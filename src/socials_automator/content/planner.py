@@ -210,17 +210,24 @@ Hook style: {hook_type.value}
 
 {f"Previous posts context:{chr(10)}{kb_context}" if kb_context else ""}
 
+CAROUSEL STRUCTURE (MUST FOLLOW):
+- Slide 1: HOOK slide with eye-catching image (this is the thumbnail people see)
+- Slides 2 to N-1: CONTENT slides (1-8 content slides with the actual tips/prompts/tools)
+- Slide N: CTA slide (call-to-action, always last)
+
 Create a detailed plan with:
-1. A compelling hook (first slide) - max 12 words
+1. A compelling hook (first slide) - max 12 words, with background image
 {content_slides_instruction}
-3. A CTA slide (last slide)
+3. A CTA slide (last slide) - "Follow for more..." or similar
 
 CRITICAL REQUIREMENTS:
+- If the hook mentions a NUMBER (e.g., "5 prompts", "7 tips"), you MUST have EXACTLY that many CONTENT slides
+- Example: "5 AI Tools" = 1 hook + 5 content slides + 1 CTA = 7 total slides
+- Example: "3 Quick Tips" = 1 hook + 3 content slides + 1 CTA = 5 total slides
 - Each content slide MUST contain ACTUAL, SPECIFIC content that matches the topic
-- If the topic mentions a NUMBER (e.g., "5 prompts", "7 tips"), you MUST include that EXACT number of items
-- If the topic is about "prompts", each slide MUST contain an actual usable prompt
-- If the topic is about "tips", each slide MUST contain a specific, actionable tip
-- If the topic is about "tools", each slide MUST name and describe a specific tool
+- If the topic is about "prompts", each content slide MUST contain an actual usable prompt
+- If the topic is about "tips", each content slide MUST contain a specific, actionable tip
+- If the topic is about "tools", each content slide MUST name and describe a specific tool
 - NEVER use generic placeholders like "Point 1", "Main tip", "First tool", etc.
 - The body text must provide real value - specific examples, explanations, or instructions
 
