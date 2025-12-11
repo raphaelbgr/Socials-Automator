@@ -305,7 +305,8 @@ Return as JSON:
 
                     # Validate that if topic mentions a number, we have that many content slides
                     hook_text = data.get("hook_text", topic)
-                    number_match = re.search(r'\b(\d+)\s+(?:ChatGPT\s+)?(?:prompts?|tips?|tricks?|tools?|ways?|steps?|hacks?|ideas?|methods?|examples?|templates?|things?)\b', hook_text, re.IGNORECASE)
+                    # Match patterns like "5 tools", "5 AI tools", "5 ChatGPT prompts", "7 quick tips", etc.
+                    number_match = re.search(r'\b(\d+)\s+(?:\w+\s+)?(?:prompts?|tips?|tricks?|tools?|ways?|steps?|hacks?|ideas?|methods?|examples?|templates?|things?|apps?|features?|secrets?|reasons?)\b', hook_text, re.IGNORECASE)
                     if number_match:
                         expected_items = int(number_match.group(1))
                         actual_items = len(content_slides)
