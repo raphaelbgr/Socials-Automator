@@ -693,16 +693,119 @@ class InstagramProgressDisplay:
 
 
 @app.command()
-def post(
+def schedule(
     profile: str = typer.Argument(..., help="Profile name"),
-    post_id: str = typer.Argument(None, help="Post ID to publish (latest if not specified)"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Validate without posting"),
+    all_posts: bool = typer.Option(False, "--all", "-a", help="Schedule all generated posts"),
 ):
-    """Post a generated carousel to Instagram.
+    """Move generated posts to pending-post queue.
+
+    Workflow:
+        1. generate: Creates posts in posts/YYYY/MM/generated/
+        2. schedule: Moves to posts/YYYY/MM/pending-post/ (this command)
+        3. post: Publishes to Instagram, moves to posts/YYYY/MM/posted/
 
     Examples:
-        socials post ai.for.mortals                    # Post most recent
-        socials post ai.for.mortals 20251210-001      # Post specific
+        socials schedule ai.for.mortals         # Schedule one post interactively
+        socials schedule ai.for.mortals --all   # Schedule all generated posts
+    """
+    import shutil
+
+    profile_path = get_profile_path(profile)
+
+    if not profile_path.exists():
+        console.print(f"[red]Profile not found: {profile}[/red]")
+        raise typer.Exit(1)
+
+    # Find posts in generated folders
+    posts_dir = profile_path / "posts"
+    generated_posts = []
+
+    for year_dir in posts_dir.glob("*"):
+        if year_dir.is_dir() and year_dir.name.isdigit():
+            for month_dir in year_dir.glob("*"):
+                if month_dir.is_dir() and month_dir.name.isdigit():
+                    generated_dir = month_dir / "generated"
+                    if generated_dir.exists():
+                        for post_dir in generated_dir.iterdir():
+                            if post_dir.is_dir() and (post_dir / "metadata.json").exists():
+                                generated_posts.append(post_dir)
+
+    if not generated_posts:
+        console.print("[yellow]No posts in generated folders.[/yellow]")
+        console.print("\n[dim]Generate posts first:[/dim]")
+        console.print("  [cyan]python -m socials_automator.cli generate <profile> --topic '...'[/cyan]")
+        raise typer.Exit(1)
+
+    # Sort by folder name
+    generated_posts.sort(key=lambda p: p.name)
+
+    console.print(f"\n[bold]Found {len(generated_posts)} generated post(s):[/bold]")
+    for i, post_path in enumerate(generated_posts, 1):
+        # Load metadata for topic
+        with open(post_path / "metadata.json") as f:
+            meta = json.load(f)
+        topic = meta.get("post", {}).get("topic", post_path.name)
+        console.print(f"  {i}. [cyan]{post_path.name}[/cyan]")
+        console.print(f"     {topic[:60]}{'...' if len(topic) > 60 else ''}")
+
+    if all_posts:
+        to_schedule = generated_posts
+    else:
+        # Ask which post to schedule
+        console.print(f"\n[dim]Enter post number (1-{len(generated_posts)}) or 'all':[/dim]")
+        choice = typer.prompt("Schedule", default="1")
+
+        if choice.lower() == "all":
+            to_schedule = generated_posts
+        else:
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(generated_posts):
+                    to_schedule = [generated_posts[idx]]
+                else:
+                    console.print("[red]Invalid choice[/red]")
+                    raise typer.Exit(1)
+            except ValueError:
+                console.print("[red]Invalid choice[/red]")
+                raise typer.Exit(1)
+
+    # Move posts to pending-post
+    for post_path in to_schedule:
+        generated_parent = post_path.parent  # e.g., posts/2025/12/generated
+        pending_dir = generated_parent.parent / "pending-post"
+        pending_dir.mkdir(parents=True, exist_ok=True)
+        new_path = pending_dir / post_path.name
+
+        try:
+            shutil.move(str(post_path), str(new_path))
+            console.print(f"[green]Scheduled:[/green] {post_path.name}")
+        except Exception as e:
+            console.print(f"[red]Failed to move {post_path.name}: {e}[/red]")
+
+    console.print(f"\n[bold green]Scheduled {len(to_schedule)} post(s) for publishing.[/bold green]")
+    console.print("\n[dim]To publish:[/dim]")
+    console.print("  [cyan]python -m socials_automator.cli post <profile>[/cyan]")
+
+
+@app.command()
+def post(
+    profile: str = typer.Argument(..., help="Profile name"),
+    post_id: str = typer.Argument(None, help="Post ID to publish (oldest pending if not specified)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate without posting"),
+):
+    """Post a pending carousel to Instagram.
+
+    Posts from the pending-post queue. After successful posting,
+    the post is moved to the posted folder.
+
+    Workflow:
+        1. generate: Creates posts in posts/YYYY/MM/generated/
+        2. schedule: Moves to posts/YYYY/MM/pending-post/
+        3. post: Publishes to Instagram, moves to posts/YYYY/MM/posted/ (this command)
+
+    Examples:
+        socials post ai.for.mortals                    # Post oldest pending
+        socials post ai.for.mortals 11-001            # Post specific (by prefix)
         socials post ai.for.mortals --dry-run         # Validate only
     """
     profile_path = get_profile_path(profile)
@@ -745,29 +848,48 @@ async def _post_to_instagram(
 ):
     """Async Instagram posting with progress display."""
     from .instagram import InstagramClient, CloudinaryUploader, InstagramProgress
-    from .knowledge import KnowledgeStore
+    import shutil
 
-    store = KnowledgeStore(profile_path)
+    # Find posts in pending-post folder (scan all year/month subfolders)
+    posts_dir = profile_path / "posts"
+    pending_posts = []
 
-    # Find the post to publish
+    for year_dir in posts_dir.glob("*"):
+        if year_dir.is_dir() and year_dir.name.isdigit():
+            for month_dir in year_dir.glob("*"):
+                if month_dir.is_dir() and month_dir.name.isdigit():
+                    pending_dir = month_dir / "pending-post"
+                    if pending_dir.exists():
+                        for post_dir in pending_dir.iterdir():
+                            if post_dir.is_dir() and (post_dir / "metadata.json").exists():
+                                pending_posts.append(post_dir)
+
+    if not pending_posts:
+        console.print("[yellow]No posts in pending-post folders.[/yellow]")
+        console.print("\n[dim]Workflow:[/dim]")
+        console.print("  1. Generate posts: [cyan]python -m socials_automator.cli generate <profile> --topic '...'[/cyan]")
+        console.print("  2. Schedule posts: [cyan]python -m socials_automator.cli schedule <profile>[/cyan]")
+        console.print("  3. Post to Instagram: [cyan]python -m socials_automator.cli post <profile>[/cyan]")
+        raise typer.Exit(1)
+
+    # Sort by folder name (date-number-slug) to get oldest first
+    pending_posts.sort(key=lambda p: p.name)
+
+    # Select post to publish
     if post_id:
-        post_record = store.get_post_by_id(post_id)
-        if not post_record:
-            console.print(f"[red]Post not found: {post_id}[/red]")
+        # Find specific post
+        post_path = None
+        for p in pending_posts:
+            if post_id in p.name or p.name.startswith(post_id):
+                post_path = p
+                break
+        if not post_path:
+            console.print(f"[red]Post not found in pending-post: {post_id}[/red]")
+            console.print(f"[dim]Available: {[p.name for p in pending_posts]}[/dim]")
             raise typer.Exit(1)
     else:
-        # Get most recent post
-        recent_posts = store.get_recent_posts(days=30)
-        if not recent_posts:
-            console.print("[red]No posts found. Generate some posts first![/red]")
-            raise typer.Exit(1)
-        post_record = recent_posts[-1]
-
-    # Find the post directory
-    post_path = profile_path / "posts" / post_record.path
-    if not post_path.exists():
-        console.print(f"[red]Post directory not found: {post_path}[/red]")
-        raise typer.Exit(1)
+        # Use oldest pending post
+        post_path = pending_posts[0]
 
     # Load post metadata
     metadata_path = post_path / "metadata.json"
@@ -784,32 +906,48 @@ async def _post_to_instagram(
         console.print(f"[red]No slide images found in {post_path}[/red]")
         raise typer.Exit(1)
 
-    # Load caption
+    # Load caption (use UTF-8 for emoji support)
     caption_path = post_path / "caption.txt"
-    caption = caption_path.read_text() if caption_path.exists() else ""
+    caption = caption_path.read_text(encoding="utf-8") if caption_path.exists() else ""
 
     # Load hashtags
     hashtags_path = post_path / "hashtags.txt"
     if hashtags_path.exists():
-        hashtags = hashtags_path.read_text().strip()
+        hashtags = hashtags_path.read_text(encoding="utf-8").strip()
         if hashtags and not caption.endswith(hashtags):
             caption = f"{caption}\n\n{hashtags}"
 
+    # Extract post info from metadata
+    post_info = post_metadata.get("post", {})
+    post_id_display = post_info.get("id", post_path.name)
+    post_topic = post_info.get("topic", "Unknown topic")
+    post_date = post_info.get("date", "Unknown")
+
     # Show post info
     console.print(Panel(
-        f"[bold]Post ID:[/] {post_record.id}\n"
-        f"[bold]Topic:[/] {post_record.topic}\n"
+        f"[bold]Post ID:[/] {post_id_display}\n"
+        f"[bold]Topic:[/] {post_topic}\n"
         f"[bold]Slides:[/] {len(slide_paths)}\n"
-        f"[bold]Generated:[/] {post_record.date}",
+        f"[bold]Generated:[/] {post_date}\n"
+        f"[bold]Location:[/] {post_path}",
         title="Instagram Posting",
     ))
 
     if dry_run:
+        import re
+        def safe_print_caption(text: str) -> str:
+            """Remove characters that can't be displayed in Windows console."""
+            try:
+                return text.encode('cp1252', errors='ignore').decode('cp1252')
+            except Exception:
+                return re.sub(r'[^\x00-\x7F]+', '', text)
+
         console.print("\n[yellow]DRY RUN - Would upload these images:[/yellow]")
         for path in slide_paths:
             console.print(f"  - {path.name}")
         console.print(f"\n[yellow]Caption ({len(caption)} chars):[/yellow]")
-        console.print(caption[:500] + "..." if len(caption) > 500 else caption)
+        display_caption = caption[:500] + "..." if len(caption) > 500 else caption
+        console.print(safe_print_caption(display_caption))
         console.print("\n[green]Dry run complete. No images were uploaded.[/green]")
         return
 
@@ -837,14 +975,14 @@ async def _post_to_instagram(
         progress_callback=progress_callback,
     )
 
-    # Validate token first
+    # Validate token first (skip on error - validation endpoint can be flaky)
     console.print("\n[dim]Validating Instagram access...[/dim]")
     try:
         account_info = await client.validate_token()
         console.print(f"[green]Connected as @{account_info.get('username', 'unknown')}[/green]\n")
     except Exception as e:
-        console.print(f"[red]Failed to validate Instagram token: {e}[/red]")
-        raise typer.Exit(1)
+        console.print(f"[yellow]Warning: Could not validate token ({e})[/yellow]")
+        console.print("[yellow]Proceeding with posting attempt...[/yellow]\n")
 
     # Run with live progress display
     with Live(console=console, refresh_per_second=4) as live:
@@ -862,7 +1000,7 @@ async def _post_to_instagram(
                 total_images=len(slide_paths),
             ))
 
-            folder = f"socials-automator/{profile_path.name}/{post_record.id}"
+            folder = f"socials-automator/{profile_path.name}/{post_id_display}"
             image_urls = await uploader.upload_batch(slide_paths, folder=folder)
 
             # Update progress
@@ -906,7 +1044,18 @@ async def _post_to_instagram(
         with open(metadata_path, "w") as f:
             json.dump(post_metadata, f, indent=2)
 
-        console.print(f"\n[dim]Post metadata updated: {metadata_path}[/dim]")
+        # Move from pending-post to posted folder
+        pending_parent = post_path.parent  # e.g., posts/2025/12/pending-post
+        posted_dir = pending_parent.parent / "posted"
+        posted_dir.mkdir(parents=True, exist_ok=True)
+        new_post_path = posted_dir / post_path.name
+
+        try:
+            shutil.move(str(post_path), str(new_post_path))
+            console.print(f"\n[green]Post moved to:[/green] {new_post_path}")
+        except Exception as e:
+            console.print(f"\n[yellow]Warning: Could not move post folder: {e}[/yellow]")
+            console.print(f"[dim]Post remains at: {post_path}[/dim]")
     else:
         console.print(Panel(
             f"[bold red]Publishing failed[/bold red]\n\n"

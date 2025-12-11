@@ -417,7 +417,7 @@
   },
 
   "output_settings": {
-    "folder_structure": "posts/{year}/{month}/{day}-{post_number}-{slug}",
+    "folder_structure": "posts/{year}/{month}/{status}/{day}-{post_number}-{slug}",
     "file_naming": {
       "slides": "slide_{number:02d}.jpg",
       "caption": "caption.txt",

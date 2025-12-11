@@ -1,7 +1,9 @@
 """Instagram Graph API client for publishing carousel posts."""
 
 import asyncio
+import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Callable, Awaitable
 
 import httpx
@@ -12,6 +14,15 @@ from .models import (
     InstagramPublishResult,
     InstagramPostStatus,
 )
+
+# Set up file logging for API calls
+_log_dir = Path(__file__).parent.parent.parent.parent / "logs"
+_log_dir.mkdir(exist_ok=True)
+_api_logger = logging.getLogger("instagram_api")
+_api_logger.setLevel(logging.DEBUG)
+_file_handler = logging.FileHandler(_log_dir / "instagram_api.log", encoding="utf-8")
+_file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
+_api_logger.addHandler(_file_handler)
 
 
 class InstagramAPIError(Exception):
@@ -52,6 +63,10 @@ class InstagramClient:
         # Progress tracking
         self._progress = InstagramProgress()
 
+        # API call counter for logging
+        self._api_call_count = 0
+        _api_logger.info(f"=== NEW SESSION === Instagram User ID: {config.instagram_user_id}")
+
     async def _report_progress(
         self,
         status: InstagramPostStatus,
@@ -86,12 +101,17 @@ class InstagramClient:
         Raises:
             InstagramAPIError: If the API returns an error
         """
+        self._api_call_count += 1
         url = f"{self.base_url}/{endpoint}"
 
         # Add access token to params
         if params is None:
             params = {}
         params["access_token"] = self.config.access_token
+
+        # Log the API call (without token)
+        log_params = {k: v for k, v in params.items() if k != "access_token"}
+        _api_logger.info(f"API CALL #{self._api_call_count} | {method} {endpoint} | params: {log_params}")
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             if method.upper() == "GET":
@@ -102,6 +122,12 @@ class InstagramClient:
                 raise ValueError(f"Unsupported HTTP method: {method}")
 
             result = response.json()
+
+            # Log the response
+            if "error" in result:
+                _api_logger.error(f"API CALL #{self._api_call_count} | ERROR: {result['error']}")
+            else:
+                _api_logger.info(f"API CALL #{self._api_call_count} | SUCCESS: {list(result.keys())}")
 
             # Check for API errors
             if "error" in result:
@@ -178,7 +204,7 @@ class InstagramClient:
         self,
         container_id: str,
         max_wait_seconds: int = 300,
-        poll_interval: float = 5.0,
+        poll_interval: float = 10.0,  # Increased from 5s to reduce API calls
     ) -> bool:
         """Wait for a container to be ready for publishing.
 
@@ -344,6 +370,8 @@ class InstagramClient:
                 100.0,
             )
 
+            _api_logger.info(f"=== SESSION COMPLETE === Total API calls: {self._api_call_count}")
+
             return InstagramPublishResult(
                 success=True,
                 media_id=media_id,
@@ -360,6 +388,8 @@ class InstagramClient:
                 f"Failed: {e}",
                 self._progress.progress_percent,
             )
+
+            _api_logger.error(f"=== SESSION FAILED === Total API calls: {self._api_call_count} | Error: {e}")
 
             return InstagramPublishResult(
                 success=False,

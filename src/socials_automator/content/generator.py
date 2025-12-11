@@ -180,10 +180,21 @@ class ContentGenerator:
         slug = re.sub(r"[\s-]+", "-", slug)
         return slug[:50].strip("-")
 
-    def _get_output_path(self, post: CarouselPost) -> Path:
-        """Get output directory path for a post."""
+    def _get_output_path(self, post: CarouselPost, status: str = "generated") -> Path:
+        """Get output directory path for a post.
+
+        Args:
+            post: The carousel post
+            status: Post status folder - "generated", "pending-post", or "posted"
+
+        Returns:
+            Path to the post directory
+        """
         now = datetime.now()
-        folder_template = self.output_config.get("folder_structure", "posts/{year}/{month}/{day}-{post_number}-{slug}")
+        folder_template = self.output_config.get(
+            "folder_structure",
+            "posts/{year}/{month}/{status}/{day}-{post_number}-{slug}"
+        )
 
         folder = folder_template.format(
             year=now.strftime("%Y"),
@@ -191,6 +202,7 @@ class ContentGenerator:
             day=now.strftime("%d"),
             post_number=post.id.split("-")[-1],
             slug=post.slug,
+            status=status,
         )
 
         return self.profile_path / folder
@@ -481,10 +493,16 @@ class ContentGenerator:
 
         # Save hashtags
         hashtags_filename = file_naming.get("hashtags", "hashtags.txt")
+        hashtags_text = " ".join(post.hashtags)
         (output_path / hashtags_filename).write_text(
-            " ".join(post.hashtags),
+            hashtags_text,
             encoding="utf-8"
         )
+
+        # Save combined caption + hashtags
+        combined_filename = file_naming.get("combined", "caption+hashtags.txt")
+        combined_text = f"{post.caption}\n\n{hashtags_text}"
+        (output_path / combined_filename).write_text(combined_text, encoding="utf-8")
 
         # Save alt texts
         alt_texts = [f"Slide {s.number}: {s.heading}" for s in post.slides]

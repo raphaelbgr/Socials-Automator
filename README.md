@@ -12,6 +12,81 @@ AI-powered Instagram carousel content generator. Automatically creates professio
 - **Post history awareness** - Avoids repeating recent topics
 - **Profile-based config** - Manage multiple Instagram accounts
 
+## Usage Workflows
+
+The tool supports three workflows depending on your needs:
+
+### Workflow 1: Generate Only (Manual Posting)
+
+Generate carousel content, then manually upload to Instagram:
+
+```bash
+# Generate a post
+python -m socials_automator.cli generate ai.for.mortals --topic "5 AI tools for productivity"
+
+# Output goes to: profiles/ai.for.mortals/posts/2025/12/generated/
+# Contains: slide images, caption.txt, hashtags.txt
+
+# Manual posting:
+# 1. Open the generated folder
+# 2. Upload slide_01.jpg to slide_XX.jpg to Instagram
+# 3. Copy caption from caption.txt
+# 4. Post!
+```
+
+**Best for:** Users who want content creation without Meta/Facebook integration.
+
+---
+
+### Workflow 2: Full Automation (Generate → Schedule → Post)
+
+Generate content, schedule it, then auto-post to Instagram:
+
+```bash
+# Step 1: Generate content
+python -m socials_automator.cli generate ai.for.mortals --topic "5 AI tools for productivity"
+# → Creates post in: posts/2025/12/generated/
+
+# Step 2: Schedule for posting (moves to pending queue)
+python -m socials_automator.cli schedule ai.for.mortals
+# → Moves to: posts/2025/12/pending-post/
+
+# Step 3: Publish to Instagram
+python -m socials_automator.cli post ai.for.mortals
+# → Publishes and moves to: posts/2025/12/posted/
+```
+
+**Folder structure:**
+```
+posts/2025/12/
+├── generated/      ← New posts land here
+├── pending-post/   ← Scheduled, ready to publish
+└── posted/         ← Successfully published
+```
+
+**Requires:** Instagram API + Cloudinary setup (see [Instagram Posting Setup](#instagram-posting-setup))
+
+---
+
+### Workflow 3: Batch Generation
+
+Generate multiple posts at once:
+
+```bash
+# Generate 5 posts with AI-chosen topics
+python -m socials_automator.cli generate ai.for.mortals -n 5
+
+# Schedule all generated posts
+python -m socials_automator.cli schedule ai.for.mortals --all
+
+# Post one at a time (oldest first)
+python -m socials_automator.cli post ai.for.mortals
+python -m socials_automator.cli post ai.for.mortals
+# ...
+```
+
+---
+
 ## Quick Start
 
 ### 1. Installation
