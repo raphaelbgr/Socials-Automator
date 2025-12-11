@@ -85,6 +85,7 @@ python -m socials_automator.cli generate --help
 | Command | Description |
 |---------|-------------|
 | `generate` | Generate carousel posts for a profile |
+| `post` | Publish a generated post to Instagram |
 | `new-profile` | Create a new profile interactively |
 | `list-profiles` | List all available profiles |
 | `list-niches` | List available niches from niches.json |
@@ -133,6 +134,47 @@ python -m socials_automator.cli generate ai.for.mortals -t "AI tools for writers
 # Generate post with 4-8 slides (AI decides within range)
 python -m socials_automator.cli generate ai.for.mortals --min-slides 4 --max-slides 8
 ```
+
+---
+
+### post
+
+Publish a generated carousel post to Instagram. Requires Instagram API and Cloudinary credentials (see [Instagram Posting Setup](#instagram-posting-setup)).
+
+```bash
+python -m socials_automator.cli post <profile> [post-id] [OPTIONS]
+```
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `profile` | Profile name (required) |
+| `post-id` | Post ID to publish (optional, defaults to most recent) |
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--dry-run` | Validate the post without actually publishing |
+
+**Examples:**
+```bash
+# Post the most recent generated content
+python -m socials_automator.cli post ai.for.mortals
+
+# Post a specific post by ID
+python -m socials_automator.cli post ai.for.mortals 20251211-001
+
+# Validate without posting
+python -m socials_automator.cli post ai.for.mortals --dry-run
+```
+
+**Workflow:**
+1. Uploads slide images to Cloudinary (Instagram requires public URLs)
+2. Creates Instagram media containers for each image
+3. Creates carousel container combining all slides
+4. Publishes to Instagram
+5. Cleans up temporary Cloudinary uploads
+6. Updates post metadata with Instagram URL
 
 ---
 
@@ -439,6 +481,98 @@ The system tries providers in order of priority (cheapest first by default):
 
 If a provider fails (rate limit, API error), it automatically falls back to the next one.
 
+## Instagram Posting Setup
+
+To use the `post` command to publish directly to Instagram, you need to set up both Instagram API access and Cloudinary for image hosting.
+
+### Requirements
+
+1. **Instagram Business or Creator Account** - Personal accounts don't have API access
+2. **Facebook Page** - Your Instagram account must be connected to a Facebook Page
+3. **Facebook Developer App** - To get API access tokens
+4. **Cloudinary Account** - For temporary image hosting (Instagram requires public URLs)
+
+### Step 1: Set Up Instagram Business Account
+
+1. Open Instagram app and go to Settings > Account
+2. Tap "Switch to Professional Account"
+3. Choose "Business" or "Creator"
+4. Connect to a Facebook Page (create one if needed)
+
+### Step 2: Create Facebook App
+
+1. Go to [developers.facebook.com](https://developers.facebook.com)
+2. Click "My Apps" > "Create App"
+3. Choose "Business" type
+4. Add "Instagram Graph API" product to your app
+5. In Instagram Graph API settings, add your Instagram account as a tester
+
+### Step 3: Generate Access Token
+
+1. Go to [Facebook Graph API Explorer](https://developers.facebook.com/tools/explorer/)
+2. Select your app from the dropdown
+3. Click "Generate Access Token"
+4. Select these permissions:
+   - `instagram_basic`
+   - `instagram_content_publish`
+   - `pages_read_engagement`
+5. Copy the access token
+
+**Note:** Access tokens expire. For production use, generate a long-lived token using the [Token Debugger](https://developers.facebook.com/tools/debug/accesstoken/).
+
+### Step 4: Get Your Instagram User ID
+
+1. In the Graph API Explorer, make this request:
+   ```
+   GET /me/accounts
+   ```
+2. Find your Facebook Page and note the `id`
+3. Make this request with your Page ID:
+   ```
+   GET /{page-id}?fields=instagram_business_account
+   ```
+4. The `instagram_business_account.id` is your Instagram User ID
+
+### Step 5: Set Up Cloudinary
+
+1. Go to [cloudinary.com](https://cloudinary.com) and create a free account
+2. In your Cloudinary Dashboard, find:
+   - Cloud Name
+   - API Key
+   - API Secret
+
+### Step 6: Add Credentials to .env
+
+Add these to your `.env` file:
+
+```bash
+# Instagram API
+INSTAGRAM_USER_ID=17841405793187218  # Your Instagram User ID
+INSTAGRAM_ACCESS_TOKEN=EAAxxxxx...    # Your access token
+
+# Cloudinary (for image hosting)
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=123456789012345
+CLOUDINARY_API_SECRET=abcdefghijklmnop
+```
+
+### Step 7: Test Your Setup
+
+```bash
+# Dry run to validate credentials
+python -m socials_automator.cli post ai.for.mortals --dry-run
+
+# Publish for real
+python -m socials_automator.cli post ai.for.mortals
+```
+
+### Rate Limits
+
+Instagram has these posting limits:
+- **25-50 posts per day** (varies by account age/standing)
+- **Carousels**: Up to 10 images per carousel
+- **Captions**: Up to 2,200 characters
+
 ## Project Structure
 
 ```
@@ -464,6 +598,10 @@ Socials-Automator/
 │   │   ├── text.py         # Text generation
 │   │   ├── image.py        # Image generation
 │   │   └── config.py       # Provider config
+│   ├── instagram/          # Instagram posting
+│   │   ├── client.py       # Instagram Graph API client
+│   │   ├── uploader.py     # Cloudinary image uploader
+│   │   └── models.py       # Instagram data models
 │   ├── knowledge/          # Knowledge base
 │   └── research/           # Topic research
 ├── .env.example            # Example environment file
@@ -503,7 +641,7 @@ Socials-Automator/
 
 ## Roadmap
 
-- [ ] Instagram API integration (`--post-to-instagram`)
+- [x] Instagram API integration (`post` command)
 - [ ] Scheduled posting (`--schedule "2025-12-11 10:00"`)
 - [ ] Multiple social platforms (Twitter/X, LinkedIn)
 - [ ] Video/Reels generation

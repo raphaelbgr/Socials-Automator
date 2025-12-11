@@ -201,6 +201,31 @@ class KnowledgeStore:
         ]
         return sorted(posts, key=lambda p: p.date, reverse=True)[:limit]
 
+    def get_post_by_id(self, post_id: str) -> PostRecord | None:
+        """Get a specific post by ID.
+
+        Args:
+            post_id: The post ID to find.
+
+        Returns:
+            PostRecord if found, None otherwise.
+        """
+        for post in self.posts_index.posts:
+            if post.id == post_id:
+                return post
+        return None
+
+    def get_latest_post(self) -> PostRecord | None:
+        """Get the most recently generated post.
+
+        Returns:
+            Most recent PostRecord or None if no posts exist.
+        """
+        posts = self.posts_index.posts
+        if not posts:
+            return None
+        return sorted(posts, key=lambda p: p.date, reverse=True)[0]
+
     # ==================== Topic Management ====================
 
     def add_topic(self, topic: TopicRecord) -> None:

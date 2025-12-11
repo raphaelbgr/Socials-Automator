@@ -107,9 +107,13 @@ class HookSlideTemplate(SlideTemplate):
     text_align: TextAlignment = TextAlignment.CENTER
     vertical_align: VerticalAlignment = VerticalAlignment.CENTER
 
-    # Hook-specific settings
-    hook_font_size: int = 72
-    subtext_font_size: int = 32
+    # Increased padding for Instagram grid view (text gets cut on edges)
+    padding_x: int = 140
+    padding_y: int = 100
+
+    # Hook-specific settings - larger fonts for mobile readability
+    hook_font_size: int = 78
+    subtext_font_size: int = 36
     subtext_color: str = "#a1a1aa"
 
     # Emphasis styling
@@ -128,14 +132,14 @@ class ContentSlideTemplate(SlideTemplate):
 
     # Number styling (for numbered lists)
     show_number: bool = True
-    number_font_size: int = 120
+    number_font_size: int = 140
     number_color: str = "#6366f1"  # Gradient or solid
     number_opacity: float = 0.3
     number_position: Literal["left", "background"] = "background"
 
-    # Content text
-    heading_font_size: int = 48
-    body_font_size: int = 32
+    # Content text - larger fonts for mobile readability
+    heading_font_size: int = 58
+    body_font_size: int = 40
     body_color: str = "#d4d4d8"
 
     # Icon (optional)
@@ -149,18 +153,18 @@ class CTASlideTemplate(SlideTemplate):
     """Template for call-to-action/final slide."""
 
     name: str = "cta"
-    background_type: Literal["solid", "gradient", "image"] = "gradient"
+    background_type: Literal["solid", "gradient", "image"] = "solid"  # Black background
     text_align: TextAlignment = TextAlignment.CENTER
     vertical_align: VerticalAlignment = VerticalAlignment.CENTER
 
-    # CTA-specific
-    cta_font_size: int = 56
-    secondary_font_size: int = 36
+    # CTA-specific - larger fonts for mobile readability
+    cta_font_size: int = 64
+    secondary_font_size: int = 42
     secondary_color: str = "#a1a1aa"
 
     # Handle display
     show_handle: bool = True
-    handle_font_size: int = 40
+    handle_font_size: int = 48
     handle_color: str = "#ffffff"
 
     # Action icons

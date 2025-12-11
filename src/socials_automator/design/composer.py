@@ -472,23 +472,23 @@ class SlideComposer:
         text_area_width = template.width - (template.padding_x * 2)
 
         # Dynamic font sizing based on content length for mobile readability
-        # Short content gets bigger fonts
+        # Short content gets bigger fonts for easier reading
         heading_len = len(heading)
         body_len = len(body) if body else 0
         total_len = heading_len + body_len
 
         if total_len < 50:
-            # Very short - use large fonts
-            heading_size = int(template.heading_font_size * 1.4)
-            body_size = int(template.body_font_size * 1.3)
+            # Very short - use extra large fonts
+            heading_size = int(template.heading_font_size * 1.5)
+            body_size = int(template.body_font_size * 1.4)
         elif total_len < 100:
-            # Short - use medium-large fonts
-            heading_size = int(template.heading_font_size * 1.2)
-            body_size = int(template.body_font_size * 1.15)
+            # Short - use large fonts
+            heading_size = int(template.heading_font_size * 1.3)
+            body_size = int(template.body_font_size * 1.25)
         elif total_len < 200:
-            # Medium - use slightly larger fonts
-            heading_size = int(template.heading_font_size * 1.1)
-            body_size = int(template.body_font_size * 1.05)
+            # Medium - use medium-large fonts
+            heading_size = int(template.heading_font_size * 1.15)
+            body_size = int(template.body_font_size * 1.1)
         else:
             # Long content - use default fonts
             heading_size = template.heading_font_size
@@ -579,13 +579,22 @@ class SlideComposer:
         """
         template = template or CTASlideTemplate()
 
-        # Create gradient background
-        img = self._create_gradient_background(
-            template.width,
-            template.height,
-            template.colors.gradient_start,
-            template.colors.gradient_end,
-        )
+        # Create background based on template setting
+        if template.background_type == "solid":
+            # Use solid black background
+            img = self._create_solid_background(
+                template.width,
+                template.height,
+                template.colors.background,  # Default is #0a0a0f (near black)
+            )
+        else:
+            # Use gradient background
+            img = self._create_gradient_background(
+                template.width,
+                template.height,
+                template.colors.gradient_start,
+                template.colors.gradient_end,
+            )
 
         draw = ImageDraw.Draw(img)
 
@@ -594,35 +603,40 @@ class SlideComposer:
         secondary_font = self._get_font(template.typography.body_font, template.secondary_font_size)
         handle_font = self._get_font(template.typography.body_font, template.handle_font_size)
 
+        # Calculate text area width with padding
+        text_area_width = template.width - (template.padding_x * 2)
+
         # Calculate total height for centering
         total_height = 0
         elements = []
 
-        # Main CTA text
-        cta_lines = self._wrap_text(text, cta_font, template.width - template.padding_x * 2)
+        # Main CTA text - wrapped
+        cta_lines = self._wrap_text(text, cta_font, text_area_width)
         cta_line_height = cta_font.getbbox("Ay")[3] - cta_font.getbbox("Ay")[1]
         cta_height = len(cta_lines) * int(cta_line_height * template.typography.line_height)
-        elements.append(("cta", cta_lines, cta_font, template.colors.text_primary, cta_height))
+        elements.append(("cta", cta_lines, cta_font, template.colors.text_primary, cta_line_height))
         total_height += cta_height
 
-        # Secondary text
+        # Secondary text - NOW WRAPPED properly
         if secondary_text:
             total_height += 40  # Gap
-            secondary_height = secondary_font.getbbox(secondary_text)[3] - secondary_font.getbbox(secondary_text)[1]
-            elements.append(("secondary", [secondary_text], secondary_font, template.secondary_color, secondary_height))
+            secondary_lines = self._wrap_text(secondary_text, secondary_font, text_area_width)
+            secondary_line_height = secondary_font.getbbox("Ay")[3] - secondary_font.getbbox("Ay")[1]
+            secondary_height = len(secondary_lines) * int(secondary_line_height * template.typography.line_height)
+            elements.append(("secondary", secondary_lines, secondary_font, template.secondary_color, secondary_line_height))
             total_height += secondary_height
 
         # Handle
         if handle and template.show_handle:
             total_height += 60  # Larger gap before handle
-            handle_height = handle_font.getbbox(handle)[3] - handle_font.getbbox(handle)[1]
-            elements.append(("handle", [handle], handle_font, template.handle_color, handle_height))
-            total_height += handle_height
+            handle_line_height = handle_font.getbbox(handle)[3] - handle_font.getbbox(handle)[1]
+            elements.append(("handle", [handle], handle_font, template.handle_color, handle_line_height))
+            total_height += handle_line_height
 
         # Draw elements centered
         current_y = (template.height - total_height) // 2
 
-        for elem_type, lines, font, color, height in elements:
+        for elem_type, lines, font, color, line_height in elements:
             if elem_type == "secondary":
                 current_y += 40
             elif elem_type == "handle":
@@ -633,11 +647,7 @@ class SlideComposer:
                 line_width = bbox[2] - bbox[0]
                 x = (template.width - line_width) // 2
                 draw.text((x, current_y), line, font=font, fill=self._hex_to_rgb(color))
-
-                if elem_type == "cta":
-                    current_y += int(cta_line_height * template.typography.line_height)
-                else:
-                    current_y += height
+                current_y += int(line_height * template.typography.line_height)
 
         # Add logo
         if logo_path and template.show_logo:

@@ -39,6 +39,9 @@ dependencies = [
     # Utilities
     "python-dotenv>=1.0.0",
     "tenacity>=8.2.0",
+
+    # Instagram Posting
+    "cloudinary>=1.36.0",
 ]
 
 [project.optional-dependencies]

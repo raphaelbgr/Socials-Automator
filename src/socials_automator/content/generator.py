@@ -309,7 +309,7 @@ class ContentGenerator:
         all_hashtags = []
         for category in ["primary", "secondary", "niche", "branded"]:
             all_hashtags.extend(hashtag_sets.get(category, []))
-        post.hashtags = all_hashtags[:20]
+        post.hashtags = all_hashtags[:10]  # Limited for Threads compatibility (500 char limit)
 
         progress.completed_steps += 1
         await self._emit_progress(progress)

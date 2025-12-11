@@ -214,9 +214,18 @@ Create a detailed plan with:
 {content_slides_instruction}
 3. A CTA slide (last slide)
 
+CRITICAL REQUIREMENTS:
+- Each content slide MUST contain ACTUAL, SPECIFIC content that matches the topic
+- If the topic mentions a NUMBER (e.g., "5 prompts", "7 tips"), you MUST include that EXACT number of items
+- If the topic is about "prompts", each slide MUST contain an actual usable prompt
+- If the topic is about "tips", each slide MUST contain a specific, actionable tip
+- If the topic is about "tools", each slide MUST name and describe a specific tool
+- NEVER use generic placeholders like "Point 1", "Main tip", "First tool", etc.
+- The body text must provide real value - specific examples, explanations, or instructions
+
 Each content slide should have:
-- A clear heading (main point)
-- Supporting body text (1-2 sentences)
+- A clear heading (the actual tip/prompt/tool name - NOT "Point 1" or generic text)
+- Supporting body text (1-2 sentences with specific details)
 - Whether it needs a background image
 
 Return as JSON:
@@ -225,7 +234,7 @@ Return as JSON:
     "hook_subtext": "Optional subtext for hook slide",
     "slides": [
         {{"number": 1, "slide_type": "hook", "heading": "...", "body": null, "needs_image": true, "image_description": "..."}},
-        {{"number": 2, "slide_type": "content", "heading": "Point 1", "body": "Explanation...", "needs_image": false, "image_description": null}},
+        {{"number": 2, "slide_type": "content", "heading": "ACTUAL TIP/PROMPT/ITEM HERE", "body": "Specific explanation with real details...", "needs_image": false, "image_description": null}},
         ...
         {{"number": N, "slide_type": "cta", "heading": "Follow for more", "body": null, "needs_image": false, "image_description": null}}
     ],
@@ -234,24 +243,34 @@ Return as JSON:
     "hashtags": ["#hashtag1", "#hashtag2", ...]
 }}"""
 
-        # Try up to 2 times with different prompts
-        for attempt in range(2):
+        # Try up to 4 times with different prompts
+        max_attempts = 4
+        last_error = None
+
+        for attempt in range(max_attempts):
             if attempt == 0:
                 # First attempt - use full prompt
                 current_prompt = prompt
                 system_prompt = self._get_system_prompt()
+                temp = 0.7
+            elif attempt == 1:
+                # Second attempt - same prompt, lower temperature
+                current_prompt = prompt
+                system_prompt = self._get_system_prompt()
+                temp = 0.5
             else:
-                # Retry with simpler, more explicit prompt
+                # Later attempts - use simpler, more explicit prompt
                 current_prompt = self._get_simple_planning_prompt(
                     topic, content_pillar, hook_type, target_slides or 6
                 )
                 system_prompt = "You are a JSON generator. Return ONLY valid JSON, no other text."
+                temp = 0.3
 
             response = await self.text_provider.generate(
                 prompt=current_prompt,
                 system=system_prompt,
                 task="content_planning",
-                temperature=0.7 if attempt == 0 else 0.5,
+                temperature=temp,
                 max_tokens=2000,
             )
 
@@ -260,7 +279,22 @@ Return as JSON:
                 data = self._extract_json(response)
 
                 slides = data.get("slides", [])
-                if slides and len(slides) >= 3:  # Ensure we have meaningful content
+                if slides and len(slides) >= 3:
+                    # Validate that content slides have meaningful content
+                    content_slides = [s for s in slides if s.get("slide_type") == "content"]
+                    has_placeholder = any(
+                        s.get("heading", "").startswith("Point ") or
+                        s.get("body") == "Content to be generated" or
+                        s.get("heading", "").lower() in ["first main point", "second main point", "third main point"]
+                        for s in content_slides
+                    )
+
+                    if has_placeholder:
+                        import logging
+                        logging.warning(f"Attempt {attempt + 1}: Content has placeholders, retrying...")
+                        last_error = "Content slides contain placeholder text instead of actual content"
+                        continue
+
                     return PostPlan(
                         topic=topic,
                         content_pillar=content_pillar,
@@ -275,6 +309,7 @@ Return as JSON:
                     # Empty or too few slides - retry
                     import logging
                     logging.warning(f"Attempt {attempt + 1}: Got {len(slides)} slides, retrying...")
+                    last_error = f"Only got {len(slides)} slides, need at least 3"
                     continue
 
             except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -283,19 +318,16 @@ Return as JSON:
                 logging.warning(f"Attempt {attempt + 1}: Failed to parse AI response: {e}")
                 if response:
                     logging.debug(f"Raw response (first 500 chars): {response[:500]}")
+                last_error = str(e)
                 continue
 
-        # All retries failed - return basic plan with default slides
+        # All retries failed - raise an error instead of using placeholders
         import logging
-        logging.error("All parsing attempts failed, using default slides")
-        default_slides = self._create_default_slides(topic, hook_type, target_slides or 6)
-        return PostPlan(
-            topic=topic,
-            content_pillar=content_pillar,
-            hook_type=hook_type,
-            hook_text=topic,
-            target_slides=len(default_slides),
-            slides=default_slides,
+        logging.error(f"All {max_attempts} parsing attempts failed for topic: {topic}")
+        raise RuntimeError(
+            f"Failed to generate content plan after {max_attempts} attempts. "
+            f"Last error: {last_error}. "
+            f"Topic: {topic}"
         )
 
     def _get_simple_planning_prompt(
@@ -306,24 +338,44 @@ Return as JSON:
         target_slides: int,
     ) -> str:
         """Generate a simpler prompt for retry attempts."""
+        # Determine content type from topic
+        content_type = "tips"
+        if "prompt" in topic.lower():
+            content_type = "prompts"
+        elif "tool" in topic.lower():
+            content_type = "tools"
+        elif "trick" in topic.lower():
+            content_type = "tricks"
+        elif "hack" in topic.lower():
+            content_type = "hacks"
+        elif "way" in topic.lower():
+            content_type = "ways"
+        elif "step" in topic.lower():
+            content_type = "steps"
+
         return f"""Create a {target_slides}-slide Instagram carousel about "{topic}".
 
-Return this exact JSON structure (replace ... with actual content):
+CRITICAL: Each content slide MUST contain REAL, SPECIFIC {content_type} - NOT placeholders!
+- If topic says "5 {content_type}", include exactly 5 specific {content_type}
+- Each heading must be the actual {content_type[:-1] if content_type.endswith('s') else content_type}, not "First point" or "Main tip"
+- Body text must explain the specific {content_type[:-1] if content_type.endswith('s') else content_type} with real details
+
+Return this exact JSON structure with REAL CONTENT:
 ```json
 {{
   "hook_text": "Catchy hook headline (max 10 words)",
   "slides": [
-    {{"number": 1, "slide_type": "hook", "heading": "Hook headline", "body": null, "needs_image": true, "image_description": "Description for hook image"}},
-    {{"number": 2, "slide_type": "content", "heading": "First main point", "body": "Brief explanation in 1-2 sentences.", "needs_image": false, "image_description": null}},
-    {{"number": 3, "slide_type": "content", "heading": "Second main point", "body": "Brief explanation in 1-2 sentences.", "needs_image": false, "image_description": null}},
-    {{"number": 4, "slide_type": "content", "heading": "Third main point", "body": "Brief explanation in 1-2 sentences.", "needs_image": false, "image_description": null}},
-    {{"number": {target_slides}, "slide_type": "cta", "heading": "Follow for more tips!", "body": null, "needs_image": false, "image_description": null}}
+    {{"number": 1, "slide_type": "hook", "heading": "Hook headline matching topic", "body": null, "needs_image": true, "image_description": "Description for hook image"}},
+    {{"number": 2, "slide_type": "content", "heading": "ACTUAL SPECIFIC {content_type.upper()[:-1]} #1", "body": "Real explanation with specific details.", "needs_image": false, "image_description": null}},
+    {{"number": 3, "slide_type": "content", "heading": "ACTUAL SPECIFIC {content_type.upper()[:-1]} #2", "body": "Real explanation with specific details.", "needs_image": false, "image_description": null}},
+    {{"number": 4, "slide_type": "content", "heading": "ACTUAL SPECIFIC {content_type.upper()[:-1]} #3", "body": "Real explanation with specific details.", "needs_image": false, "image_description": null}},
+    {{"number": {target_slides}, "slide_type": "cta", "heading": "Follow for more!", "body": null, "needs_image": false, "image_description": null}}
   ],
   "keywords": ["keyword1", "keyword2", "keyword3"]
 }}
 ```
 
-IMPORTANT: Return ONLY the JSON, no explanation before or after."""
+IMPORTANT: Return ONLY the JSON with REAL CONTENT, no explanation before or after."""
 
     def _extract_json(self, response: str) -> dict[str, Any]:
         """Extract JSON from AI response, handling various formats.
@@ -486,23 +538,19 @@ IMPORTANT: Return ONLY the JSON, no explanation before or after."""
 
         hashtags_str = " ".join(hashtags[:20])  # Instagram limit
 
-        prompt = f"""Write an Instagram caption for a carousel post.
+        prompt = f"""Write a SHORT Instagram caption for a carousel post.
 
 Topic: {topic}
 Hook: {hook_text}
-Content summary: {content_summary}
 
 Requirements:
-- Start with a hook line that grabs attention
-- 2-3 sentences of value/context
-- End with a clear CTA (save, share, follow)
-- Keep under 2000 characters
-- Use line breaks for readability
-- Minimal emojis (max 3)
+- MUST be under 250 characters (very important for Threads compatibility)
+- 1-2 short sentences maximum
+- End with brief CTA (save/share/follow)
+- 1-2 emojis max
+- No hashtags (added separately)
 
-DO NOT include hashtags - they will be added separately.
-
-Return ONLY the caption text."""
+Return ONLY the caption text, nothing else."""
 
         caption = await self.text_provider.generate(
             prompt=prompt,
@@ -511,7 +559,16 @@ Return ONLY the caption text."""
             temperature=0.7,
         )
 
-        # Add hashtags
-        full_caption = f"{caption.strip()}\n\n.\n.\n.\n\n{hashtags_str}"
+        # Truncate caption if too long (for Threads 500 char limit)
+        caption = caption.strip()
+        if len(caption) > 280:
+            # Cut at last sentence boundary
+            caption = caption[:280].rsplit('.', 1)[0] + '.'
+
+        # Add hashtags (limited to ~200 chars for Threads)
+        hashtags_limited = hashtags[:10]  # Limit hashtags for shorter total
+        hashtags_str = " ".join(hashtags_limited)
+
+        full_caption = f"{caption}\n\n{hashtags_str}"
 
         return full_caption

@@ -312,6 +312,17 @@ async def _generate_posts(
                         max_slides=max_slides,
                     )
                     output_path = await generator.save_post(post)
+                except RuntimeError as e:
+                    display_task.cancel()
+                    try:
+                        await display_task
+                    except asyncio.CancelledError:
+                        pass
+                    console.print(f"\n[bold red]Content Generation Failed[/bold red]")
+                    console.print(f"[red]{e}[/red]")
+                    console.print("\n[yellow]This usually means the AI failed to generate proper content.[/yellow]")
+                    console.print("[yellow]Try running the command again, or try a different/simpler topic.[/yellow]")
+                    return
                 finally:
                     display_task.cancel()
                     try:
@@ -350,14 +361,16 @@ async def _generate_posts(
             console.print(f"\n[green]Generated {len(posts)} post(s)[/green]")
             for p in posts:
                 console.print(f"  - {p.topic} ({p.slides_count} slides)")
-            # Show output path for last post
+            # Show output path and Instagram-ready content for last post
             if posts:
-                last_post_path = generator._get_output_path(posts[-1])
-                console.print(f"\n[dim]Output: {last_post_path.parent}[/dim]")
+                last_post = posts[-1]
+                last_post_path = generator._get_output_path(last_post)
+                _print_instagram_ready(last_post, last_post_path)
         elif post and output_path:
             # Summary for single post
             console.print("\n")
             _print_generation_summary(post, output_path, display.stats)
+            _print_instagram_ready(post, output_path)
 
     else:
         # Simple progress bar mode
@@ -393,6 +406,49 @@ async def _generate_posts(
                 console.print(f"\n[green]Generated {len(posts)} post(s)[/green]")
                 for post in posts:
                     console.print(f"  - {post.topic} ({post.slides_count} slides)")
+
+
+def _print_instagram_ready(post, output_path: Path):
+    """Print Instagram-ready caption and hashtags for easy copy-paste."""
+    import re
+
+    def safe_print(text: str) -> str:
+        """Remove characters that can't be encoded in Windows console."""
+        # Remove emojis and other non-ASCII characters for console display
+        # but keep the original in the file
+        try:
+            return text.encode('cp1252', errors='ignore').decode('cp1252')
+        except Exception:
+            # Fallback: remove all non-ASCII
+            return re.sub(r'[^\x00-\x7F]+', '', text)
+
+    # File destination
+    console.print(f"\n[bold cyan]{'=' * 60}[/bold cyan]")
+    console.print(f"[bold]Output:[/bold] {output_path}")
+    console.print(f"[bold cyan]{'=' * 60}[/bold cyan]")
+
+    # Build full caption with hashtags
+    caption_text = post.caption if post.caption else post.hook_text
+    hashtags_str = " ".join(f"#{tag.lstrip('#')}" for tag in post.hashtags) if post.hashtags else ""
+    full_text = f"{caption_text}\n\n{hashtags_str}" if hashtags_str else caption_text
+    char_count = len(full_text)
+
+    # Threads compatibility indicator
+    threads_ok = char_count <= 500
+    threads_status = "[green]OK for Threads[/green]" if threads_ok else "[red]Too long for Threads (>500)[/red]"
+
+    # Instagram-ready content
+    console.print(f"\n[bold yellow]Instagram + Threads Ready ({char_count} chars - {threads_status}):[/bold yellow]")
+    console.print(f"[bold cyan]{'-' * 60}[/bold cyan]\n")
+
+    # Caption (with safe encoding for console)
+    console.print(safe_print(caption_text))
+
+    # Hashtags
+    if hashtags_str:
+        console.print(f"\n{safe_print(hashtags_str)}")
+
+    console.print(f"\n[bold cyan]{'-' * 60}[/bold cyan]")
 
 
 def _print_generation_summary(post, output_path: Path, stats: dict):
@@ -583,6 +639,282 @@ def status(
         console.print("\n[bold]Top Keywords:[/bold]")
         for kw, count in top_keywords:
             console.print(f"  {kw}: {count}")
+
+
+class InstagramProgressDisplay:
+    """Rich display for Instagram publishing progress."""
+
+    def __init__(self):
+        from .instagram.models import InstagramProgress
+        self.progress = InstagramProgress()
+
+    def update(self, progress):
+        """Update the progress state."""
+        self.progress = progress
+
+    def render(self) -> Panel:
+        """Render the progress display."""
+        from .instagram.models import InstagramPostStatus
+
+        progress = self.progress
+        lines = []
+
+        # Status with color
+        status_color = {
+            InstagramPostStatus.PENDING: "white",
+            InstagramPostStatus.UPLOADING: "yellow",
+            InstagramPostStatus.CREATING_CONTAINERS: "cyan",
+            InstagramPostStatus.PUBLISHING: "blue",
+            InstagramPostStatus.PUBLISHED: "green",
+            InstagramPostStatus.FAILED: "red",
+        }.get(progress.status, "white")
+
+        lines.append(f"[bold {status_color}]Status:[/] {progress.status.value.upper()}")
+        lines.append(f"[bold]Step:[/] {progress.current_step}")
+        lines.append(f"[bold]Progress:[/] {progress.progress_percent:.0f}%")
+        lines.append("")
+
+        # Image upload progress
+        if progress.total_images > 0:
+            lines.append(f"[bold cyan]Images:[/] {progress.images_uploaded}/{progress.total_images} uploaded")
+            lines.append(f"[bold cyan]Containers:[/] {progress.containers_created}/{progress.total_images} created")
+            lines.append("")
+
+        # Error display
+        if progress.error:
+            lines.append(f"[bold red]Error:[/] {progress.error}")
+
+        return Panel(
+            "\n".join(lines),
+            title="[bold]Instagram Publishing[/]",
+            border_style="blue",
+            box=box.ROUNDED,
+        )
+
+
+@app.command()
+def post(
+    profile: str = typer.Argument(..., help="Profile name"),
+    post_id: str = typer.Argument(None, help="Post ID to publish (latest if not specified)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate without posting"),
+):
+    """Post a generated carousel to Instagram.
+
+    Examples:
+        socials post ai.for.mortals                    # Post most recent
+        socials post ai.for.mortals 20251210-001      # Post specific
+        socials post ai.for.mortals --dry-run         # Validate only
+    """
+    profile_path = get_profile_path(profile)
+
+    if not profile_path.exists():
+        console.print(f"[red]Profile not found: {profile}[/red]")
+        raise typer.Exit(1)
+
+    # Check for Instagram credentials
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    try:
+        from .instagram.models import InstagramConfig
+        config = InstagramConfig.from_env()
+    except ValueError as e:
+        console.print(f"[red]{e}[/red]")
+        console.print("\n[yellow]To set up Instagram posting:[/]")
+        console.print("  1. Create a Facebook App at https://developers.facebook.com")
+        console.print("  2. Connect your Instagram Business/Creator account")
+        console.print("  3. Generate an access token with instagram_content_publish permission")
+        console.print("  4. Create a Cloudinary account at https://cloudinary.com")
+        console.print("  5. Add credentials to your .env file")
+        raise typer.Exit(1)
+
+    # Run async posting
+    asyncio.run(_post_to_instagram(
+        profile_path=profile_path,
+        post_id=post_id,
+        config=config,
+        dry_run=dry_run,
+    ))
+
+
+async def _post_to_instagram(
+    profile_path: Path,
+    post_id: str | None,
+    config,
+    dry_run: bool,
+):
+    """Async Instagram posting with progress display."""
+    from .instagram import InstagramClient, CloudinaryUploader, InstagramProgress
+    from .knowledge import KnowledgeStore
+
+    store = KnowledgeStore(profile_path)
+
+    # Find the post to publish
+    if post_id:
+        post_record = store.get_post_by_id(post_id)
+        if not post_record:
+            console.print(f"[red]Post not found: {post_id}[/red]")
+            raise typer.Exit(1)
+    else:
+        # Get most recent post
+        recent_posts = store.get_recent_posts(days=30)
+        if not recent_posts:
+            console.print("[red]No posts found. Generate some posts first![/red]")
+            raise typer.Exit(1)
+        post_record = recent_posts[-1]
+
+    # Find the post directory
+    post_path = profile_path / "posts" / post_record.path
+    if not post_path.exists():
+        console.print(f"[red]Post directory not found: {post_path}[/red]")
+        raise typer.Exit(1)
+
+    # Load post metadata
+    metadata_path = post_path / "metadata.json"
+    if not metadata_path.exists():
+        console.print(f"[red]Post metadata not found: {metadata_path}[/red]")
+        raise typer.Exit(1)
+
+    with open(metadata_path) as f:
+        post_metadata = json.load(f)
+
+    # Get slide images
+    slide_paths = sorted(post_path.glob("slide_*.jpg"))
+    if not slide_paths:
+        console.print(f"[red]No slide images found in {post_path}[/red]")
+        raise typer.Exit(1)
+
+    # Load caption
+    caption_path = post_path / "caption.txt"
+    caption = caption_path.read_text() if caption_path.exists() else ""
+
+    # Load hashtags
+    hashtags_path = post_path / "hashtags.txt"
+    if hashtags_path.exists():
+        hashtags = hashtags_path.read_text().strip()
+        if hashtags and not caption.endswith(hashtags):
+            caption = f"{caption}\n\n{hashtags}"
+
+    # Show post info
+    console.print(Panel(
+        f"[bold]Post ID:[/] {post_record.id}\n"
+        f"[bold]Topic:[/] {post_record.topic}\n"
+        f"[bold]Slides:[/] {len(slide_paths)}\n"
+        f"[bold]Generated:[/] {post_record.date}",
+        title="Instagram Posting",
+    ))
+
+    if dry_run:
+        console.print("\n[yellow]DRY RUN - Would upload these images:[/yellow]")
+        for path in slide_paths:
+            console.print(f"  - {path.name}")
+        console.print(f"\n[yellow]Caption ({len(caption)} chars):[/yellow]")
+        console.print(caption[:500] + "..." if len(caption) > 500 else caption)
+        console.print("\n[green]Dry run complete. No images were uploaded.[/green]")
+        return
+
+    # Initialize progress display
+    display = InstagramProgressDisplay()
+
+    async def progress_callback(progress: InstagramProgress):
+        display.update(progress)
+
+    # Create uploader and client
+    uploader = CloudinaryUploader(
+        config=config,
+        progress_callback=lambda step, cur, tot: progress_callback(
+            InstagramProgress(
+                status=InstagramProgress().status,
+                current_step=step,
+                images_uploaded=cur,
+                total_images=tot,
+            )
+        ),
+    )
+
+    client = InstagramClient(
+        config=config,
+        progress_callback=progress_callback,
+    )
+
+    # Validate token first
+    console.print("\n[dim]Validating Instagram access...[/dim]")
+    try:
+        account_info = await client.validate_token()
+        console.print(f"[green]Connected as @{account_info.get('username', 'unknown')}[/green]\n")
+    except Exception as e:
+        console.print(f"[red]Failed to validate Instagram token: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Run with live progress display
+    with Live(console=console, refresh_per_second=4) as live:
+        async def update_display():
+            while True:
+                live.update(display.render())
+                await asyncio.sleep(0.25)
+
+        display_task = asyncio.create_task(update_display())
+
+        try:
+            # Step 1: Upload images to Cloudinary
+            display.update(InstagramProgress(
+                current_step="Uploading images to Cloudinary...",
+                total_images=len(slide_paths),
+            ))
+
+            folder = f"socials-automator/{profile_path.name}/{post_record.id}"
+            image_urls = await uploader.upload_batch(slide_paths, folder=folder)
+
+            # Update progress
+            display.update(InstagramProgress(
+                current_step="Images uploaded, creating Instagram containers...",
+                images_uploaded=len(image_urls),
+                total_images=len(slide_paths),
+                image_urls=image_urls,
+                progress_percent=30.0,
+            ))
+
+            # Step 2: Publish to Instagram
+            result = await client.publish_carousel(
+                image_urls=image_urls,
+                caption=caption,
+            )
+
+            # Step 3: Cleanup Cloudinary uploads
+            if result.success:
+                await uploader.cleanup_async()
+
+        finally:
+            display_task.cancel()
+            try:
+                await display_task
+            except asyncio.CancelledError:
+                pass
+
+    # Show result
+    if result.success:
+        console.print(Panel(
+            f"[bold green]Published successfully![/bold green]\n\n"
+            f"[bold]Media ID:[/] {result.media_id}\n"
+            f"[bold]URL:[/] {result.permalink or 'N/A'}",
+            title="Success",
+            border_style="green",
+        ))
+
+        # Update post metadata with Instagram info
+        post_metadata["instagram"] = result.to_dict()
+        with open(metadata_path, "w") as f:
+            json.dump(post_metadata, f, indent=2)
+
+        console.print(f"\n[dim]Post metadata updated: {metadata_path}[/dim]")
+    else:
+        console.print(Panel(
+            f"[bold red]Publishing failed[/bold red]\n\n"
+            f"[bold]Error:[/] {result.error_message}",
+            title="Error",
+            border_style="red",
+        ))
+        raise typer.Exit(1)
 
 
 @app.command()
