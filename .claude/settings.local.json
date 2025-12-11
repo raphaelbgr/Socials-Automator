@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(python -m pip install:*)",
+      "Bash(where:*)",
+      "Bash(py -3.11:*)",
+      "Bash(py -3.12 --version:*)",
+      "Bash(py -3.13:*)",
+      "Bash(python -m socials_automator.cli:*)",
+      "Bash(python:*)",
+      "Bash(dir:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.z.ai)",
+      "Bash(del \"C:\\Users\\rbgnr\\git\\Socials-Automator\\debug_response.txt\")",
+      "Bash(cmd /c del \"C:\\Users\\rbgnr\\git\\Socials-Automator\\debug_response.txt\")",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

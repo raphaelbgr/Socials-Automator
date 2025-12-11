@@ -1,0 +1,173 @@
+# Socials Automator - Provider Configuration
+# ============================================
+# This file configures AI providers for text and image generation.
+# LiteLLM handles all text providers with a unified API.
+# Environment variables are loaded from .env file.
+
+provider_settings:
+  timeout_seconds: 60
+  max_retries: 3
+  retry_delay_seconds: 2
+  fallback_on_error: true
+
+# ============================================
+# TEXT PROVIDERS (via LiteLLM)
+# ============================================
+# LiteLLM uses model prefixes to route to correct provider:
+# - openai/gpt-4o
+# - anthropic/claude-sonnet-4-20250514
+# - groq/llama-3.3-70b-versatile
+# - ollama/llama3.2
+# - openai/local (for LM Studio with custom base_url)
+
+text_providers:
+  # Priority 1: Z.AI GLM-4.5-Air (Cheap & Fast)
+  # Model: GLM-4.5-Air - 106B total params, 12B active (MoE)
+  # Docs: https://docs.z.ai/
+  zai:
+    priority: 1
+    enabled: true
+    litellm_model: "openai/GLM-4.5-Air"
+    base_url_env: "ZAI_API_URL"
+    api_key_env: "ZAI_API_KEY"
+    timeout: 60
+
+  # Priority 2: Groq (Fast inference)
+  groq:
+    priority: 2
+    enabled: true
+    litellm_model: "groq/llama-3.3-70b-versatile"
+    api_key_env: "GROQ_API_KEY"
+    timeout: 30
+
+  # Priority 3: Google Gemini
+  gemini:
+    priority: 3
+    enabled: true
+    litellm_model: "gemini/gemini-2.0-flash"
+    api_key_env: "GOOGLE_API_KEY"
+    timeout: 30
+
+  # Priority 4: OpenAI (Premium)
+  openai:
+    priority: 4
+    enabled: true
+    litellm_model: "openai/gpt-4o"
+    api_key_env: "OPENAI_API_KEY"
+    timeout: 60
+    models:
+      fast: "openai/gpt-4o-mini"
+      quality: "openai/gpt-4o"
+
+  # Priority 5: Anthropic (NOT OpenAI compatible - disabled)
+  anthropic:
+    priority: 5
+    enabled: false  # Needs Anthropic SDK, not OpenAI compatible
+    litellm_model: "anthropic/claude-sonnet-4-20250514"
+    api_key_env: "ANTHROPIC_API_KEY"
+    timeout: 60
+
+  # Local providers (disabled - enable if running locally)
+  lmstudio:
+    priority: 10
+    enabled: false
+    litellm_model: "openai/local-model"
+    base_url: "http://localhost:1234/v1"
+    api_key: "lm-studio"
+    timeout: 120
+
+  ollama:
+    priority: 11
+    enabled: false
+    litellm_model: "ollama/llama3.2"
+    base_url: "http://localhost:11434"
+    timeout: 120
+
+# Default text provider chain (fallback order)
+text_priority_chain:
+  - zai
+  - groq
+  - gemini
+  - openai
+
+# ============================================
+# IMAGE PROVIDERS
+# ============================================
+image_providers:
+  # Nano Banana (via fal.ai or direct)
+  nanobanana:
+    priority: 1
+    enabled: true
+    type: "fal"
+    model: "fal-ai/flux/dev"  # or nano-banana when available
+    api_key_env: "FAL_API_KEY"
+    timeout: 90
+    cost_per_image: 0.025
+    settings:
+      image_size: "portrait_4_3"  # 1024x1365, close to Instagram 4:5
+      num_inference_steps: 28
+      guidance_scale: 3.5
+
+  fal_flux:
+    priority: 2
+    enabled: true
+    type: "fal"
+    model: "fal-ai/flux/schnell"
+    api_key_env: "FAL_API_KEY"
+    timeout: 60
+    cost_per_image: 0.01
+    settings:
+      image_size: "portrait_4_3"
+      num_inference_steps: 4
+
+  replicate:
+    priority: 3
+    enabled: true
+    type: "replicate"
+    model: "stability-ai/sdxl:latest"
+    api_key_env: "REPLICATE_API_TOKEN"
+    timeout: 120
+    cost_per_image: 0.03
+
+  dalle:
+    priority: 4
+    enabled: true
+    type: "openai"
+    model: "dall-e-3"
+    api_key_env: "OPENAI_API_KEY"
+    timeout: 60
+    cost_per_image: 0.08
+    settings:
+      size: "1024x1792"  # Portrait
+      quality: "standard"
+
+# Default image provider chain (fallback order)
+image_priority_chain:
+  - nanobanana
+  - fal_flux
+  - replicate
+  - dalle
+
+# ============================================
+# TASK-SPECIFIC OVERRIDES
+# ============================================
+# Override provider for specific tasks
+task_overrides:
+  # All tasks use Z.AI GLM-4.5-Air (cheapest)
+  research:
+    text_provider: zai
+
+  hook_generation:
+    text_provider: zai
+    temperature: 0.9
+
+  content_planning:
+    text_provider: zai
+    temperature: 0.7
+
+  # Images use fal.ai (you have FAL_API_KEY)
+  hook_images:
+    image_provider: fal_flux
+
+  content_images:
+    image_provider: fal_flux

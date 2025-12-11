@@ -1,0 +1,349 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2024-12-10",
+  "niches": [
+    {
+      "id": "ai-productivity",
+      "name": "AI Tools & Productivity",
+      "tier": 2,
+      "category": "technology",
+      "description": "Teaching people how to use AI tools to boost productivity, automate tasks, and work smarter.",
+      "engagement_rate": "4-6%",
+      "competition": "low",
+      "growth_rate": "420% search growth",
+      "monetization_potential": "high",
+      "monetization_methods": ["courses", "affiliates", "consulting", "digital_products"],
+      "carousel_fit": "excellent",
+      "content_types": ["tutorials", "tool_comparisons", "tips_lists", "how_to_guides", "before_after"],
+      "target_audience": {
+        "demographics": ["25-45", "professionals", "entrepreneurs", "freelancers", "students"],
+        "pain_points": ["overwhelmed_by_ai", "dont_know_where_to_start", "fear_of_missing_out", "time_wasted_on_manual_tasks"],
+        "desires": ["work_smarter", "save_time", "stay_competitive", "learn_new_skills"]
+      },
+      "content_pillars": ["ai_tools", "automation", "productivity_tips", "tutorials", "tool_reviews"],
+      "hashtags": {
+        "primary": ["#AITools", "#ProductivityHacks", "#AIForEveryone", "#WorkSmarter", "#Automation"],
+        "secondary": ["#ChatGPT", "#AITips", "#TechTips", "#DigitalProductivity", "#FutureOfWork"],
+        "niche": ["#AIProductivity", "#NoCodeAI", "#AIForBeginners", "#SimpleAI"]
+      },
+      "research_sources": {
+        "subreddits": ["ChatGPT", "artificial", "productivity", "Automate", "SideProject"],
+        "keywords": ["AI tools 2024", "ChatGPT alternatives", "AI productivity", "automation tools", "AI for beginners"]
+      },
+      "suggested_handles": [
+        "ai.made" ,
+        "daily.ai.tips",
+        "ai.for" ,
+        "simple.ai.hacks",
+        "ai.productivity.lab"
+      ]
+    },
+    {
+      "id": "finance",
+      "name": "Personal Finance",
+      "tier": 1,
+      "category": "finance",
+      "description": "Helping people manage money, invest wisely, and build wealth through practical financial advice.",
+      "engagement_rate": "6%+",
+      "competition": "medium-high",
+      "growth_rate": "steady",
+      "monetization_potential": "very_high",
+      "monetization_methods": ["courses", "affiliates", "coaching", "ebooks", "sponsored_posts"],
+      "carousel_fit": "excellent",
+      "content_types": ["tips_lists", "statistics", "strategies", "comparisons", "calculators"],
+      "target_audience": {
+        "demographics": ["22-40", "young_professionals", "new_graduates", "parents"],
+        "pain_points": ["debt", "no_savings", "confused_by_investing", "living_paycheck_to_paycheck"],
+        "desires": ["financial_freedom", "early_retirement", "wealth_building", "passive_income"]
+      },
+      "content_pillars": ["budgeting", "investing", "saving", "debt_freedom", "passive_income"],
+      "hashtags": {
+        "primary": ["#PersonalFinance", "#MoneyTips", "#FinancialFreedom", "#Investing", "#MoneyManagement"],
+        "secondary": ["#BudgetTips", "#WealthBuilding", "#FIRE", "#MoneyMindset", "#FinanceTips"],
+        "niche": ["#MoneyFor Beginners", "#InvestingTips", "#DebtFree"]
+      },
+      "research_sources": {
+        "subreddits": ["personalfinance", "FinancialIndependence", "investing", "Bogleheads"],
+        "keywords": ["personal finance tips", "how to invest", "budgeting strategies", "passive income ideas"]
+      },
+      "suggested_handles": [
+        "money.simplified",
+        "finance.for.humans",
+        "wealth.basics",
+        "smart.money.moves"
+      ]
+    },
+    {
+      "id": "fitness",
+      "name": "Fitness & Health",
+      "tier": 1,
+      "category": "health",
+      "description": "Providing workout tips, nutrition advice, and motivation for healthier living.",
+      "engagement_rate": "3-5%",
+      "competition": "high",
+      "growth_rate": "steady",
+      "monetization_potential": "high",
+      "monetization_methods": ["programs", "memberships", "supplements_affiliates", "coaching", "merch"],
+      "carousel_fit": "excellent",
+      "content_types": ["workout_breakdowns", "nutrition_facts", "transformation_stories", "tips_lists", "meal_plans"],
+      "target_audience": {
+        "demographics": ["18-45", "health_conscious", "gym_goers", "beginners"],
+        "pain_points": ["lack_of_motivation", "no_time", "confused_by_diets", "plateau"],
+        "desires": ["weight_loss", "muscle_gain", "energy", "confidence"]
+      },
+      "content_pillars": ["workouts", "nutrition", "motivation", "recovery", "lifestyle"],
+      "hashtags": {
+        "primary": ["#Fitness", "#Workout", "#HealthyLifestyle", "#FitFam", "#GymLife"],
+        "secondary": ["#FitnessMotivation", "#HomeWorkout", "#NutritionTips", "#FitLife", "#HealthyLiving"],
+        "niche": ["#FitnessForBeginners", "#SimpleWorkouts", "#NoGymNeeded"]
+      },
+      "research_sources": {
+        "subreddits": ["fitness", "loseit", "bodyweightfitness", "MealPrepSunday"],
+        "keywords": ["home workout", "weight loss tips", "muscle building", "healthy recipes"]
+      },
+      "suggested_handles": [
+        "fit.simplified",
+        "daily.fitness.tips",
+        "simple.fit.life"
+      ]
+    },
+    {
+      "id": "self-improvement",
+      "name": "Self-Improvement",
+      "tier": 2,
+      "category": "lifestyle",
+      "description": "Inspiring personal growth through habits, mindset shifts, and actionable self-development advice.",
+      "engagement_rate": "4-5%",
+      "competition": "medium",
+      "growth_rate": "growing",
+      "monetization_potential": "high",
+      "monetization_methods": ["courses", "coaching", "books", "journals", "speaking"],
+      "carousel_fit": "excellent",
+      "content_types": ["habits", "mindset_tips", "book_summaries", "daily_practices", "quotes_with_context"],
+      "target_audience": {
+        "demographics": ["20-40", "ambitious", "professionals", "students"],
+        "pain_points": ["procrastination", "lack_of_direction", "low_confidence", "bad_habits"],
+        "desires": ["success", "discipline", "clarity", "better_relationships"]
+      },
+      "content_pillars": ["habits", "mindset", "productivity", "relationships", "books"],
+      "hashtags": {
+        "primary": ["#SelfImprovement", "#PersonalGrowth", "#Mindset", "#GrowthMindset", "#SelfDevelopment"],
+        "secondary": ["#SuccessMindset", "#DailyHabits", "#Motivation", "#BetterYourself", "#LifeCoach"],
+        "niche": ["#MindsetShift", "#HabitStacking", "#GrowthJourney"]
+      },
+      "research_sources": {
+        "subreddits": ["selfimprovement", "getdisciplined", "DecidingToBeBetter", "productivity"],
+        "keywords": ["self improvement tips", "daily habits", "mindset books", "personal development"]
+      },
+      "suggested_handles": [
+        "growth.daily",
+        "mindset.simplified",
+        "level.up.daily"
+      ]
+    },
+    {
+      "id": "tech-reviews",
+      "name": "Tech Reviews",
+      "tier": 2,
+      "category": "technology",
+      "description": "Reviewing gadgets, apps, and tech products with honest opinions and comparisons.",
+      "engagement_rate": "3-4%",
+      "competition": "medium",
+      "growth_rate": "steady",
+      "monetization_potential": "high",
+      "monetization_methods": ["affiliates", "sponsored_reviews", "youtube_crossover", "consulting"],
+      "carousel_fit": "excellent",
+      "content_types": ["product_reviews", "comparisons", "pros_cons", "setup_tours", "buying_guides"],
+      "target_audience": {
+        "demographics": ["18-45", "tech_enthusiasts", "gadget_lovers", "early_adopters"],
+        "pain_points": ["overwhelmed_by_choices", "fear_of_bad_purchase", "fomo"],
+        "desires": ["best_value", "latest_tech", "informed_decisions"]
+      },
+      "content_pillars": ["reviews", "comparisons", "news", "tutorials", "deals"],
+      "hashtags": {
+        "primary": ["#TechReview", "#Gadgets", "#TechTips", "#Technology", "#GadgetReview"],
+        "secondary": ["#TechNews", "#SmartHome", "#Apple", "#Android", "#BestGadgets"],
+        "niche": ["#TechForEveryone", "#HonestReview", "#BudgetTech"]
+      },
+      "research_sources": {
+        "subreddits": ["technology", "gadgets", "Android", "apple", "BuyItForLife"],
+        "keywords": ["tech review 2024", "best gadgets", "product comparison", "tech deals"]
+      },
+      "suggested_handles": [
+        "tech.simplified",
+        "honest.tech.reviews",
+        "gadget.guide"
+      ]
+    },
+    {
+      "id": "career",
+      "name": "Career & Business",
+      "tier": 2,
+      "category": "business",
+      "description": "Helping professionals advance their careers with practical advice on jobs, side hustles, and business.",
+      "engagement_rate": "4-5%",
+      "competition": "medium",
+      "growth_rate": "growing",
+      "monetization_potential": "very_high",
+      "monetization_methods": ["courses", "coaching", "templates", "consulting", "speaking"],
+      "carousel_fit": "excellent",
+      "content_types": ["interview_tips", "resume_advice", "side_hustle_ideas", "negotiation", "linkedin_tips"],
+      "target_audience": {
+        "demographics": ["22-45", "job_seekers", "professionals", "entrepreneurs"],
+        "pain_points": ["stuck_in_career", "low_salary", "job_hunting", "no_side_income"],
+        "desires": ["promotion", "higher_salary", "remote_work", "entrepreneurship"]
+      },
+      "content_pillars": ["job_search", "salary_negotiation", "side_hustles", "leadership", "networking"],
+      "hashtags": {
+        "primary": ["#CareerAdvice", "#JobSearch", "#SideHustle", "#CareerGrowth", "#Entrepreneur"],
+        "secondary": ["#LinkedInTips", "#ResumeHelp", "#InterviewTips", "#WorkFromHome", "#BusinessTips"],
+        "niche": ["#CareerHacks", "#SalaryNegotiation", "#QuitYourJob"]
+      },
+      "research_sources": {
+        "subreddits": ["careerguidance", "jobs", "Entrepreneur", "sidehustle", "antiwork"],
+        "keywords": ["career advice", "side hustle ideas", "interview tips", "salary negotiation"]
+      },
+      "suggested_handles": [
+        "career.simplified",
+        "hustle.smart",
+        "job.hacks"
+      ]
+    },
+    {
+      "id": "mental-health",
+      "name": "Mental Health",
+      "tier": 2,
+      "category": "health",
+      "description": "Promoting mental wellness through coping strategies, awareness, and supportive content.",
+      "engagement_rate": "5-6%",
+      "competition": "medium",
+      "growth_rate": "growing",
+      "monetization_potential": "medium",
+      "monetization_methods": ["courses", "journals", "apps_affiliates", "coaching", "books"],
+      "carousel_fit": "good",
+      "content_types": ["coping_strategies", "daily_practices", "awareness", "self_care", "therapy_tips"],
+      "target_audience": {
+        "demographics": ["18-40", "anxiety_sufferers", "stressed_professionals", "students"],
+        "pain_points": ["anxiety", "depression", "burnout", "loneliness", "overthinking"],
+        "desires": ["peace_of_mind", "better_sleep", "healthy_coping", "self_acceptance"]
+      },
+      "content_pillars": ["anxiety", "self_care", "mindfulness", "therapy", "boundaries"],
+      "hashtags": {
+        "primary": ["#MentalHealth", "#SelfCare", "#Anxiety", "#MentalHealthAwareness", "#Mindfulness"],
+        "secondary": ["#Therapy", "#MentalHealthMatters", "#Wellness", "#HealingJourney", "#SelfLove"],
+        "niche": ["#AnxietyTips", "#MentalHealthTips", "#EndTheStigma"]
+      },
+      "research_sources": {
+        "subreddits": ["mentalhealth", "Anxiety", "depression", "selfimprovement"],
+        "keywords": ["mental health tips", "coping with anxiety", "self care ideas", "mindfulness"]
+      },
+      "suggested_handles": [
+        "mind.simplified",
+        "mental.health.daily",
+        "calm.mind.tips"
+      ]
+    },
+    {
+      "id": "sustainable-living",
+      "name": "Sustainable Living",
+      "tier": 2,
+      "category": "lifestyle",
+      "description": "Inspiring eco-friendly lifestyle changes through practical tips and product recommendations.",
+      "engagement_rate": "3-4%",
+      "competition": "low-medium",
+      "growth_rate": "300-500% follower growth",
+      "monetization_potential": "medium-high",
+      "monetization_methods": ["eco_affiliates", "sponsored_posts", "digital_guides", "consulting"],
+      "carousel_fit": "excellent",
+      "content_types": ["eco_tips", "product_swaps", "lifestyle_changes", "diy", "myth_busting"],
+      "target_audience": {
+        "demographics": ["22-40", "eco_conscious", "parents", "minimalists"],
+        "pain_points": ["climate_anxiety", "greenwashing_confusion", "expensive_eco_products"],
+        "desires": ["reduce_footprint", "healthier_home", "sustainable_choices", "save_money"]
+      },
+      "content_pillars": ["zero_waste", "eco_swaps", "sustainable_fashion", "green_home", "food_waste"],
+      "hashtags": {
+        "primary": ["#SustainableLiving", "#EcoFriendly", "#ZeroWaste", "#Sustainability", "#GreenLiving"],
+        "secondary": ["#EcoTips", "#SustainableLifestyle", "#PlasticFree", "#ConsciousLiving", "#EarthFriendly"],
+        "niche": ["#EasyEco", "#SustainableSwaps", "#GreenTips"]
+      },
+      "research_sources": {
+        "subreddits": ["ZeroWaste", "sustainability", "Anticonsumption", "BuyItForLife"],
+        "keywords": ["sustainable living tips", "eco swaps", "zero waste", "sustainable products"]
+      },
+      "suggested_handles": [
+        "eco.simplified",
+        "green.daily.tips",
+        "sustainable.simple"
+      ]
+    },
+    {
+      "id": "mens-grooming",
+      "name": "Men's Grooming",
+      "tier": 2,
+      "category": "beauty",
+      "description": "Modern men's grooming, skincare, and style advice for the everyday guy.",
+      "engagement_rate": "400% YoY growth",
+      "competition": "very_low",
+      "growth_rate": "explosive",
+      "monetization_potential": "high",
+      "monetization_methods": ["affiliates", "sponsored_posts", "own_products", "subscriptions"],
+      "carousel_fit": "good",
+      "content_types": ["routines", "product_reviews", "how_to", "transformations", "tips_lists"],
+      "target_audience": {
+        "demographics": ["18-45", "men", "professionals", "dating"],
+        "pain_points": ["dont_know_where_to_start", "overwhelmed_by_products", "skin_issues"],
+        "desires": ["look_better", "confidence", "simple_routine", "anti_aging"]
+      },
+      "content_pillars": ["skincare", "haircare", "beard", "style", "fragrance"],
+      "hashtags": {
+        "primary": ["#MensGrooming", "#MensSkincare", "#Grooming", "#MensStyle", "#BeardCare"],
+        "secondary": ["#MensFashion", "#Skincare", "#GroomingTips", "#MensHealth", "#Barbershop"],
+        "niche": ["#MensGroomingTips", "#GuysWithSkincare", "#ModernMan"]
+      },
+      "research_sources": {
+        "subreddits": ["malegrooming", "SkincareAddiction", "malefashionadvice", "beards"],
+        "keywords": ["mens skincare routine", "grooming tips for men", "beard care", "mens style"]
+      },
+      "suggested_handles": [
+        "grooming.simplified",
+        "mens.care.daily",
+        "the.groomed.guy"
+      ]
+    },
+    {
+      "id": "remote-work",
+      "name": "Remote Work & Digital Nomad",
+      "tier": 2,
+      "category": "lifestyle",
+      "description": "Helping remote workers and digital nomads thrive with productivity tips, tools, and lifestyle advice.",
+      "engagement_rate": "4-5%",
+      "competition": "low",
+      "growth_rate": "high",
+      "monetization_potential": "high",
+      "monetization_methods": ["courses", "affiliates", "consulting", "community", "tools"],
+      "carousel_fit": "excellent",
+      "content_types": ["productivity_tips", "tool_recommendations", "location_guides", "lifestyle", "home_office"],
+      "target_audience": {
+        "demographics": ["25-45", "remote_workers", "freelancers", "digital_nomads"],
+        "pain_points": ["isolation", "work_life_balance", "productivity_at_home", "travel_logistics"],
+        "desires": ["freedom", "travel", "flexibility", "efficient_work"]
+      },
+      "content_pillars": ["productivity", "tools", "travel", "lifestyle", "home_office"],
+      "hashtags": {
+        "primary": ["#RemoteWork", "#DigitalNomad", "#WorkFromHome", "#RemoteLife", "#LocationIndependent"],
+        "secondary": ["#WFH", "#HomeOffice", "#FreelanceLife", "#RemoteWorker", "#NomadLife"],
+        "niche": ["#RemoteWorkTips", "#DigitalNomadLife", "#WorkFromAnywhere"]
+      },
+      "research_sources": {
+        "subreddits": ["remotework", "digitalnomad", "workfromhome", "freelance"],
+        "keywords": ["remote work tips", "digital nomad guide", "work from home productivity", "best remote tools"]
+      },
+      "suggested_handles": [
+        "remote.simplified",
+        "nomad.productivity",
+        "work.anywhere.tips"
+      ]
+    }
+  ]
+}

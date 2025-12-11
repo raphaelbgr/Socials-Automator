@@ -1,0 +1,462 @@
+{
+  "version": "1.0.0",
+  "profile": {
+    "id": "ai-for-mortals",
+    "name": "ai.for.mortals",
+    "display_name": "AI For Mortals",
+    "instagram_handle": "@ai.for.mortals",
+    "niche_id": "ai-productivity",
+    "tagline": "AI tools for us mere mortals",
+    "bio": "AI made simple for normal humans. Daily tips, tools & tutorials to 10x your productivity. No PhD required.",
+    "description": "We demystify AI tools and show everyday people (mortals!) how to use them to boost productivity, automate boring tasks, and work smarter. Our content focuses on practical, actionable tips that anyone can implement in 5 minutes or less. No tech background needed.",
+    "language": "en",
+    "target_audience": {
+      "demographics": {
+        "age_range": ["25-45"],
+        "occupations": ["professionals", "entrepreneurs", "freelancers", "small_business_owners", "students", "content_creators"],
+        "tech_level": "beginner_to_intermediate",
+        "locations": ["global", "english_speaking"]
+      },
+      "psychographics": {
+        "interests": ["productivity", "technology", "self_improvement", "business", "automation"],
+        "values": ["efficiency", "learning", "simplicity", "staying_current"],
+        "personality": ["curious", "ambitious", "practical", "time_conscious"]
+      },
+      "pain_points": [
+        "Overwhelmed by AI news and don't know where to start",
+        "Fear of being left behind as AI advances",
+        "Tried ChatGPT but don't know how to use it effectively",
+        "Spending too much time on repetitive tasks",
+        "Technical jargon makes AI feel inaccessible",
+        "Don't have time to research which AI tools are worth using",
+        "Worried about job security with AI automation"
+      ],
+      "desires": [
+        "Save hours every week with automation",
+        "Stay competitive in their career",
+        "Learn AI without needing to code",
+        "Get quick wins they can implement today",
+        "Understand AI trends without the hype",
+        "Find the best AI tools for their specific needs",
+        "Feel confident using modern technology"
+      ]
+    }
+  },
+
+  "content_strategy": {
+    "mission": "Make AI accessible and practical for everyone, one post at a time",
+    "tone": {
+      "primary": "friendly_expert",
+      "attributes": ["approachable", "clear", "encouraging", "practical", "no_jargon"],
+      "avoid": ["condescending", "overly_technical", "hype", "clickbait", "fear_mongering"]
+    },
+    "voice_guidelines": {
+      "sentence_style": "Short, punchy sentences. Break complex ideas into simple steps.",
+      "vocabulary": "Use everyday words. If you must use technical terms, explain them.",
+      "perspective": "We're learning together. Position as a helpful friend, not a guru.",
+      "examples": [
+        "Good: 'Here's a 30-second trick to summarize any article'",
+        "Bad: 'Leverage LLM capabilities for content synthesis'",
+        "Good: 'I tested 10 AI writing tools. Here's the winner.'",
+        "Bad: 'Comprehensive analysis of generative AI text solutions'"
+      ]
+    },
+    "content_pillars": [
+      {
+        "id": "tool_tutorials",
+        "name": "Tool Tutorials",
+        "description": "Step-by-step guides on using specific AI tools",
+        "frequency_percent": 30,
+        "examples": ["How to use ChatGPT for X", "Midjourney basics", "Claude vs ChatGPT"]
+      },
+      {
+        "id": "productivity_hacks",
+        "name": "Productivity Hacks",
+        "description": "Quick tips to save time with AI",
+        "frequency_percent": 25,
+        "examples": ["5 prompts that save me 2 hours/day", "Automate your email responses"]
+      },
+      {
+        "id": "tool_comparisons",
+        "name": "Tool Comparisons",
+        "description": "Side-by-side comparisons of AI tools",
+        "frequency_percent": 15,
+        "examples": ["ChatGPT vs Claude vs Gemini", "Best AI for writing", "Free vs paid AI tools"]
+      },
+      {
+        "id": "ai_news_simplified",
+        "name": "AI News Simplified",
+        "description": "Breaking down AI news in simple terms",
+        "frequency_percent": 15,
+        "examples": ["What GPT-5 means for you", "New feature explained", "AI trend breakdown"]
+      },
+      {
+        "id": "prompt_templates",
+        "name": "Prompt Templates",
+        "description": "Ready-to-use prompts for common tasks",
+        "frequency_percent": 15,
+        "examples": ["10 prompts for marketers", "The perfect email prompt", "Research prompts"]
+      }
+    ],
+    "posting_schedule": {
+      "posts_per_day": 3,
+      "posting_times_utc": ["13:00", "17:00", "21:00"],
+      "best_days": ["monday", "tuesday", "wednesday", "thursday"],
+      "avoid_posting": ["saturday_morning", "sunday_morning"]
+    },
+    "carousel_settings": {
+      "min_slides": 4,
+      "max_slides": 10,
+      "preferred_slides": 6,
+      "aspect_ratio": "4:5",
+      "dimensions": {
+        "width": 1080,
+        "height": 1350
+      }
+    },
+    "content_rules": {
+      "always": [
+        "Include actionable takeaway in every post",
+        "Use numbers and specific results when possible",
+        "End with clear CTA (save, share, follow)",
+        "Make first slide impossible to scroll past",
+        "Keep text readable (large fonts, high contrast)"
+      ],
+      "never": [
+        "Use jargon without explanation",
+        "Make claims without backing them up",
+        "Post about tools you haven't tested",
+        "Use fear-based messaging about AI taking jobs",
+        "Promote paid tools without disclosure"
+      ],
+      "avoid_topics": [
+        "Politics",
+        "Religion",
+        "Controversial AI ethics debates",
+        "Specific company drama",
+        "Unverified AI rumors"
+      ]
+    }
+  },
+
+  "hook_strategies": {
+    "primary_types": [
+      {
+        "type": "curiosity_gap",
+        "description": "Create curiosity that can only be satisfied by reading",
+        "templates": [
+          "I discovered a {tool} trick that {benefit}",
+          "99% of people use {tool} wrong. Here's why:",
+          "The {tool} feature nobody talks about:",
+          "I tested {number} AI tools. Only {number} are worth it."
+        ],
+        "frequency_percent": 30
+      },
+      {
+        "type": "bold_statement",
+        "description": "Make a bold claim that challenges assumptions",
+        "templates": [
+          "Stop using {tool} for {task}. Do this instead:",
+          "{Tool} just killed {other_tool}",
+          "This free AI beats {expensive_tool}",
+          "You're wasting hours because you don't know this:"
+        ],
+        "frequency_percent": 25
+      },
+      {
+        "type": "number_benefit",
+        "description": "Specific numbers + clear benefit",
+        "templates": [
+          "{Number} AI tools that will save you {time} this week",
+          "I save {time} daily with these {number} prompts",
+          "{Number} ChatGPT tricks for {audience}",
+          "From {time} to {time}: How I automated {task}"
+        ],
+        "frequency_percent": 25
+      },
+      {
+        "type": "question",
+        "description": "Ask a question the audience wants answered",
+        "templates": [
+          "Is {tool} actually worth it?",
+          "What AI tool should you learn first?",
+          "Why do some people 10x their productivity with AI?",
+          "Can AI really replace {job/task}?"
+        ],
+        "frequency_percent": 10
+      },
+      {
+        "type": "social_proof",
+        "description": "Reference results or authority",
+        "templates": [
+          "The AI workflow that {famous_person/company} uses",
+          "How I {achievement} using only AI",
+          "The prompt template used by {audience}",
+          "{Number}K people asked for this tutorial:"
+        ],
+        "frequency_percent": 10
+      }
+    ],
+    "hook_rules": {
+      "max_words": 12,
+      "must_include": ["benefit_or_curiosity", "specificity"],
+      "formatting": ["all_caps_for_emphasis", "emoji_sparingly"]
+    }
+  },
+
+  "design": {
+    "brand_identity": {
+      "style": "modern_minimal_tech",
+      "mood": ["clean", "professional", "approachable", "futuristic_but_friendly"],
+      "inspiration": ["Apple", "Notion", "Linear", "Vercel"]
+    },
+    "colors": {
+      "primary": {
+        "dark_bg": "#0a0a0f",
+        "light_bg": "#ffffff",
+        "accent": "#6366f1"
+      },
+      "secondary": {
+        "purple": "#8b5cf6",
+        "blue": "#3b82f6",
+        "cyan": "#06b6d4",
+        "green": "#10b981"
+      },
+      "gradients": {
+        "primary": "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+        "accent": "linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)",
+        "dark": "linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 100%)"
+      },
+      "text": {
+        "primary": "#ffffff",
+        "secondary": "#a1a1aa",
+        "on_light": "#18181b"
+      }
+    },
+    "typography": {
+      "heading_font": "Inter-Bold",
+      "body_font": "Inter-Regular",
+      "accent_font": "JetBrains Mono",
+      "sizes": {
+        "hook_text": 72,
+        "slide_heading": 56,
+        "body_text": 36,
+        "caption": 28
+      },
+      "fallback_fonts": ["SF Pro Display", "Helvetica Neue", "Arial"]
+    },
+    "slide_templates": {
+      "hook_slide": {
+        "background": "gradient_or_image",
+        "text_position": "center",
+        "include_logo": true,
+        "logo_position": "bottom_right",
+        "overlay_opacity": 0.7
+      },
+      "content_slide": {
+        "background": "solid_dark",
+        "text_position": "center_left",
+        "include_logo": true,
+        "number_style": "large_gradient_number",
+        "icon_style": "simple_line_icons"
+      },
+      "cta_slide": {
+        "background": "gradient",
+        "text_position": "center",
+        "include_logo": true,
+        "include_handle": true
+      }
+    },
+    "image_generation": {
+      "style_prompt_suffix": "minimal, clean, tech aesthetic, dark mode, subtle gradients, professional, modern UI style",
+      "avoid_in_images": ["faces", "text_heavy", "cluttered", "cartoonish", "stock_photo_feel"],
+      "preferred_subjects": ["abstract_tech", "devices", "workspaces", "data_visualization", "geometric_patterns"]
+    }
+  },
+
+  "hashtag_strategy": {
+    "total_count": 20,
+    "distribution": {
+      "high_volume": 5,
+      "medium_volume": 8,
+      "low_volume_niche": 5,
+      "branded": 2
+    },
+    "hashtag_sets": {
+      "primary": [
+        "#AITools", "#ArtificialIntelligence", "#ProductivityTips", "#TechTips", "#ChatGPT",
+        "#Automation", "#WorkSmarter", "#AIForBusiness", "#DigitalProductivity", "#FutureOfWork"
+      ],
+      "secondary": [
+        "#AIHacks", "#ProductivityHacks", "#NoCode", "#AIAssistant", "#TechEducation",
+        "#LearnAI", "#AITutorial", "#SmartWork", "#EfficiencyTips", "#ModernWork"
+      ],
+      "niche": [
+        "#AIForMortals", "#AIForBeginners", "#AIForEveryone", "#SimpleAI", "#AIWithoutCode",
+        "#EverydayAI", "#PracticalAI", "#AIProductivity", "#PromptEngineering", "#AIAutomation"
+      ],
+      "branded": [
+        "#AIForMortals", "#MortalsUseAI"
+      ]
+    },
+    "banned_hashtags": [
+      "#followforfollow", "#f4f", "#likeforlike", "#followback"
+    ]
+  },
+
+  "research_sources": {
+    "priority_order": ["reddit", "twitter", "news", "youtube", "blogs"],
+    "sources": {
+      "subreddits": [
+        "ChatGPT",
+        "artificial",
+        "singularity",
+        "MachineLearning",
+        "productivity",
+        "Automate",
+        "OpenAI",
+        "ClaudeAI",
+        "LocalLLaMA",
+        "StableDiffusion"
+      ],
+      "twitter_accounts": [
+        "@OpenAI",
+        "@AnthropicAI",
+        "@GoogleAI",
+        "@ylecun",
+        "@kaboreinav",
+        "@emaborevkato"
+      ],
+      "rss_feeds": [
+        "https://openai.com/blog/rss",
+        "https://www.anthropic.com/blog/rss",
+        "https://techcrunch.com/tag/artificial-intelligence/feed/"
+      ],
+      "news_sites": [
+        "techcrunch.com",
+        "theverge.com",
+        "arstechnica.com",
+        "wired.com"
+      ],
+      "youtube_channels": [
+        "Matt Wolfe",
+        "All About AI",
+        "AI Explained",
+        "Fireship"
+      ]
+    },
+    "trending_keywords": [
+      "ChatGPT update",
+      "Claude 3",
+      "GPT-5",
+      "AI tools 2024",
+      "best AI apps",
+      "AI automation",
+      "AI productivity",
+      "prompt engineering",
+      "AI for beginners",
+      "free AI tools"
+    ],
+    "content_freshness": {
+      "max_age_days": 7,
+      "prefer_last_hours": 48,
+      "evergreen_allowed": true
+    }
+  },
+
+  "ai_generation": {
+    "providers": {
+      "text_priority": ["lmstudio", "ollama", "groq", "openai", "anthropic"],
+      "image_priority": ["nanobanana", "fal", "dalle"],
+      "task_overrides": {
+        "research": {
+          "provider": "groq",
+          "model": "llama-3.3-70b-versatile",
+          "reason": "Fast inference for research tasks"
+        },
+        "hook_generation": {
+          "provider": "openai",
+          "model": "gpt-4o",
+          "reason": "Best creativity for hooks"
+        },
+        "content_planning": {
+          "provider": "anthropic",
+          "model": "claude-sonnet-4-20250514",
+          "reason": "Best reasoning for content structure"
+        },
+        "hook_images": {
+          "provider": "nanobanana_pro",
+          "reason": "Higher quality for first impression"
+        },
+        "content_images": {
+          "provider": "nanobanana",
+          "reason": "Cost effective for content slides"
+        }
+      }
+    },
+    "prompts": {
+      "system_context": "You are a content creator for @ai.for.mortals, an Instagram account that makes AI tools accessible for everyday people - us mere mortals who don't have PhDs in computer science. Your audience is professionals aged 25-45 who are curious about AI but feel overwhelmed. They want practical, actionable tips they can implement in 5 minutes. Avoid jargon. Be friendly, clear, slightly playful (lean into the 'mortals' theme), and encouraging. Every piece of content should have a specific takeaway.",
+      "content_guidelines": [
+        "Always explain WHY something matters, not just WHAT it is",
+        "Include specific numbers and results when possible",
+        "Break complex topics into numbered steps",
+        "End each carousel with a clear call-to-action",
+        "Use analogies to explain technical concepts"
+      ]
+    },
+    "quality_checks": {
+      "min_hook_score": 7,
+      "max_jargon_words": 2,
+      "required_elements": ["hook", "value", "cta"],
+      "image_requirements": {
+        "min_resolution": [1080, 1350],
+        "format": "JPEG",
+        "quality": 95
+      }
+    }
+  },
+
+  "output_settings": {
+    "folder_structure": "posts/{year}/{month}/{day}-{post_number}-{slug}",
+    "file_naming": {
+      "slides": "slide_{number:02d}.jpg",
+      "caption": "caption.txt",
+      "hashtags": "hashtags.txt",
+      "metadata": "metadata.json",
+      "alt_texts": "alt_texts.json"
+    },
+    "caption_format": {
+      "max_length": 2200,
+      "structure": [
+        "hook_line",
+        "empty_line",
+        "value_proposition",
+        "empty_line",
+        "cta",
+        "empty_line",
+        "hashtags"
+      ],
+      "emoji_usage": "minimal",
+      "line_breaks": "use_for_readability"
+    }
+  },
+
+  "analytics_tracking": {
+    "enabled": true,
+    "track_metrics": [
+      "posts_generated",
+      "generation_time",
+      "provider_usage",
+      "cost_per_post",
+      "topics_covered",
+      "content_pillar_distribution"
+    ]
+  },
+
+  "metadata": {
+    "created_at": "2024-12-10T12:00:00Z",
+    "updated_at": "2024-12-10T12:00:00Z",
+    "created_by": "system",
+    "status": "active"
+  }
+}
