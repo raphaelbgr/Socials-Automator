@@ -71,43 +71,52 @@ python -m socials_automator.cli generate your-profile-name --topic "5 ChatGPT tr
 python -m socials_automator.cli generate your-profile-name
 ```
 
-## Usage
+## CLI Reference
 
-### Commands
+Get help for any command with `--help`:
 
 ```bash
-# List all available profiles
-python -m socials_automator.cli list-profiles
-
-# Generate posts
-python -m socials_automator.cli generate <profile> [options]
-
-# Create a new profile
-python -m socials_automator.cli new-profile
-
-# Show profile status and recent posts
-python -m socials_automator.cli status <profile>
-
-# List available niches
-python -m socials_automator.cli list-niches
+python -m socials_automator.cli --help
+python -m socials_automator.cli generate --help
 ```
 
-### Generate Command Options
+### Main Commands
+
+| Command | Description |
+|---------|-------------|
+| `generate` | Generate carousel posts for a profile |
+| `new-profile` | Create a new profile interactively |
+| `list-profiles` | List all available profiles |
+| `list-niches` | List available niches from niches.json |
+| `status` | Show profile status and recent posts |
+| `init` | Initialize project structure |
+
+---
+
+### generate
+
+Generate carousel posts for a profile. By default, the AI decides the optimal number of slides (3-10) based on the topic content.
 
 ```bash
 python -m socials_automator.cli generate <profile> [OPTIONS]
-
-Options:
-  -t, --topic TEXT       Topic for the post (optional - AI will generate if not provided)
-  -p, --pillar TEXT      Content pillar (e.g., tool_tutorials, productivity_hacks)
-  -n, --count INTEGER    Number of posts to generate [default: 1]
-  -s, --slides INTEGER   Force specific slide count (default: AI decides)
-  --min-slides INTEGER   Minimum slides when AI decides [default: 3]
-  --max-slides INTEGER   Maximum slides when AI decides [default: 10]
 ```
 
-### Examples
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `profile` | Profile name to generate for (required) |
 
+**Options:**
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--topic` | `-t` | Topic for the post. If not provided, AI generates a topic | Auto |
+| `--pillar` | `-p` | Content pillar (e.g., tool_tutorials, productivity_hacks) | Auto |
+| `--count` | `-n` | Number of posts to generate | 1 |
+| `--slides` | `-s` | Force specific slide count (overrides AI decision) | AI decides |
+| `--min-slides` | | Minimum slides when AI decides | 3 |
+| `--max-slides` | | Maximum slides when AI decides | 10 |
+
+**Examples:**
 ```bash
 # Generate 1 post with AI-chosen topic
 python -m socials_automator.cli generate ai.for.mortals
@@ -123,6 +132,81 @@ python -m socials_automator.cli generate ai.for.mortals -t "AI tools for writers
 
 # Generate post with 4-8 slides (AI decides within range)
 python -m socials_automator.cli generate ai.for.mortals --min-slides 4 --max-slides 8
+```
+
+---
+
+### new-profile
+
+Create a new profile for your Instagram account.
+
+```bash
+python -m socials_automator.cli new-profile <name> [OPTIONS]
+```
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `name` | Profile folder name (required) |
+
+**Options:**
+| Option | Short | Description | Required |
+|--------|-------|-------------|----------|
+| `--handle` | `-h` | Instagram handle (without @) | Yes |
+| `--niche` | `-n` | Niche ID from niches.json | No |
+
+**Examples:**
+```bash
+# Create a new profile
+python -m socials_automator.cli new-profile my-brand -h mybrand
+
+# Create with specific niche
+python -m socials_automator.cli new-profile tech-tips -h techtips -n ai_tools
+```
+
+---
+
+### status
+
+Show profile status and recent posts.
+
+```bash
+python -m socials_automator.cli status <profile>
+```
+
+**Examples:**
+```bash
+python -m socials_automator.cli status ai.for.mortals
+```
+
+---
+
+### list-profiles
+
+List all available profiles.
+
+```bash
+python -m socials_automator.cli list-profiles
+```
+
+---
+
+### list-niches
+
+List available niches from niches.json with their content pillars.
+
+```bash
+python -m socials_automator.cli list-niches
+```
+
+---
+
+### init
+
+Initialize project structure (creates config and profiles directories).
+
+```bash
+python -m socials_automator.cli init
 ```
 
 ## Output
@@ -209,38 +293,151 @@ Each profile has a `metadata.json` with:
 
 ## API Keys Setup
 
-### Z.AI (Recommended for Text - Cheap)
-1. Go to [z.ai](https://z.ai)
-2. Create an account and get API key
-3. Add to `.env`:
+You need **at least one text provider** and **one image provider** to use Socials Automator. The cheapest combination is Z.AI + fal.ai (~$0.02 per post).
+
+### Minimum Setup (Recommended)
+
+For the cheapest setup, get these two keys:
+
+1. **Z.AI** (text generation) - ~$0.001 per request
+2. **fal.ai** (image generation) - ~$0.01 per image
+
+---
+
+### Text Providers
+
+#### Z.AI (Recommended - Cheapest)
+Uses the GLM-4.5-Air model, a powerful and affordable option.
+
+1. Go to [https://z.ai](https://z.ai)
+2. Click "Sign Up" and create an account
+3. Navigate to "API Keys" in your dashboard
+4. Click "Create API Key" and copy the key
+5. Add to your `.env` file:
    ```
-   ZAI_API_KEY=your-key
+   ZAI_API_KEY=your-api-key-here
    ZAI_API_URL=https://api.z.ai/v1
    ```
 
-### Groq (Free Tier)
-1. Go to [console.groq.com](https://console.groq.com)
-2. Create account and generate API key
-3. Add to `.env`:
+**Cost**: ~$0.001 per 1K tokens (very cheap)
+
+#### Groq (Free Tier Available)
+Fast inference with Llama 3.3 70B model. Has a generous free tier.
+
+1. Go to [https://console.groq.com](https://console.groq.com)
+2. Sign up with Google, GitHub, or email
+3. Go to "API Keys" in the left sidebar
+4. Click "Create API Key"
+5. Copy the key (starts with `gsk_`)
+6. Add to your `.env` file:
    ```
-   GROQ_API_KEY=gsk_...
+   GROQ_API_KEY=gsk_your-api-key-here
    ```
 
-### OpenAI (Text + Images)
-1. Go to [platform.openai.com](https://platform.openai.com)
-2. Create API key
-3. Add to `.env`:
+**Cost**: Free tier includes ~14,400 requests/day
+
+#### Google Gemini
+Google's Gemini 2.0 Flash model.
+
+1. Go to [https://aistudio.google.com](https://aistudio.google.com)
+2. Sign in with your Google account
+3. Click "Get API Key" in the top right
+4. Click "Create API Key" and select a project
+5. Copy the API key
+6. Add to your `.env` file:
    ```
-   OPENAI_API_KEY=sk-...
+   GOOGLE_API_KEY=your-api-key-here
    ```
 
-### fal.ai (Cheap Images)
-1. Go to [fal.ai](https://fal.ai)
-2. Create account and get API key
-3. Add to `.env`:
+**Cost**: Free tier available, then pay-as-you-go
+
+#### OpenAI (GPT-4o)
+Premium option with GPT-4o model.
+
+1. Go to [https://platform.openai.com](https://platform.openai.com)
+2. Sign up or log in
+3. Go to "API Keys" in the left sidebar
+4. Click "Create new secret key"
+5. Copy the key (starts with `sk-`)
+6. Add to your `.env` file:
    ```
-   FAL_API_KEY=...
+   OPENAI_API_KEY=sk-your-api-key-here
    ```
+
+**Cost**: ~$0.005 per 1K tokens (more expensive)
+
+---
+
+### Image Providers
+
+#### fal.ai (Recommended - Cheapest)
+Uses Flux models for high-quality image generation.
+
+1. Go to [https://fal.ai](https://fal.ai)
+2. Click "Sign Up" (top right)
+3. Sign up with Google, GitHub, or email
+4. Go to "Keys" in your dashboard ([https://fal.ai/dashboard/keys](https://fal.ai/dashboard/keys))
+5. Click "Create Key"
+6. Copy the API key
+7. Add to your `.env` file:
+   ```
+   FAL_API_KEY=your-api-key-here
+   ```
+
+**Cost**: ~$0.01 per image (Flux Schnell) or ~$0.025 (Flux Dev)
+
+#### Replicate (SDXL)
+Access to Stable Diffusion XL and other models.
+
+1. Go to [https://replicate.com](https://replicate.com)
+2. Sign up with GitHub
+3. Go to Account Settings > API tokens
+4. Copy your API token
+5. Add to your `.env` file:
+   ```
+   REPLICATE_API_TOKEN=r8_your-token-here
+   ```
+
+**Cost**: ~$0.03 per image
+
+#### OpenAI DALL-E 3
+Premium image generation from OpenAI.
+
+1. Use the same OpenAI API key from text setup
+2. DALL-E 3 access is included with OpenAI API
+3. Add to your `.env` file (if not already):
+   ```
+   OPENAI_API_KEY=sk-your-api-key-here
+   ```
+
+**Cost**: ~$0.08 per image (most expensive)
+
+---
+
+### Example .env File
+
+```bash
+# Text Providers (pick at least one)
+ZAI_API_KEY=your-zai-key
+ZAI_API_URL=https://api.z.ai/v1
+GROQ_API_KEY=gsk_your-groq-key
+GOOGLE_API_KEY=your-google-key
+OPENAI_API_KEY=sk-your-openai-key
+
+# Image Providers (pick at least one)
+FAL_API_KEY=your-fal-key
+REPLICATE_API_TOKEN=r8_your-replicate-token
+# OPENAI_API_KEY is also used for DALL-E 3
+```
+
+### Provider Priority
+
+The system tries providers in order of priority (cheapest first by default):
+
+**Text**: Z.AI → Groq → Gemini → OpenAI
+**Image**: fal.ai Flux Dev → fal.ai Flux Schnell → Replicate → DALL-E 3
+
+If a provider fails (rate limit, API error), it automatically falls back to the next one.
 
 ## Project Structure
 
