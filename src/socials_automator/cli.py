@@ -209,11 +209,14 @@ def generate(
     slides: int = typer.Option(None, "--slides", "-s", help="Number of slides (default: AI decides)"),
     min_slides: int = typer.Option(3, "--min-slides", help="Minimum slides when AI decides"),
     max_slides: int = typer.Option(10, "--max-slides", help="Maximum slides when AI decides"),
+    post_after: bool = typer.Option(False, "--post", help="Publish to Instagram after generating"),
 ):
     """Generate carousel posts for a profile.
 
     By default, the AI decides the optimal number of slides (3-10) based on
     the topic content. Use --slides to force a specific count.
+
+    Use --post to automatically publish to Instagram after generation.
     """
     profile_path = get_profile_path(profile)
 
@@ -249,6 +252,7 @@ def generate(
         slides=slides,
         min_slides=min_slides,
         max_slides=max_slides,
+        post_after=post_after,
     ))
 
 
@@ -262,6 +266,7 @@ async def _generate_posts(
     min_slides: int = 3,
     max_slides: int = 10,
     verbose: bool = True,
+    post_after: bool = False,
 ):
     """Async post generation with progress display."""
     display = VerboseProgressDisplay()
@@ -406,6 +411,36 @@ async def _generate_posts(
                 console.print(f"\n[green]Generated {len(posts)} post(s)[/green]")
                 for post in posts:
                     console.print(f"  - {post.topic} ({post.slides_count} slides)")
+
+    # Auto-post to Instagram if requested
+    if post_after and output_path:
+        import shutil
+        from dotenv import load_dotenv
+        load_dotenv()
+
+        try:
+            from .instagram.models import InstagramConfig
+            ig_config = InstagramConfig.from_env()
+        except ValueError as e:
+            console.print(f"\n[red]Cannot post: {e}[/red]")
+            console.print("[yellow]Post saved in generated/ folder. Set up Instagram credentials to post.[/yellow]")
+            return
+
+        # Move from generated/ to pending-post/
+        generated_path = output_path
+        pending_path = generated_path.parent.parent / "pending-post" / generated_path.name
+        pending_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(generated_path), str(pending_path))
+        console.print(f"\n[dim]Moved to pending-post: {pending_path.name}[/dim]")
+
+        # Now post to Instagram
+        console.print("\n[bold cyan]Publishing to Instagram...[/bold cyan]")
+        await _post_to_instagram(
+            profile_path=profile_path,
+            post_id=None,
+            config=ig_config,
+            dry_run=False,
+        )
 
 
 def _print_instagram_ready(post, output_path: Path):

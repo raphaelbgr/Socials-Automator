@@ -38,9 +38,22 @@ python -m socials_automator.cli generate ai.for.mortals --topic "5 AI tools for 
 
 ---
 
-### Workflow 2: Full Automation (Generate → Schedule → Post)
+### Workflow 2: One-Command Generate + Post
 
-Generate content, schedule it, then auto-post to Instagram:
+Generate and immediately publish to Instagram in a single command:
+
+```bash
+# Generate AND post in one command
+python -m socials_automator.cli generate ai.for.mortals --topic "5 AI tools for productivity" --post
+```
+
+**Requires:** Instagram API + Cloudinary setup (see [Instagram Posting Setup](#instagram-posting-setup))
+
+---
+
+### Workflow 3: Full Automation (Generate → Schedule → Post)
+
+Generate content, schedule it, then auto-post to Instagram (for more control):
 
 ```bash
 # Step 1: Generate content
@@ -68,7 +81,7 @@ posts/2025/12/
 
 ---
 
-### Workflow 3: Batch Generation
+### Workflow 4: Batch Generation
 
 Generate multiple posts at once:
 
