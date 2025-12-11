@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from typing import Any
 
 from pydantic import BaseModel
@@ -294,6 +295,18 @@ Return as JSON:
                         logging.warning(f"Attempt {attempt + 1}: Content has placeholders, retrying...")
                         last_error = "Content slides contain placeholder text instead of actual content"
                         continue
+
+                    # Validate that if topic mentions a number, we have that many content slides
+                    hook_text = data.get("hook_text", topic)
+                    number_match = re.search(r'\b(\d+)\s+(?:ChatGPT\s+)?(?:prompts?|tips?|tricks?|tools?|ways?|steps?|hacks?|ideas?|methods?|examples?|templates?|things?)\b', hook_text, re.IGNORECASE)
+                    if number_match:
+                        expected_items = int(number_match.group(1))
+                        actual_items = len(content_slides)
+                        if actual_items != expected_items:
+                            import logging
+                            logging.warning(f"Attempt {attempt + 1}: Hook says '{expected_items}' items but got {actual_items} content slides, retrying...")
+                            last_error = f"Hook promises {expected_items} items but only {actual_items} content slides were generated"
+                            continue
 
                     return PostPlan(
                         topic=topic,
