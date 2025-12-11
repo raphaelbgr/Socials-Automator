@@ -104,7 +104,7 @@ image_providers:
     timeout: 90
     cost_per_image: 0.025
     settings:
-      image_size: "portrait_4_3"  # 1024x1365, close to Instagram 4:5
+      # image_size determined dynamically (square for 1080x1080)
       num_inference_steps: 28
       guidance_scale: 3.5
 
@@ -117,7 +117,7 @@ image_providers:
     timeout: 60
     cost_per_image: 0.01
     settings:
-      image_size: "portrait_4_3"
+      # image_size determined dynamically (square for 1080x1080)
       num_inference_steps: 4
 
   replicate:
@@ -138,7 +138,7 @@ image_providers:
     timeout: 60
     cost_per_image: 0.08
     settings:
-      size: "1024x1792"  # Portrait
+      # size determined dynamically (1024x1024 for square)
       quality: "standard"
 
 # Default image provider chain (fallback order)
