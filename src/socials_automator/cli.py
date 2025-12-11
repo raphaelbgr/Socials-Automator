@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -20,6 +21,25 @@ from rich import box
 
 from .content import ContentGenerator
 from .content.models import GenerationProgress
+
+# Configure logging to suppress console output - all logs go to files only
+# This prevents WARNING/INFO messages from polluting the Rich CLI display
+
+# Remove any default console handlers from root logger
+root_logger = logging.getLogger()
+root_logger.handlers = []
+root_logger.setLevel(logging.CRITICAL)  # Suppress root logger output
+
+# Suppress loggers that might print to console (except ai_calls which has file handler)
+for logger_name in ["httpx", "httpcore", "urllib3", "asyncio"]:
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.WARNING)
+    logger.propagate = False
+
+# Ensure ai_calls and instagram_api loggers don't propagate to console
+for logger_name in ["ai_calls", "instagram_api"]:
+    logger = logging.getLogger(logger_name)
+    logger.propagate = False  # Don't propagate to root (keep file handlers)
 
 # Create Typer app
 app = typer.Typer(
@@ -43,7 +63,11 @@ class VerboseProgressDisplay:
             "total_cost": 0.0,
             "providers_used": set(),
             "text_provider": None,
+            "text_model": None,
+            "text_prompt_preview": None,
             "image_provider": None,
+            "image_model": None,
+            "image_prompt_preview": None,
         }
 
     def add_event(self, progress: GenerationProgress):
@@ -66,15 +90,23 @@ class VerboseProgressDisplay:
         self.stats["image_calls"] = progress.total_image_calls
         self.stats["total_cost"] = progress.total_cost_usd
 
-        # Track providers (persist values)
+        # Track providers (persist values - don't overwrite with None)
         if progress.text_provider:
             self.stats["text_provider"] = progress.text_provider
+        if progress.text_model:
             self.stats["text_model"] = progress.text_model
+        if progress.text_prompt_preview:
+            self.stats["text_prompt_preview"] = progress.text_prompt_preview
+        if progress.text_provider:
             self.stats["providers_used"].add(progress.text_provider)
+
         if progress.image_provider:
             self.stats["image_provider"] = progress.image_provider
-            self.stats["image_model"] = progress.image_model
             self.stats["providers_used"].add(progress.image_provider)
+        if progress.image_model:
+            self.stats["image_model"] = progress.image_model
+        if progress.image_prompt_preview:
+            self.stats["image_prompt_preview"] = progress.image_prompt_preview
 
     def render(self, progress: GenerationProgress) -> Panel:
         """Render the progress display."""
@@ -91,6 +123,20 @@ class VerboseProgressDisplay:
 
         lines.append(f"[bold {status_color}]Status:[/] {progress.status.upper()}")
         lines.append(f"[bold]Step:[/] {progress.current_step}")
+
+        # Show current action prominently (validation attempts, etc.)
+        if progress.current_action:
+            action_color = "yellow" if "Retry" in progress.current_action else "cyan"
+            lines.append(f"[bold {action_color}]Action:[/] {progress.current_action}")
+
+        # Show validation progress if in validation
+        if progress.validation_attempt > 0:
+            lines.append(f"[bold]Attempt:[/] {progress.validation_attempt}/{progress.validation_max_attempts}")
+            if progress.validation_error:
+                # Truncate long error messages
+                error_text = progress.validation_error[:60] + "..." if len(progress.validation_error) > 60 else progress.validation_error
+                lines.append(f"[dim red]Last error: {error_text}[/]")
+
         lines.append(f"[bold]Progress:[/] {progress.completed_steps}/{progress.total_steps} ({progress.progress_percent:.0f}%)")
         lines.append("")
 
@@ -99,36 +145,38 @@ class VerboseProgressDisplay:
             lines.append(f"[bold cyan]Slide:[/] {progress.current_slide}/{progress.total_slides}")
             lines.append("")
 
-        # Text AI Activity - use persisted stats if current progress doesn't have it
+        # Text AI Activity - ALWAYS show if we have persisted provider info
         text_provider = progress.text_provider or self.stats.get("text_provider")
         text_model = progress.text_model or self.stats.get("text_model")
-        if text_provider or progress.event_type.startswith("text_"):
+        text_prompt = progress.text_prompt_preview or self.stats.get("text_prompt_preview")
+
+        if text_provider:
             lines.append("[bold magenta]Text AI:[/]")
-            if text_provider:
-                lines.append(f"  Provider: [green]{text_provider}[/]")
+            lines.append(f"  Provider: [green]{text_provider}[/]")
             if text_model:
                 lines.append(f"  Model: [blue]{text_model}[/]")
-            if progress.text_prompt_preview:
-                lines.append(f"  [dim]Prompt:[/] {progress.text_prompt_preview[:80]}...")
+            if text_prompt:
+                lines.append(f"  [dim]Last prompt:[/] {text_prompt[:70]}...")
             if progress.text_failed_providers:
                 failed = " | ".join(progress.text_failed_providers)
-                lines.append(f"  [dim]Previous attempts: {failed}[/]")
+                lines.append(f"  [dim]Failed providers: {failed}[/]")
             lines.append("")
 
-        # Image AI Activity - use persisted stats if current progress doesn't have it
+        # Image AI Activity - show if we have provider info
         image_provider = progress.image_provider or self.stats.get("image_provider")
         image_model = progress.image_model or self.stats.get("image_model")
-        if image_provider or progress.event_type.startswith("image_"):
+        image_prompt = progress.image_prompt_preview or self.stats.get("image_prompt_preview")
+
+        if image_provider:
             lines.append("[bold magenta]Image AI:[/]")
-            if image_provider:
-                lines.append(f"  Provider: [green]{image_provider}[/]")
+            lines.append(f"  Provider: [green]{image_provider}[/]")
             if image_model:
                 lines.append(f"  Model: [blue]{image_model}[/]")
-            if progress.image_prompt_preview:
-                lines.append(f"  [dim]Prompt:[/] {progress.image_prompt_preview[:80]}...")
+            if image_prompt:
+                lines.append(f"  [dim]Last prompt:[/] {image_prompt[:70]}...")
             if progress.image_failed_providers:
                 failed = " | ".join(progress.image_failed_providers)
-                lines.append(f"  [dim]Previous attempts: {failed}[/]")
+                lines.append(f"  [dim]Failed providers: {failed}[/]")
             lines.append("")
 
         # Stats
@@ -323,10 +371,29 @@ async def _generate_posts(
                         await display_task
                     except asyncio.CancelledError:
                         pass
-                    console.print(f"\n[bold red]Content Generation Failed[/bold red]")
-                    console.print(f"[red]{e}[/red]")
-                    console.print("\n[yellow]This usually means the AI failed to generate proper content.[/yellow]")
-                    console.print("[yellow]Try running the command again, or try a different/simpler topic.[/yellow]")
+                    # Show a clear error panel
+                    error_lines = [
+                        "[bold red]Content Generation Failed[/bold red]",
+                        "",
+                        f"[red]{e}[/red]",
+                        "",
+                        "[bold yellow]What happened:[/bold yellow]",
+                        "  The AI repeatedly failed to generate content that matches the topic.",
+                        "  For example, if the topic asks for '5 tips', the AI kept generating",
+                        "  a different number of content slides.",
+                        "",
+                        "[bold cyan]Suggestions:[/bold cyan]",
+                        "  1. Try again - AI responses can vary",
+                        "  2. Use a simpler topic (e.g., '3 tips' instead of '7 tips')",
+                        "  3. Check logs/ai_calls.log for detailed error information",
+                        "  4. Consider switching text provider in config/providers.yaml",
+                    ]
+                    console.print(Panel(
+                        "\n".join(error_lines),
+                        title="[bold red]Generation Error[/bold red]",
+                        border_style="red",
+                        box=box.ROUNDED,
+                    ))
                     return
                 finally:
                     display_task.cancel()
@@ -353,6 +420,36 @@ async def _generate_posts(
 
                 try:
                     posts = await generator.generate_daily_posts(count=count)
+                except RuntimeError as e:
+                    display_task.cancel()
+                    try:
+                        await display_task
+                    except asyncio.CancelledError:
+                        pass
+                    # Show a clear error panel
+                    error_lines = [
+                        "[bold red]Content Generation Failed[/bold red]",
+                        "",
+                        f"[red]{e}[/red]",
+                        "",
+                        "[bold yellow]What happened:[/bold yellow]",
+                        "  The AI repeatedly failed to generate content that matches the topic.",
+                        "  For example, if the topic asks for '5 tips', the AI kept generating",
+                        "  a different number of content slides.",
+                        "",
+                        "[bold cyan]Suggestions:[/bold cyan]",
+                        "  1. Try again - AI responses can vary",
+                        "  2. Use a simpler topic with --topic flag",
+                        "  3. Check logs/ai_calls.log for detailed error information",
+                        "  4. Consider switching text provider in config/providers.yaml",
+                    ]
+                    console.print(Panel(
+                        "\n".join(error_lines),
+                        title="[bold red]Generation Error[/bold red]",
+                        border_style="red",
+                        box=box.ROUNDED,
+                    ))
+                    return
                 finally:
                     display_task.cancel()
                     try:
@@ -872,6 +969,21 @@ def post(
         console.print("  5. Add credentials to your .env file")
         raise typer.Exit(1)
 
+    # Try to auto-refresh token if needed
+    if not dry_run:
+        try:
+            from .instagram import TokenManager
+            token_manager = TokenManager.from_env()
+            if token_manager.can_refresh:
+                console.print("[dim]Checking token validity...[/dim]")
+                new_token = asyncio.run(token_manager.ensure_valid_token())
+                if new_token != config.access_token:
+                    config.access_token = new_token
+                    console.print("[green]Token refreshed successfully![/green]")
+        except Exception as e:
+            console.print(f"[yellow]Token auto-refresh unavailable: {e}[/yellow]")
+            console.print("[dim]Continuing with current token...[/dim]")
+
     # Run async posting
     asyncio.run(_post_to_instagram(
         profile_path=profile_path,
@@ -879,6 +991,88 @@ def post(
         config=config,
         dry_run=dry_run,
     ))
+
+
+@app.command()
+def token(
+    check: bool = typer.Option(False, "--check", "-c", help="Check token validity"),
+    refresh: bool = typer.Option(False, "--refresh", "-r", help="Refresh the token"),
+    exchange: bool = typer.Option(False, "--exchange", "-e", help="Exchange short-lived for long-lived token"),
+):
+    """Manage Instagram access token.
+
+    Use this command to check, refresh, or exchange your Instagram token.
+
+    Examples:
+        socials token --check      # Check if token is valid
+        socials token --refresh    # Refresh token (extends by 60 days)
+        socials token --exchange   # Convert short-lived to long-lived token
+    """
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    from .instagram import TokenManager
+
+    try:
+        manager = TokenManager.from_env()
+    except ValueError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    if not any([check, refresh, exchange]):
+        # Default: check token
+        check = True
+
+    if check:
+        console.print("\n[bold]Checking Instagram token...[/bold]\n")
+        try:
+            is_valid, message, days_left = asyncio.run(manager.check_token_validity())
+            if is_valid:
+                console.print(f"[green][OK] {message}[/green]")
+                if days_left and days_left < 14:
+                    console.print(f"\n[yellow]Tip: Run 'socials token --refresh' to extend token validity[/yellow]")
+            else:
+                console.print(f"[red][EXPIRED] {message}[/red]")
+                if manager.can_refresh:
+                    console.print(f"\n[yellow]Run 'socials token --refresh' to get a new token[/yellow]")
+                else:
+                    console.print(f"\n[yellow]Add FACEBOOK_APP_ID and FACEBOOK_APP_SECRET to .env for auto-refresh[/yellow]")
+                    console.print("[dim]Then get a new token from Graph API Explorer[/dim]")
+        except Exception as e:
+            console.print(f"[red]Error checking token: {e}[/red]")
+            raise typer.Exit(1)
+
+    if refresh or exchange:
+        if not manager.can_refresh:
+            console.print("[red]Cannot refresh: FACEBOOK_APP_ID and FACEBOOK_APP_SECRET required[/red]")
+            console.print("\n[yellow]Add these to your .env file:[/yellow]")
+            console.print("  FACEBOOK_APP_ID=your_app_id")
+            console.print("  FACEBOOK_APP_SECRET=your_app_secret")
+            console.print("\n[dim]Get these from: https://developers.facebook.com/apps/ -> Your App -> Settings -> Basic[/dim]")
+            raise typer.Exit(1)
+
+        action = "Exchanging" if exchange else "Refreshing"
+        console.print(f"\n[bold]{action} Instagram token...[/bold]\n")
+
+        try:
+            new_token = asyncio.run(manager.exchange_for_long_lived_token())
+            console.print(f"[green][OK] Token {action.lower()} successful![/green]")
+
+            # Save to .env
+            if manager.update_env_file(new_token):
+                console.print(f"[green][OK] Token saved to .env file[/green]")
+            else:
+                console.print(f"\n[yellow]New token (save this to your .env):[/yellow]")
+                console.print(f"[dim]{new_token[:50]}...{new_token[-20:]}[/dim]")
+
+            # Check new token validity
+            manager.access_token = new_token
+            is_valid, message, days_left = asyncio.run(manager.check_token_validity())
+            console.print(f"\n[cyan]{message}[/cyan]")
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            raise typer.Exit(1)
 
 
 async def _post_to_instagram(

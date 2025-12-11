@@ -94,43 +94,9 @@ text_priority_chain:
 # IMAGE PROVIDERS
 # ============================================
 image_providers:
-  # Nano Banana (via fal.ai or direct)
-  nanobanana:
-    priority: 1
-    enabled: true
-    type: "fal"
-    model: "fal-ai/flux/dev"  # or nano-banana when available
-    api_key_env: "FAL_API_KEY"
-    timeout: 90
-    cost_per_image: 0.025
-    settings:
-      # image_size determined dynamically (square for 1080x1080)
-      num_inference_steps: 28
-      guidance_scale: 3.5
-
-  fal_flux:
-    priority: 2
-    enabled: true
-    type: "fal"
-    model: "fal-ai/flux/schnell"
-    api_key_env: "FAL_API_KEY"
-    timeout: 60
-    cost_per_image: 0.01
-    settings:
-      # image_size determined dynamically (square for 1080x1080)
-      num_inference_steps: 4
-
-  replicate:
-    priority: 3
-    enabled: true
-    type: "replicate"
-    model: "stability-ai/sdxl:latest"
-    api_key_env: "REPLICATE_API_TOKEN"
-    timeout: 120
-    cost_per_image: 0.03
-
+  # DALL-E 3 - Currently working (OpenAI)
   dalle:
-    priority: 4
+    priority: 1
     enabled: true
     type: "openai"
     model: "dall-e-3"
@@ -141,12 +107,37 @@ image_providers:
       # size determined dynamically (1024x1024 for square)
       quality: "standard"
 
+  # Nano Banana Pro 2 (requires fal.ai balance)
+  nanobanana:
+    priority: 2
+    enabled: false  # Disabled - fal.ai balance empty
+    type: "fal"
+    model: "fal-ai/nano-banana-pro"
+    api_key_env: "FAL_API_KEY"
+    timeout: 90
+    cost_per_image: 0.15
+
+  fal_flux:
+    priority: 3
+    enabled: false  # Disabled - fal.ai balance empty
+    type: "fal"
+    model: "fal-ai/flux/schnell"
+    api_key_env: "FAL_API_KEY"
+    timeout: 60
+    cost_per_image: 0.01
+
+  replicate:
+    priority: 4
+    enabled: false  # Disabled - had errors
+    type: "replicate"
+    model: "stability-ai/sdxl:latest"
+    api_key_env: "REPLICATE_API_TOKEN"
+    timeout: 120
+    cost_per_image: 0.03
+
 # Default image provider chain (fallback order)
 image_priority_chain:
-  - nanobanana
-  - fal_flux
-  - replicate
-  - dalle
+  - dalle  # Only working option currently
 
 # ============================================
 # TASK-SPECIFIC OVERRIDES
@@ -162,7 +153,7 @@ task_overrides:
     temperature: 0.9
 
   content_planning:
-    text_provider: zai
+    text_provider: openai  # GPT-4o is better at following structured instructions
     temperature: 0.7
 
   # Images use fal.ai (you have FAL_API_KEY)

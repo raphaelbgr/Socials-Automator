@@ -15,11 +15,12 @@ from .models import (
     InstagramPostStatus,
 )
 
-# Set up file logging for API calls
+# Set up file logging for API calls (console output suppressed)
 _log_dir = Path(__file__).parent.parent.parent.parent / "logs"
 _log_dir.mkdir(exist_ok=True)
 _api_logger = logging.getLogger("instagram_api")
 _api_logger.setLevel(logging.DEBUG)
+_api_logger.propagate = False  # Don't propagate to root logger (no console output)
 _file_handler = logging.FileHandler(_log_dir / "instagram_api.log", encoding="utf-8")
 _file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
 _api_logger.addHandler(_file_handler)

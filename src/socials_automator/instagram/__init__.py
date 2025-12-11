@@ -8,6 +8,7 @@ from .models import (
     InstagramPublishResult,
     InstagramPostStatus,
 )
+from .token_manager import TokenManager, get_valid_token
 
 __all__ = [
     "InstagramClient",
@@ -16,4 +17,6 @@ __all__ = [
     "InstagramProgress",
     "InstagramPublishResult",
     "InstagramPostStatus",
+    "TokenManager",
+    "get_valid_token",
 ]

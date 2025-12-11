@@ -12,11 +12,12 @@ import re
 
 from ..providers import TextProvider, ImageProvider
 
-# Set up file logging for AI calls
+# Set up file logging for AI calls (console output suppressed)
 _log_dir = Path(__file__).parent.parent.parent.parent / "logs"
 _log_dir.mkdir(exist_ok=True)
 _ai_logger = logging.getLogger("ai_calls")
 _ai_logger.setLevel(logging.DEBUG)
+_ai_logger.propagate = False  # Don't propagate to root logger (no console output)
 _ai_file_handler = logging.FileHandler(_log_dir / "ai_calls.log", encoding="utf-8")
 _ai_file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
 _ai_logger.addHandler(_ai_file_handler)
@@ -91,7 +92,11 @@ class ContentGenerator:
         self.text_provider = text_provider or TextProvider(config, event_callback=text_event_callback)
         self.image_provider = image_provider or ImageProvider(config, event_callback=image_event_callback)
 
-        self.planner = ContentPlanner(self.profile_config, self.text_provider)
+        self.planner = ContentPlanner(
+            self.profile_config,
+            self.text_provider,
+            progress_callback=self.progress_callback,
+        )
         self.composer = SlideComposer(fonts_dir=profile_path / "brand" / "fonts")
         self.knowledge = KnowledgeStore(profile_path)
 
@@ -282,8 +287,12 @@ class ContentGenerator:
         await self._emit_progress(progress)
 
         # Step 1: Plan the post
-        progress.current_step = "Planning content structure (AI deciding slide count)"
+        progress.current_step = "Planning content structure"
+        progress.current_action = "Starting content generation..."
         await self._emit_progress(progress)
+
+        # Set planner's progress reference so it can emit updates
+        self.planner._current_progress = progress
 
         plan = await self.planner.plan_post(
             topic=topic,
@@ -664,8 +673,12 @@ class ContentGenerator:
                 await self.save_post(post)
                 posts.append(post)
 
+            except RuntimeError:
+                # Propagate RuntimeError (validation failures) to caller
+                raise
             except Exception as e:
-                # Continue with other posts on error
+                # Continue with other posts on non-critical errors
+                _ai_logger.warning(f"Failed to generate post for topic '{topic_info.get('topic', 'unknown')}': {e}")
                 continue
 
         return posts

@@ -111,11 +111,17 @@ class GenerationProgress(BaseModel):
     post_id: str
     status: str = "starting"
     current_step: str = ""
+    current_action: str = ""  # Detailed action like "Validating AI output #1", "Generating content"
     total_steps: int = 0
     completed_steps: int = 0
     current_slide: int = 0
     total_slides: int = 0
     errors: list[str] = Field(default_factory=list)
+
+    # Validation tracking
+    validation_attempt: int = 0
+    validation_max_attempts: int = 6
+    validation_error: str | None = None
 
     # Detailed event info (legacy, for compatibility)
     event_type: str = ""  # text_call, text_response, text_error, image_call, image_response, image_error
@@ -126,7 +132,7 @@ class GenerationProgress(BaseModel):
     duration_seconds: float | None = None
     cost_usd: float | None = None
 
-    # Current text AI activity
+    # Current text AI activity (persisted across events)
     text_provider: str | None = None
     text_model: str | None = None
     text_prompt_preview: str | None = None

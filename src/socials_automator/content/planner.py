@@ -3,15 +3,22 @@
 from __future__ import annotations
 
 import json
+import logging
 import random
 import re
-from typing import Any
+from typing import Any, Callable, Awaitable
 
 from pydantic import BaseModel
 
 from ..providers import TextProvider, get_text_provider
 from ..knowledge import KnowledgeStore
-from .models import PostPlan, HookType, SlideType
+from .models import PostPlan, HookType, SlideType, GenerationProgress
+
+# Get logger for file-only logging (configured in cli.py)
+_logger = logging.getLogger("ai_calls")
+
+# Progress callback type
+ProgressCallback = Callable[[GenerationProgress], Awaitable[None]]
 
 
 class SlideOutline(BaseModel):
@@ -63,6 +70,7 @@ class ContentPlanner:
         profile_config: dict[str, Any],
         text_provider: TextProvider | None = None,
         knowledge_store: KnowledgeStore | None = None,
+        progress_callback: ProgressCallback | None = None,
     ):
         """Initialize the content planner.
 
@@ -70,15 +78,35 @@ class ContentPlanner:
             profile_config: Profile configuration.
             text_provider: Text generation provider.
             knowledge_store: Knowledge store for context.
+            progress_callback: Callback for progress updates.
         """
         self.profile = profile_config
         self.text_provider = text_provider or get_text_provider()
         self.knowledge = knowledge_store
+        self.progress_callback = progress_callback
+
+        # Current progress state (set by generator)
+        self._current_progress: GenerationProgress | None = None
 
         # Extract config
         self.content_strategy = profile_config.get("content_strategy", {})
         self.hook_strategies = profile_config.get("hook_strategies", {})
         self.ai_config = profile_config.get("ai_generation", {})
+
+    async def _emit_progress(
+        self,
+        action: str,
+        attempt: int = 0,
+        max_attempts: int = 6,
+        error: str | None = None,
+    ) -> None:
+        """Emit progress update for validation/generation."""
+        if self._current_progress and self.progress_callback:
+            self._current_progress.current_action = action
+            self._current_progress.validation_attempt = attempt
+            self._current_progress.validation_max_attempts = max_attempts
+            self._current_progress.validation_error = error
+            await self.progress_callback(self._current_progress)
 
     def _get_system_prompt(self) -> str:
         """Get the system prompt from profile config."""
@@ -306,11 +334,18 @@ Return as JSON:
     "hashtags": ["#hashtag1", "#hashtag2", ...]
 }}"""
 
-        # Try up to 4 times with different prompts
-        max_attempts = 4
+        # Try up to 6 times with different prompts
+        max_attempts = 6  # More attempts since validation is strict
         last_error = None
 
         for attempt in range(max_attempts):
+            # Emit progress: Generating content
+            await self._emit_progress(
+                action=f"Generating content (attempt {attempt + 1}/{max_attempts})",
+                attempt=attempt + 1,
+                max_attempts=max_attempts,
+            )
+
             if attempt == 0:
                 # First attempt - use full prompt
                 current_prompt = prompt
@@ -337,6 +372,13 @@ Return as JSON:
                 max_tokens=2000,
             )
 
+            # Emit progress: Validating
+            await self._emit_progress(
+                action=f"Validating AI output (attempt {attempt + 1}/{max_attempts})",
+                attempt=attempt + 1,
+                max_attempts=max_attempts,
+            )
+
             # Parse response
             try:
                 data = self._extract_json(response)
@@ -353,24 +395,72 @@ Return as JSON:
                     )
 
                     if has_placeholder:
-                        import logging
-                        logging.warning(f"Attempt {attempt + 1}: Content has placeholders, retrying...")
                         last_error = "Content slides contain placeholder text instead of actual content"
+                        _logger.warning(f"Attempt {attempt + 1}: Content has placeholders, retrying...")
+                        await self._emit_progress(
+                            action=f"Retry needed: placeholder content detected",
+                            attempt=attempt + 1,
+                            max_attempts=max_attempts,
+                            error=last_error,
+                        )
                         continue
 
-                    # AI Validation: Check if content matches the hook's promise
+                    # STRICT Validation: Check if content matches the hook's promise
                     hook_text = data.get("hook_text", topic)
                     content_headings = [s.get("heading", "") for s in content_slides]
+
+                    # Check topic first (e.g., "7 AI Prompt Templates...")
+                    number_match = re.search(r'\b(\d+)\s+\w*\s*(?:prompts?|tips?|tricks?|tools?|ways?|steps?|hacks?|ideas?|methods?|examples?|templates?|things?|apps?|features?|secrets?|reasons?)\b', topic, re.IGNORECASE)
+
+                    # Also check hook text
+                    if not number_match:
+                        number_match = re.search(r'\b(\d+)\s+\w*\s*(?:prompts?|tips?|tricks?|tools?|ways?|steps?|hacks?|ideas?|methods?|examples?|templates?|things?|apps?|features?|secrets?|reasons?)\b', hook_text, re.IGNORECASE)
+
+                    _logger.info(f"Validation check: topic='{topic}', hook='{hook_text}', content_slides={len(content_slides)}, number_match={number_match.group(0) if number_match else None}")
+
+                    if number_match:
+                        expected_items = int(number_match.group(1))
+                        actual_items = len(content_slides)
+                        if actual_items != expected_items:
+                            last_error = f"Hook promises {expected_items} items but got {actual_items} content slides"
+                            _logger.warning(f"Attempt {attempt + 1}: MISMATCH! {last_error}")
+                            await self._emit_progress(
+                                action=f"Retry needed: expected {expected_items} slides, got {actual_items}",
+                                attempt=attempt + 1,
+                                max_attempts=max_attempts,
+                                error=last_error,
+                            )
+                            continue
+
+                    # Second: AI validation for quality check
+                    await self._emit_progress(
+                        action=f"AI quality validation (attempt {attempt + 1}/{max_attempts})",
+                        attempt=attempt + 1,
+                        max_attempts=max_attempts,
+                    )
+
                     validation_result = await self._validate_content_matches_hook(
                         hook_text=hook_text,
                         content_headings=content_headings,
                     )
 
                     if not validation_result["valid"]:
-                        import logging
-                        logging.warning(f"Attempt {attempt + 1}: AI validation failed - {validation_result['reason']}")
                         last_error = validation_result["reason"]
+                        _logger.warning(f"Attempt {attempt + 1}: AI validation failed - {last_error}")
+                        await self._emit_progress(
+                            action=f"Retry needed: AI validation failed",
+                            attempt=attempt + 1,
+                            max_attempts=max_attempts,
+                            error=last_error,
+                        )
                         continue
+
+                    # Success!
+                    await self._emit_progress(
+                        action="Content validated successfully",
+                        attempt=attempt + 1,
+                        max_attempts=max_attempts,
+                    )
 
                     return PostPlan(
                         topic=topic,
@@ -384,27 +474,36 @@ Return as JSON:
                     )
                 else:
                     # Empty or too few slides - retry
-                    import logging
-                    logging.warning(f"Attempt {attempt + 1}: Got {len(slides)} slides, retrying...")
                     last_error = f"Only got {len(slides)} slides, need at least 3"
+                    _logger.warning(f"Attempt {attempt + 1}: {last_error}")
+                    await self._emit_progress(
+                        action=f"Retry needed: insufficient slides ({len(slides)})",
+                        attempt=attempt + 1,
+                        max_attempts=max_attempts,
+                        error=last_error,
+                    )
                     continue
 
             except (json.JSONDecodeError, KeyError, ValueError) as e:
                 # Log error for debugging
-                import logging
-                logging.warning(f"Attempt {attempt + 1}: Failed to parse AI response: {e}")
+                last_error = f"Failed to parse AI response: {e}"
+                _logger.warning(f"Attempt {attempt + 1}: {last_error}")
                 if response:
-                    logging.debug(f"Raw response (first 500 chars): {response[:500]}")
-                last_error = str(e)
+                    _logger.debug(f"Raw response (first 500 chars): {response[:500]}")
+                await self._emit_progress(
+                    action=f"Retry needed: JSON parse error",
+                    attempt=attempt + 1,
+                    max_attempts=max_attempts,
+                    error=str(e),
+                )
                 continue
 
         # All retries failed - raise an error instead of using placeholders
-        import logging
-        logging.error(f"All {max_attempts} parsing attempts failed for topic: {topic}")
+        _logger.error(f"All {max_attempts} parsing attempts failed for topic: {topic}")
         raise RuntimeError(
-            f"Failed to generate content plan after {max_attempts} attempts. "
-            f"Last error: {last_error}. "
-            f"Topic: {topic}"
+            f"Failed to generate valid content after {max_attempts} attempts. "
+            f"The AI kept generating {actual_items if 'actual_items' in dir() else 'incorrect number of'} slides "
+            f"instead of the required amount. Last error: {last_error}"
         )
 
     def _get_simple_planning_prompt(
