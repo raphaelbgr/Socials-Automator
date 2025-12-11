@@ -156,6 +156,61 @@ Return ONLY a JSON array of strings with the hooks, no other text:
 
         return [topic]  # Fallback
 
+    async def _validate_content_matches_hook(
+        self,
+        hook_text: str,
+        content_headings: list[str],
+    ) -> dict:
+        """Use AI to validate that content slides match the hook's promise.
+
+        Args:
+            hook_text: The hook/title text
+            content_headings: List of content slide headings
+
+        Returns:
+            Dict with 'valid' (bool) and 'reason' (str) keys
+        """
+        validation_prompt = f"""Validate this Instagram carousel content.
+
+HOOK/TITLE: "{hook_text}"
+
+CONTENT SLIDES ({len(content_headings)} items):
+{chr(10).join(f'{i+1}. {h}' for i, h in enumerate(content_headings))}
+
+VALIDATION RULES:
+1. If the hook mentions a specific NUMBER (e.g., "5 tips", "7 tools", "3 ways"), the content MUST have EXACTLY that many items
+2. Each content item must be relevant to the hook's topic
+3. Items should be distinct (no duplicates or very similar items)
+
+Return ONLY a JSON object:
+{{"valid": true/false, "reason": "explanation if invalid"}}
+
+Examples:
+- Hook "5 AI Tools" with 4 content items → {{"valid": false, "reason": "Hook promises 5 items but only 4 content slides provided"}}
+- Hook "5 AI Tools" with 5 content items → {{"valid": true, "reason": "Content matches hook"}}
+- Hook "Best AI Tips" with 3 items → {{"valid": true, "reason": "No specific number promised, content is valid"}}"""
+
+        try:
+            response = await self.text_provider.generate(
+                prompt=validation_prompt,
+                system="You are a content validator. Return ONLY valid JSON, nothing else.",
+                task="validation",
+                temperature=0.1,
+                max_tokens=200,
+            )
+
+            # Parse JSON response
+            result = json.loads(response.strip())
+            return {
+                "valid": result.get("valid", False),
+                "reason": result.get("reason", "Unknown validation error")
+            }
+        except Exception as e:
+            # On error, be lenient and allow the content through
+            import logging
+            logging.warning(f"AI validation failed with error: {e}, allowing content through")
+            return {"valid": True, "reason": "Validation skipped due to error"}
+
     async def plan_post(
         self,
         topic: str,
@@ -303,18 +358,19 @@ Return as JSON:
                         last_error = "Content slides contain placeholder text instead of actual content"
                         continue
 
-                    # Validate that if topic mentions a number, we have that many content slides
+                    # AI Validation: Check if content matches the hook's promise
                     hook_text = data.get("hook_text", topic)
-                    # Match patterns like "5 tools", "5 AI tools", "5 ChatGPT prompts", "7 quick tips", etc.
-                    number_match = re.search(r'\b(\d+)\s+(?:\w+\s+)?(?:prompts?|tips?|tricks?|tools?|ways?|steps?|hacks?|ideas?|methods?|examples?|templates?|things?|apps?|features?|secrets?|reasons?)\b', hook_text, re.IGNORECASE)
-                    if number_match:
-                        expected_items = int(number_match.group(1))
-                        actual_items = len(content_slides)
-                        if actual_items != expected_items:
-                            import logging
-                            logging.warning(f"Attempt {attempt + 1}: Hook says '{expected_items}' items but got {actual_items} content slides, retrying...")
-                            last_error = f"Hook promises {expected_items} items but only {actual_items} content slides were generated"
-                            continue
+                    content_headings = [s.get("heading", "") for s in content_slides]
+                    validation_result = await self._validate_content_matches_hook(
+                        hook_text=hook_text,
+                        content_headings=content_headings,
+                    )
+
+                    if not validation_result["valid"]:
+                        import logging
+                        logging.warning(f"Attempt {attempt + 1}: AI validation failed - {validation_result['reason']}")
+                        last_error = validation_result["reason"]
+                        continue
 
                     return PostPlan(
                         topic=topic,

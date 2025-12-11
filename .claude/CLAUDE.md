@@ -1,5 +1,9 @@
 # Claude Code Instructions for Socials-Automator
 
+## CRITICAL: Git Commits
+
+**NEVER commit or push automatically!** Only commit when the user explicitly asks.
+
 ## CRITICAL: Instagram Posting
 
 **ALWAYS use `--dry-run` when testing the `post` command!**
@@ -14,7 +18,17 @@ python -m socials_automator.cli post ai.for.mortals
 
 Never run the post command without `--dry-run` unless the user explicitly asks to publish to Instagram.
 
-Failed API calls can still result in posts being published. Rate limit errors do NOT mean the post wasn't created.
+### WARNING: Meta API Rate Limit Bug
+
+**Rate limit errors do NOT mean the post wasn't published!**
+
+Meta's API can:
+1. Create all containers successfully
+2. Process the carousel
+3. Actually publish the post
+4. THEN return a rate limit error
+
+This is a known Meta API issue - the publish happens but the response fails. Always check Instagram manually after a "failed" publish before retrying.
 
 ## Commands Overview
 

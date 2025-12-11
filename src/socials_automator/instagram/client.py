@@ -382,6 +382,41 @@ class InstagramClient:
             )
 
         except InstagramAPIError as e:
+            # Check for "ghost publish" - post went through despite error
+            ghost_media_id = None
+            ghost_permalink = None
+
+            if "rate limit" in str(e).lower() or e.error_code == 4:
+                _api_logger.warning("Rate limit error - checking if post was actually published...")
+                await asyncio.sleep(2)  # Brief wait before checking
+                recent = await self.get_recent_media(limit=1)
+                if recent:
+                    recent_post = recent[0]
+                    # Check if this was posted in the last 60 seconds
+                    from datetime import timezone
+                    recent_time = datetime.fromisoformat(recent_post.get("timestamp", "").replace("Z", "+00:00"))
+                    if (datetime.now(timezone.utc) - recent_time).total_seconds() < 60:
+                        ghost_media_id = recent_post.get("id")
+                        ghost_permalink = recent_post.get("permalink")
+                        _api_logger.warning(f"GHOST PUBLISH DETECTED! Post went through: {ghost_permalink}")
+
+            if ghost_media_id:
+                # Post actually succeeded!
+                await self._report_progress(
+                    InstagramPostStatus.PUBLISHED,
+                    "Published (detected after rate limit error)",
+                    100.0,
+                )
+                _api_logger.info(f"=== SESSION COMPLETE (GHOST) === Total API calls: {self._api_call_count}")
+                return InstagramPublishResult(
+                    success=True,
+                    media_id=ghost_media_id,
+                    permalink=ghost_permalink,
+                    container_ids=container_ids,
+                    image_urls=image_urls,
+                    published_at=datetime.now(),
+                )
+
             self._progress.error = str(e)
             await self._report_progress(
                 InstagramPostStatus.FAILED,
@@ -412,6 +447,23 @@ class InstagramClient:
                 container_ids=self._progress.container_ids,
                 image_urls=image_urls,
             )
+
+    async def get_recent_media(self, limit: int = 1) -> list[dict]:
+        """Get recent media posts from the account.
+
+        Args:
+            limit: Number of recent posts to fetch
+
+        Returns:
+            List of media objects with id, timestamp, permalink
+        """
+        try:
+            endpoint = f"{self.config.instagram_user_id}/media"
+            params = {"fields": "id,timestamp,permalink,media_type", "limit": limit}
+            result = await self._make_request("GET", endpoint, params=params)
+            return result.get("data", [])
+        except InstagramAPIError:
+            return []
 
     async def validate_token(self) -> dict:
         """Validate the access token and get account info.

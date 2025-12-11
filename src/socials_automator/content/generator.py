@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,15 @@ from typing import Any, Callable, Awaitable
 import re
 
 from ..providers import TextProvider, ImageProvider
+
+# Set up file logging for AI calls
+_log_dir = Path(__file__).parent.parent.parent.parent / "logs"
+_log_dir.mkdir(exist_ok=True)
+_ai_logger = logging.getLogger("ai_calls")
+_ai_logger.setLevel(logging.DEBUG)
+_ai_file_handler = logging.FileHandler(_log_dir / "ai_calls.log", encoding="utf-8")
+_ai_file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
+_ai_logger.addHandler(_ai_file_handler)
 from ..providers.config import load_provider_config
 from ..design import SlideComposer, HookSlideTemplate, ContentSlideTemplate, CTASlideTemplate
 from ..knowledge import KnowledgeStore, PostRecord, PromptLog, PromptLogEntry
@@ -91,6 +101,7 @@ class ContentGenerator:
 
         # Current progress state
         self._current_progress: GenerationProgress | None = None
+        self._current_post_id: str | None = None
 
     def _load_profile_config(self) -> dict[str, Any]:
         """Load profile configuration from metadata.json."""
@@ -127,6 +138,24 @@ class ContentGenerator:
 
         if event.get("cost_usd"):
             self._total_cost += event["cost_usd"]
+
+        # Log AI call to file
+        post_id = self._current_post_id or "unknown"
+        provider = event.get("provider", "unknown")
+        model = event.get("model", "unknown")
+        duration = event.get("duration_seconds", 0)
+        cost = event.get("cost_usd", 0)
+        task = event.get("task", "unknown")
+
+        if event_type in ["text_response", "image_response"]:
+            prompt_preview = (event.get("prompt_preview", "") or "")[:100]
+            _ai_logger.info(
+                f"POST:{post_id} | {event_type.upper()} | provider:{provider} | model:{model} | "
+                f"task:{task} | duration:{duration:.2f}s | cost:${cost:.4f} | prompt:{prompt_preview}..."
+            )
+        elif event_type in ["text_error", "image_error"]:
+            error = event.get("error", "unknown")
+            _ai_logger.error(f"POST:{post_id} | {event_type.upper()} | provider:{provider} | error:{error}")
 
         # Build update dict
         update: dict[str, Any] = {
@@ -240,7 +269,10 @@ class ContentGenerator:
 
         start_time = time.time()
         post_id = self._generate_post_id()
+        self._current_post_id = post_id  # Track for AI call logging
         prompt_log = PromptLog(post_id=post_id)
+
+        _ai_logger.info(f"=== NEW POST SESSION === POST:{post_id} | topic: {topic}")
 
         progress = GenerationProgress(
             post_id=post_id,
@@ -354,6 +386,12 @@ class ContentGenerator:
             generation_time_seconds=post.generation_time_seconds,
             total_cost_usd=post.total_cost_usd,
         ))
+
+        _ai_logger.info(
+            f"=== POST COMPLETE === POST:{post_id} | slides:{post.slides_count} | "
+            f"time:{post.generation_time_seconds:.1f}s | cost:${post.total_cost_usd:.4f} | "
+            f"text_calls:{self._total_text_calls} | image_calls:{self._total_image_calls}"
+        )
 
         return post
 
