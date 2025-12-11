@@ -47,14 +47,28 @@ cp .env.example .env
 | **Image AI** | fal.ai | `FAL_API_KEY` | ~$0.01/image |
 | | OpenAI | `OPENAI_API_KEY` | ~$0.08/image |
 
-### 3. Generate Your First Post
+### 3. Create Your Instagram Profile
+
+The program needs a **profile** that defines your Instagram account's niche, target audience, content style, and brand voice. This helps the AI generate relevant, on-brand content.
+
+```bash
+# Create a new profile interactively
+python -m socials_automator.cli new-profile
+
+# Or copy and modify the example profile
+cp -r profiles/ai.for.mortals profiles/your-profile-name
+```
+
+Then edit `profiles/your-profile-name/metadata.json` with your account details.
+
+### 4. Generate Your First Post
 
 ```bash
 # Generate a post with a specific topic
-python -m socials_automator.cli generate ai.for.mortals --topic "5 ChatGPT tricks for productivity"
+python -m socials_automator.cli generate your-profile-name --topic "5 ChatGPT tricks for productivity"
 
 # Let AI choose the topic automatically
-python -m socials_automator.cli generate ai.for.mortals
+python -m socials_automator.cli generate your-profile-name
 ```
 
 ## Usage
