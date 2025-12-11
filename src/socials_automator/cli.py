@@ -131,7 +131,10 @@ class VerboseProgressDisplay:
 
         # Show validation progress if in validation
         if progress.validation_attempt > 0:
-            lines.append(f"[bold]Attempt:[/] {progress.validation_attempt}/{progress.validation_max_attempts}")
+            if progress.validation_max_attempts > 0:
+                lines.append(f"[bold]Attempt:[/] {progress.validation_attempt}/{progress.validation_max_attempts}")
+            else:
+                lines.append(f"[bold]Attempt:[/] {progress.validation_attempt} (auto-retry)")
             if progress.validation_error:
                 # Truncate long error messages
                 error_text = progress.validation_error[:60] + "..." if len(progress.validation_error) > 60 else progress.validation_error
@@ -191,6 +194,25 @@ class VerboseProgressDisplay:
             border_style="blue",
             box=box.ROUNDED,
         )
+
+
+def parse_interval(interval: str) -> int:
+    """Parse interval string like '5m', '1h', '30s' to seconds."""
+    import re
+    match = re.match(r'^(\d+)(s|m|h)?$', interval.lower().strip())
+    if not match:
+        raise ValueError(f"Invalid interval format: {interval}. Use format like 5m, 1h, 30s")
+
+    value = int(match.group(1))
+    unit = match.group(2) or 's'
+
+    if unit == 's':
+        return value
+    elif unit == 'm':
+        return value * 60
+    elif unit == 'h':
+        return value * 3600
+    return value
 
 
 def get_profiles_dir() -> Path:
@@ -258,6 +280,10 @@ def generate(
     min_slides: int = typer.Option(3, "--min-slides", help="Minimum slides when AI decides"),
     max_slides: int = typer.Option(10, "--max-slides", help="Maximum slides when AI decides"),
     post_after: bool = typer.Option(False, "--post", help="Publish to Instagram after generating"),
+    auto_retry: bool = typer.Option(False, "--auto-retry", help="Retry indefinitely until valid content"),
+    text_ai: str = typer.Option(None, "--text-ai", help="Text AI provider (zai, groq, gemini, openai, lmstudio, ollama)"),
+    image_ai: str = typer.Option(None, "--image-ai", help="Image AI provider (dalle, fal_flux, comfy)"),
+    loop_each: str = typer.Option(None, "--loop-each", help="Loop interval (e.g., 5m, 1h, 30s)"),
 ):
     """Generate carousel posts for a profile.
 
@@ -265,6 +291,10 @@ def generate(
     the topic content. Use --slides to force a specific count.
 
     Use --post to automatically publish to Instagram after generation.
+    Use --auto-retry to keep retrying until valid content is generated.
+    Use --text-ai to select text provider (zai, groq, gemini, openai, lmstudio, ollama).
+    Use --image-ai to select image provider (dalle, fal_flux, comfy).
+    Use --loop-each to continuously generate posts (e.g., --loop-each 5m).
     """
     profile_path = get_profile_path(profile)
 
@@ -284,24 +314,77 @@ def generate(
     effective_max = max_slides if max_slides != 10 else profile_max
 
     slides_info = f"{slides} slides" if slides else f"AI decides ({effective_min}-{effective_max} slides)"
-    console.print(Panel(
-        f"Generating {count} post(s) for [cyan]{profile}[/cyan]\n"
-        f"Slide count: [yellow]{slides_info}[/yellow]",
-        title="Socials Automator",
-    ))
 
-    # Run async generation
-    asyncio.run(_generate_posts(
-        profile_path=profile_path,
-        config=config,
-        topic=topic,
-        pillar=pillar,
-        count=count,
-        slides=slides,
-        min_slides=min_slides,
-        max_slides=max_slides,
-        post_after=post_after,
-    ))
+    # Parse loop interval if provided
+    loop_seconds = None
+    if loop_each:
+        try:
+            loop_seconds = parse_interval(loop_each)
+            console.print(Panel(
+                f"Generating post(s) for [cyan]{profile}[/cyan]\n"
+                f"Slide count: [yellow]{slides_info}[/yellow]\n"
+                f"Loop: [green]Every {loop_each}[/green] (Ctrl+C to stop)",
+                title="Socials Automator - Loop Mode",
+            ))
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1)
+    else:
+        console.print(Panel(
+            f"Generating {count} post(s) for [cyan]{profile}[/cyan]\n"
+            f"Slide count: [yellow]{slides_info}[/yellow]",
+            title="Socials Automator",
+        ))
+
+    # Show provider override info
+    if text_ai:
+        console.print(f"[dim]Text AI: {text_ai}[/dim]")
+    if image_ai:
+        console.print(f"[dim]Image AI: {image_ai}[/dim]")
+
+    # Run generation (with optional loop)
+    if loop_seconds:
+        # Loop mode
+        import time
+        iteration = 0
+        try:
+            while True:
+                iteration += 1
+                console.print(f"\n[bold cyan]--- Iteration {iteration} ---[/bold cyan]")
+                asyncio.run(_generate_posts(
+                    profile_path=profile_path,
+                    config=config,
+                    topic=None,  # Always auto-generate topic in loop mode
+                    pillar=pillar,
+                    count=1,  # One post per iteration in loop mode
+                    slides=slides,
+                    min_slides=min_slides,
+                    max_slides=max_slides,
+                    post_after=post_after,
+                    auto_retry=auto_retry,
+                    text_ai=text_ai,
+                    image_ai=image_ai,
+                ))
+                console.print(f"\n[dim]Waiting {loop_each} until next post... (Ctrl+C to stop)[/dim]")
+                time.sleep(loop_seconds)
+        except KeyboardInterrupt:
+            console.print(f"\n[yellow]Loop stopped after {iteration} iteration(s)[/yellow]")
+    else:
+        # Single run
+        asyncio.run(_generate_posts(
+            profile_path=profile_path,
+            config=config,
+            topic=topic,
+            pillar=pillar,
+            count=count,
+            slides=slides,
+            min_slides=min_slides,
+            max_slides=max_slides,
+            post_after=post_after,
+            auto_retry=auto_retry,
+            text_ai=text_ai,
+            image_ai=image_ai,
+        ))
 
 
 async def _generate_posts(
@@ -315,6 +398,9 @@ async def _generate_posts(
     max_slides: int = 10,
     verbose: bool = True,
     post_after: bool = False,
+    auto_retry: bool = False,
+    text_ai: str | None = None,
+    image_ai: str | None = None,
 ):
     """Async post generation with progress display."""
     display = VerboseProgressDisplay()
@@ -329,6 +415,9 @@ async def _generate_posts(
         profile_path=profile_path,
         profile_config=config,
         progress_callback=progress_callback,
+        auto_retry=auto_retry,
+        text_provider_override=text_ai,
+        image_provider_override=image_ai,
     )
 
     # Get default content pillar if not specified

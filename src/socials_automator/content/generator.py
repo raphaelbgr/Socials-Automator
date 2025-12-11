@@ -61,6 +61,9 @@ class ContentGenerator:
         text_provider: TextProvider | None = None,
         image_provider: ImageProvider | None = None,
         progress_callback: ProgressCallback | None = None,
+        auto_retry: bool = False,
+        text_provider_override: str | None = None,
+        image_provider_override: str | None = None,
     ):
         """Initialize the content generator.
 
@@ -70,7 +73,11 @@ class ContentGenerator:
             text_provider: Text generation provider.
             image_provider: Image generation provider.
             progress_callback: Callback for progress updates.
+            auto_retry: If True, retry indefinitely until valid content.
+            text_provider_override: Override text provider (e.g., 'lmstudio', 'openai').
+            image_provider_override: Override image provider (e.g., 'dalle', 'comfy').
         """
+        self.auto_retry = auto_retry
         self.profile_path = profile_path
         self.profile_config = profile_config or self._load_profile_config()
         self.progress_callback = progress_callback or self._default_progress
@@ -82,6 +89,12 @@ class ContentGenerator:
 
         # Create providers with event callbacks
         config = load_provider_config()
+
+        # Apply provider overrides
+        if text_provider_override:
+            config["text_provider_override"] = text_provider_override
+        if image_provider_override:
+            config["image_provider_override"] = image_provider_override
 
         async def text_event_callback(event: dict[str, Any]) -> None:
             await self._handle_ai_event(event, "text")
@@ -96,6 +109,7 @@ class ContentGenerator:
             self.profile_config,
             self.text_provider,
             progress_callback=self.progress_callback,
+            auto_retry=self.auto_retry,
         )
         self.composer = SlideComposer(fonts_dir=profile_path / "brand" / "fonts")
         self.knowledge = KnowledgeStore(profile_path)

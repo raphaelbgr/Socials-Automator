@@ -71,6 +71,7 @@ class ContentPlanner:
         text_provider: TextProvider | None = None,
         knowledge_store: KnowledgeStore | None = None,
         progress_callback: ProgressCallback | None = None,
+        auto_retry: bool = False,
     ):
         """Initialize the content planner.
 
@@ -79,11 +80,13 @@ class ContentPlanner:
             text_provider: Text generation provider.
             knowledge_store: Knowledge store for context.
             progress_callback: Callback for progress updates.
+            auto_retry: If True, retry indefinitely until valid content.
         """
         self.profile = profile_config
         self.text_provider = text_provider or get_text_provider()
         self.knowledge = knowledge_store
         self.progress_callback = progress_callback
+        self.auto_retry = auto_retry
 
         # Current progress state (set by generator)
         self._current_progress: GenerationProgress | None = None
@@ -334,16 +337,17 @@ Return as JSON:
     "hashtags": ["#hashtag1", "#hashtag2", ...]
 }}"""
 
-        # Try up to 6 times with different prompts
-        max_attempts = 6  # More attempts since validation is strict
+        # Try up to 6 times (or indefinitely with auto_retry)
+        max_attempts = 999999 if self.auto_retry else 6
         last_error = None
 
         for attempt in range(max_attempts):
             # Emit progress: Generating content
+            attempt_str = f"attempt {attempt + 1}" if self.auto_retry else f"attempt {attempt + 1}/6"
             await self._emit_progress(
-                action=f"Generating content (attempt {attempt + 1}/{max_attempts})",
+                action=f"Generating content ({attempt_str})",
                 attempt=attempt + 1,
-                max_attempts=max_attempts,
+                max_attempts=6 if not self.auto_retry else 0,  # 0 means unlimited
             )
 
             if attempt == 0:
@@ -374,9 +378,9 @@ Return as JSON:
 
             # Emit progress: Validating
             await self._emit_progress(
-                action=f"Validating AI output (attempt {attempt + 1}/{max_attempts})",
+                action=f"Validating AI output ({attempt_str})",
                 attempt=attempt + 1,
-                max_attempts=max_attempts,
+                max_attempts=6 if not self.auto_retry else 0,
             )
 
             # Parse response
@@ -400,7 +404,7 @@ Return as JSON:
                         await self._emit_progress(
                             action=f"Retry needed: placeholder content detected",
                             attempt=attempt + 1,
-                            max_attempts=max_attempts,
+                            max_attempts=6 if not self.auto_retry else 0,
                             error=last_error,
                         )
                         continue
@@ -427,16 +431,16 @@ Return as JSON:
                             await self._emit_progress(
                                 action=f"Retry needed: expected {expected_items} slides, got {actual_items}",
                                 attempt=attempt + 1,
-                                max_attempts=max_attempts,
+                                max_attempts=6 if not self.auto_retry else 0,
                                 error=last_error,
                             )
                             continue
 
                     # Second: AI validation for quality check
                     await self._emit_progress(
-                        action=f"AI quality validation (attempt {attempt + 1}/{max_attempts})",
+                        action=f"AI quality validation ({attempt_str})",
                         attempt=attempt + 1,
-                        max_attempts=max_attempts,
+                        max_attempts=6 if not self.auto_retry else 0,
                     )
 
                     validation_result = await self._validate_content_matches_hook(
@@ -450,7 +454,7 @@ Return as JSON:
                         await self._emit_progress(
                             action=f"Retry needed: AI validation failed",
                             attempt=attempt + 1,
-                            max_attempts=max_attempts,
+                            max_attempts=6 if not self.auto_retry else 0,
                             error=last_error,
                         )
                         continue
@@ -459,7 +463,7 @@ Return as JSON:
                     await self._emit_progress(
                         action="Content validated successfully",
                         attempt=attempt + 1,
-                        max_attempts=max_attempts,
+                        max_attempts=6 if not self.auto_retry else 0,
                     )
 
                     return PostPlan(
@@ -479,7 +483,7 @@ Return as JSON:
                     await self._emit_progress(
                         action=f"Retry needed: insufficient slides ({len(slides)})",
                         attempt=attempt + 1,
-                        max_attempts=max_attempts,
+                        max_attempts=6 if not self.auto_retry else 0,
                         error=last_error,
                     )
                     continue
@@ -493,15 +497,16 @@ Return as JSON:
                 await self._emit_progress(
                     action=f"Retry needed: JSON parse error",
                     attempt=attempt + 1,
-                    max_attempts=max_attempts,
+                    max_attempts=6 if not self.auto_retry else 0,
                     error=str(e),
                 )
                 continue
 
         # All retries failed - raise an error instead of using placeholders
-        _logger.error(f"All {max_attempts} parsing attempts failed for topic: {topic}")
+        attempts_msg = "6" if not self.auto_retry else str(attempt + 1)
+        _logger.error(f"All {attempts_msg} parsing attempts failed for topic: {topic}")
         raise RuntimeError(
-            f"Failed to generate valid content after {max_attempts} attempts. "
+            f"Failed to generate valid content after {attempts_msg} attempts. "
             f"The AI kept generating {actual_items if 'actual_items' in dir() else 'incorrect number of'} slides "
             f"instead of the required amount. Last error: {last_error}"
         )

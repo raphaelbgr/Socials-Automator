@@ -65,6 +65,11 @@ class ImageProvider:
         self._total_calls = 0
         self._total_cost = 0.0
 
+        # Check for provider override
+        self._provider_override: str | None = None
+        if isinstance(config, dict) and "image_provider_override" in config:
+            self._provider_override = config["image_provider_override"]
+
     async def _emit_event(self, event: dict[str, Any]) -> None:
         """Emit an AI event if callback is set."""
         if self._event_callback:
@@ -133,6 +138,12 @@ class ImageProvider:
 
         # Get provider with fallback
         providers = self.config.get_enabled_image_providers()
+
+        # If override is set, prioritize that provider
+        if self._provider_override:
+            override_name = self._provider_override.lower()
+            providers = sorted(providers, key=lambda x: 0 if x[0] == override_name else 1)
+
         last_error: Exception | None = None
         failed_providers: list[str] = []
 

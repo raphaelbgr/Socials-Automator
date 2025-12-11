@@ -48,6 +48,11 @@ class TextProvider:
         self._total_cost = 0.0
         self._clients: dict[str, AsyncOpenAI] = {}
 
+        # Check for provider override
+        self._provider_override: str | None = None
+        if isinstance(config, dict) and "text_provider_override" in config:
+            self._provider_override = config["text_provider_override"]
+
     # Providers that are NOT OpenAI-compatible (need their own SDK)
     _INCOMPATIBLE_PROVIDERS = {"anthropic"}
 
@@ -135,6 +140,13 @@ class TextProvider:
 
         # Try providers in priority order with fallback
         providers = self.config.get_enabled_text_providers()
+
+        # If override is set, prioritize that provider
+        if self._provider_override:
+            override_name = self._provider_override.lower()
+            # Reorder providers to put override first
+            providers = sorted(providers, key=lambda x: 0 if x[0] == override_name else 1)
+
         last_error: Exception | None = None
         failed_providers: list[str] = []
 
