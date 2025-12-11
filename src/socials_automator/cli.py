@@ -413,7 +413,13 @@ async def _generate_posts(
                     console.print(f"  - {post.topic} ({post.slides_count} slides)")
 
     # Auto-post to Instagram if requested
-    if post_after and output_path:
+    # Determine the path to post (either from single post or first of batch)
+    post_path_to_use = output_path
+    if not post_path_to_use and posts:
+        # Auto-generated topic - use the first generated post
+        post_path_to_use = generator._get_output_path(posts[0])
+
+    if post_after and post_path_to_use:
         import shutil
         from dotenv import load_dotenv
         load_dotenv()
@@ -427,7 +433,7 @@ async def _generate_posts(
             return
 
         # Move from generated/ to pending-post/
-        generated_path = output_path
+        generated_path = post_path_to_use
         pending_path = generated_path.parent.parent / "pending-post" / generated_path.name
         pending_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(generated_path), str(pending_path))
