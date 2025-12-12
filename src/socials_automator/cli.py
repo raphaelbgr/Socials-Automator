@@ -137,6 +137,7 @@ def generate(
     text_ai: str = typer.Option(None, "--text-ai", help="Text AI provider (zai, groq, gemini, openai, lmstudio, ollama)"),
     image_ai: str = typer.Option(None, "--image-ai", help="Image AI provider (dalle, fal_flux, comfy)"),
     loop_each: str = typer.Option(None, "--loop-each", help="Loop interval (e.g., 5m, 1h, 30s)"),
+    ai_tools: bool = typer.Option(False, "--ai-tools", help="Enable AI tool calling (AI decides when to search)"),
 ):
     """Generate carousel posts for a profile.
 
@@ -148,6 +149,7 @@ def generate(
     Use --text-ai to select text provider (zai, groq, gemini, openai, lmstudio, ollama).
     Use --image-ai to select image provider (dalle, fal_flux, comfy).
     Use --loop-each to continuously generate posts (e.g., --loop-each 5m).
+    Use --ai-tools to enable AI-driven research (AI decides when and what to search).
     """
     profile_path = get_profile_path(profile)
 
@@ -194,6 +196,8 @@ def generate(
         console.print(f"[dim]Text AI: {text_ai}[/dim]")
     if image_ai:
         console.print(f"[dim]Image AI: {image_ai}[/dim]")
+    if ai_tools:
+        console.print(f"[dim]AI Tools: enabled (AI decides when to search)[/dim]")
 
     # Run generation (with optional loop)
     if loop_seconds:
@@ -217,6 +221,7 @@ def generate(
                     auto_retry=auto_retry,
                     text_ai=text_ai,
                     image_ai=image_ai,
+                    ai_tools=ai_tools,
                 ))
                 console.print(f"\n[dim]Waiting {loop_each} until next post... (Ctrl+C to stop)[/dim]")
                 time.sleep(loop_seconds)
@@ -237,6 +242,7 @@ def generate(
             auto_retry=auto_retry,
             text_ai=text_ai,
             image_ai=image_ai,
+            ai_tools=ai_tools,
         ))
 
 
@@ -254,6 +260,7 @@ async def _generate_posts(
     auto_retry: bool = False,
     text_ai: str | None = None,
     image_ai: str | None = None,
+    ai_tools: bool = False,
 ):
     """Async post generation with progress display."""
     display = ContentGenerationDisplay()
@@ -271,6 +278,7 @@ async def _generate_posts(
         auto_retry=auto_retry,
         text_provider_override=text_ai,
         image_provider_override=image_ai,
+        ai_tools=ai_tools,
     )
 
     # Get default content pillar if not specified
@@ -817,15 +825,114 @@ def schedule(
 
 
 @app.command()
+def queue(
+    profile: str = typer.Argument(..., help="Profile name"),
+):
+    """List all posts in the publishing queue.
+
+    Shows posts from both 'generated' and 'pending-post' folders,
+    sorted by timestamp (oldest first).
+
+    Examples:
+        socials queue ai.for.mortals
+    """
+    profile_path = get_profile_path(profile)
+
+    if not profile_path.exists():
+        console.print(f"[red]Profile not found: {profile}[/red]")
+        raise typer.Exit(1)
+
+    posts_dir = profile_path / "posts"
+    all_posts = []
+
+    # Scan all year/month folders
+    for year_dir in posts_dir.glob("*"):
+        if not (year_dir.is_dir() and year_dir.name.isdigit()):
+            continue
+        for month_dir in year_dir.glob("*"):
+            if not (month_dir.is_dir() and month_dir.name.isdigit()):
+                continue
+
+            # Check generated folder
+            generated_dir = month_dir / "generated"
+            if generated_dir.exists():
+                for post_dir in generated_dir.iterdir():
+                    if post_dir.is_dir() and (post_dir / "metadata.json").exists():
+                        all_posts.append({
+                            "path": post_dir,
+                            "status": "generated",
+                            "year": year_dir.name,
+                            "month": month_dir.name,
+                        })
+
+            # Check pending-post folder
+            pending_dir = month_dir / "pending-post"
+            if pending_dir.exists():
+                for post_dir in pending_dir.iterdir():
+                    if post_dir.is_dir() and (post_dir / "metadata.json").exists():
+                        all_posts.append({
+                            "path": post_dir,
+                            "status": "pending",
+                            "year": year_dir.name,
+                            "month": month_dir.name,
+                        })
+
+    if not all_posts:
+        console.print("[yellow]No posts in queue.[/yellow]")
+        console.print("\n[dim]Generate posts with:[/dim]")
+        console.print("  [cyan]python -m socials_automator.cli generate <profile> --topic '...'[/cyan]")
+        return
+
+    # Sort by folder name (date-number-slug) for chronological order
+    all_posts.sort(key=lambda p: (p["year"], p["month"], p["path"].name))
+
+    # Build table
+    table = Table(title=f"Publishing Queue for {profile}", box=box.ROUNDED)
+    table.add_column("#", style="dim", width=3)
+    table.add_column("Status", width=10)
+    table.add_column("Date", width=10)
+    table.add_column("Post ID", width=40)
+    table.add_column("Topic", width=40)
+
+    for i, post in enumerate(all_posts, 1):
+        # Load metadata for topic
+        try:
+            with open(post["path"] / "metadata.json") as f:
+                meta = json.load(f)
+            topic = meta.get("post", {}).get("topic", "Unknown")[:38]
+            post_date = meta.get("post", {}).get("date", f"{post['year']}-{post['month']}")
+        except Exception:
+            topic = "Unknown"
+            post_date = f"{post['year']}-{post['month']}"
+
+        status_color = "yellow" if post["status"] == "generated" else "cyan"
+        table.add_row(
+            str(i),
+            f"[{status_color}]{post['status']}[/]",
+            post_date,
+            post["path"].name,
+            topic,
+        )
+
+    console.print(table)
+    console.print(f"\n[dim]Total: {len(all_posts)} post(s) in queue[/dim]")
+    console.print("\n[dim]To post all:[/dim]")
+    console.print("  [cyan]python -m socials_automator.cli post <profile>[/cyan]")
+    console.print("\n[dim]To post just one:[/dim]")
+    console.print("  [cyan]python -m socials_automator.cli post <profile> --one[/cyan]")
+
+
+@app.command()
 def post(
     profile: str = typer.Argument(..., help="Profile name"),
-    post_id: str = typer.Argument(None, help="Post ID to publish (oldest pending if not specified)"),
+    post_id: str = typer.Argument(None, help="Post ID to publish (if specified, posts only this one)"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate without posting"),
+    one: bool = typer.Option(False, "--one", "-1", help="Post only the oldest pending (instead of all)"),
 ):
-    """Post a pending carousel to Instagram.
+    """Post pending carousels to Instagram.
 
-    Posts from the pending-post queue. After successful posting,
-    the post is moved to the posted folder.
+    By default, posts ALL pending posts in chronological order.
+    Use --one to post only the oldest pending post.
 
     Workflow:
         1. generate: Creates posts in posts/YYYY/MM/generated/
@@ -833,10 +940,13 @@ def post(
         3. post: Publishes to Instagram, moves to posts/YYYY/MM/posted/ (this command)
 
     Examples:
-        socials post ai.for.mortals                    # Post oldest pending
+        socials post ai.for.mortals                    # Post ALL pending posts
+        socials post ai.for.mortals --one              # Post only oldest pending
         socials post ai.for.mortals 11-001            # Post specific (by prefix)
         socials post ai.for.mortals --dry-run         # Validate only
     """
+    # Determine if posting all or just one
+    all_posts = not one and post_id is None  # Post all unless --one or specific post_id given
     profile_path = get_profile_path(profile)
 
     if not profile_path.exists():
@@ -881,6 +991,7 @@ def post(
         post_id=post_id,
         config=config,
         dry_run=dry_run,
+        post_all=all_posts,  # True by default now (unless --one or specific post_id)
     ))
 
 
@@ -971,6 +1082,7 @@ async def _post_to_instagram(
     post_id: str | None,
     config,
     dry_run: bool,
+    post_all: bool = False,
 ):
     """Async Instagram posting with progress display."""
     from .instagram import InstagramClient, CloudinaryUploader, InstagramProgress
@@ -1026,8 +1138,24 @@ async def _post_to_instagram(
     # Sort by folder name (date-number-slug) to get oldest first
     pending_posts.sort(key=lambda p: p.name)
 
-    # Select post to publish
-    if post_id:
+    # Show queue summary
+    if post_all or len(pending_posts) > 1:
+        console.print(f"\n[bold cyan]Publishing Queue ({len(pending_posts)} posts):[/bold cyan]")
+        for i, p in enumerate(pending_posts, 1):
+            try:
+                with open(p / "metadata.json") as f:
+                    meta = json.load(f)
+                topic = meta.get("post", {}).get("topic", "Unknown")[:40]
+            except Exception:
+                topic = "Unknown"
+            marker = "[yellow]>[/yellow]" if (post_all or i == 1) else " "
+            console.print(f"  {marker} {i}. {p.name} - {topic}")
+        console.print()
+
+    # Determine which posts to publish
+    if post_all:
+        posts_to_publish = pending_posts
+    elif post_id:
         # Find specific post
         post_path = None
         for p in pending_posts:
@@ -1038,183 +1166,232 @@ async def _post_to_instagram(
             console.print(f"[red]Post not found in pending-post: {post_id}[/red]")
             console.print(f"[dim]Available: {[p.name for p in pending_posts]}[/dim]")
             raise typer.Exit(1)
+        posts_to_publish = [post_path]
     else:
         # Use oldest pending post
-        post_path = pending_posts[0]
+        posts_to_publish = [pending_posts[0]]
 
-    # Load post metadata
-    metadata_path = post_path / "metadata.json"
-    if not metadata_path.exists():
-        console.print(f"[red]Post metadata not found: {metadata_path}[/red]")
-        raise typer.Exit(1)
+    # Validate token once before posting any
+    if not dry_run:
+        from .instagram import InstagramClient, CloudinaryUploader, InstagramProgress
+        import shutil
 
-    with open(metadata_path) as f:
-        post_metadata = json.load(f)
-
-    # Get slide images
-    slide_paths = sorted(post_path.glob("slide_*.jpg"))
-    if not slide_paths:
-        console.print(f"[red]No slide images found in {post_path}[/red]")
-        raise typer.Exit(1)
-
-    # Load caption (use UTF-8 for emoji support)
-    caption_path = post_path / "caption.txt"
-    caption = caption_path.read_text(encoding="utf-8") if caption_path.exists() else ""
-
-    # Load hashtags
-    hashtags_path = post_path / "hashtags.txt"
-    if hashtags_path.exists():
-        hashtags = hashtags_path.read_text(encoding="utf-8").strip()
-        if hashtags and not caption.endswith(hashtags):
-            caption = f"{caption}\n\n{hashtags}"
-
-    # Extract post info from metadata
-    post_info = post_metadata.get("post", {})
-    post_id_display = post_info.get("id", post_path.name)
-    post_topic = post_info.get("topic", "Unknown topic")
-    post_date = post_info.get("date", "Unknown")
-
-    # Show post info
-    console.print(Panel(
-        f"[bold]Post ID:[/] {post_id_display}\n"
-        f"[bold]Topic:[/] {post_topic}\n"
-        f"[bold]Slides:[/] {len(slide_paths)}\n"
-        f"[bold]Generated:[/] {post_date}\n"
-        f"[bold]Location:[/] {post_path}",
-        title="Instagram Posting",
-    ))
-
-    if dry_run:
-        import re
-        def safe_print_caption(text: str) -> str:
-            """Remove characters that can't be displayed in Windows console."""
-            try:
-                return text.encode('cp1252', errors='ignore').decode('cp1252')
-            except Exception:
-                return re.sub(r'[^\x00-\x7F]+', '', text)
-
-        console.print("\n[yellow]DRY RUN - Would upload these images:[/yellow]")
-        for path in slide_paths:
-            console.print(f"  - {path.name}")
-        console.print(f"\n[yellow]Caption ({len(caption)} chars):[/yellow]")
-        display_caption = caption[:500] + "..." if len(caption) > 500 else caption
-        console.print(safe_print_caption(display_caption))
-        console.print("\n[green]Dry run complete. No images were uploaded.[/green]")
-        return
-
-    # Initialize progress display
-    display = InstagramPostingDisplay()
-
-    async def progress_callback(progress: InstagramProgress):
-        display.update(progress)
-
-    # Create uploader and client
-    uploader = CloudinaryUploader(
-        config=config,
-        progress_callback=lambda step, cur, tot: progress_callback(
-            InstagramProgress(
-                status=InstagramProgress().status,
-                current_step=step,
-                images_uploaded=cur,
-                total_images=tot,
-            )
-        ),
-    )
-
-    client = InstagramClient(
-        config=config,
-        progress_callback=progress_callback,
-    )
-
-    # Validate token first (skip on error - validation endpoint can be flaky)
-    console.print("\n[dim]Validating Instagram access...[/dim]")
-    try:
-        account_info = await client.validate_token()
-        console.print(f"[green]Connected as @{account_info.get('username', 'unknown')}[/green]\n")
-    except Exception as e:
-        console.print(f"[yellow]Warning: Could not validate token ({e})[/yellow]")
-        console.print("[yellow]Proceeding with posting attempt...[/yellow]\n")
-
-    # Run with live progress display
-    with Live(console=console, refresh_per_second=4) as live:
-        async def update_display():
-            while True:
-                live.update(display.render())
-                await asyncio.sleep(0.25)
-
-        display_task = asyncio.create_task(update_display())
-
+        # Create client for validation
+        temp_client = InstagramClient(config=config)
+        console.print("\n[dim]Validating Instagram access...[/dim]")
         try:
-            # Step 1: Upload images to Cloudinary
-            display.update(InstagramProgress(
-                current_step="Uploading images to Cloudinary...",
-                total_images=len(slide_paths),
-            ))
-
-            folder = f"socials-automator/{profile_path.name}/{post_id_display}"
-            image_urls = await uploader.upload_batch(slide_paths, folder=folder)
-
-            # Update progress
-            display.update(InstagramProgress(
-                current_step="Images uploaded, creating Instagram containers...",
-                images_uploaded=len(image_urls),
-                total_images=len(slide_paths),
-                image_urls=image_urls,
-                progress_percent=30.0,
-            ))
-
-            # Step 2: Publish to Instagram
-            result = await client.publish_carousel(
-                image_urls=image_urls,
-                caption=caption,
-            )
-
-            # Step 3: Cleanup Cloudinary uploads
-            if result.success:
-                await uploader.cleanup_async()
-
-        finally:
-            display_task.cancel()
-            try:
-                await display_task
-            except asyncio.CancelledError:
-                pass
-
-    # Show result
-    if result.success:
-        console.print(Panel(
-            f"[bold green]Published successfully![/bold green]\n\n"
-            f"[bold]Media ID:[/] {result.media_id}\n"
-            f"[bold]URL:[/] {result.permalink or 'N/A'}",
-            title="Success",
-            border_style="green",
-        ))
-
-        # Update post metadata with Instagram info
-        post_metadata["instagram"] = result.to_dict()
-        with open(metadata_path, "w") as f:
-            json.dump(post_metadata, f, indent=2)
-
-        # Move from pending-post to posted folder
-        pending_parent = post_path.parent  # e.g., posts/2025/12/pending-post
-        posted_dir = pending_parent.parent / "posted"
-        posted_dir.mkdir(parents=True, exist_ok=True)
-        new_post_path = posted_dir / post_path.name
-
-        try:
-            shutil.move(str(post_path), str(new_post_path))
-            console.print(f"\n[green]Post moved to:[/green] {new_post_path}")
+            account_info = await temp_client.validate_token()
+            console.print(f"[green]Connected as @{account_info.get('username', 'unknown')}[/green]\n")
         except Exception as e:
-            console.print(f"\n[yellow]Warning: Could not move post folder: {e}[/yellow]")
-            console.print(f"[dim]Post remains at: {post_path}[/dim]")
-    else:
+            console.print(f"[yellow]Warning: Could not validate token ({e})[/yellow]")
+            console.print("[yellow]Proceeding with posting attempt...[/yellow]\n")
+
+    # Publish each post
+    published_count = 0
+    failed_count = 0
+
+    for post_idx, post_path in enumerate(posts_to_publish, 1):
+        if post_all:
+            console.print(f"\n{'='*60}")
+            console.print(f"[bold cyan]Publishing {post_idx}/{len(posts_to_publish)}: {post_path.name}[/bold cyan]")
+            console.print(f"{'='*60}")
+
+        # Load post metadata
+        metadata_path = post_path / "metadata.json"
+        if not metadata_path.exists():
+            console.print(f"[red]Post metadata not found: {metadata_path}[/red]")
+            failed_count += 1
+            continue
+
+        with open(metadata_path) as f:
+            post_metadata = json.load(f)
+
+        # Get slide images
+        slide_paths = sorted(post_path.glob("slide_*.jpg"))
+        if not slide_paths:
+            console.print(f"[red]No slide images found in {post_path}[/red]")
+            failed_count += 1
+            continue
+
+        # Load caption (use UTF-8 for emoji support)
+        caption_path = post_path / "caption.txt"
+        caption = caption_path.read_text(encoding="utf-8") if caption_path.exists() else ""
+
+        # Load hashtags
+        hashtags_path = post_path / "hashtags.txt"
+        if hashtags_path.exists():
+            hashtags = hashtags_path.read_text(encoding="utf-8").strip()
+            if hashtags and not caption.endswith(hashtags):
+                caption = f"{caption}\n\n{hashtags}"
+
+        # Extract post info from metadata
+        post_info = post_metadata.get("post", {})
+        post_id_display = post_info.get("id", post_path.name)
+        post_topic = post_info.get("topic", "Unknown topic")
+        post_date = post_info.get("date", "Unknown")
+
+        # Show post info
         console.print(Panel(
-            f"[bold red]Publishing failed[/bold red]\n\n"
-            f"[bold]Error:[/] {result.error_message}",
-            title="Error",
-            border_style="red",
+            f"[bold]Post ID:[/] {post_id_display}\n"
+            f"[bold]Topic:[/] {post_topic}\n"
+            f"[bold]Slides:[/] {len(slide_paths)}\n"
+            f"[bold]Generated:[/] {post_date}\n"
+            f"[bold]Location:[/] {post_path}",
+            title="Instagram Posting",
         ))
-        raise typer.Exit(1)
+
+        if dry_run:
+            import re
+            def safe_print_caption(text: str) -> str:
+                """Remove characters that can't be displayed in Windows console."""
+                try:
+                    return text.encode('cp1252', errors='ignore').decode('cp1252')
+                except Exception:
+                    return re.sub(r'[^\x00-\x7F]+', '', text)
+
+            console.print("\n[yellow]DRY RUN - Would upload these images:[/yellow]")
+            for path in slide_paths:
+                console.print(f"  - {path.name}")
+            console.print(f"\n[yellow]Caption ({len(caption)} chars):[/yellow]")
+            display_caption = caption[:500] + "..." if len(caption) > 500 else caption
+            console.print(safe_print_caption(display_caption))
+            published_count += 1
+            continue
+
+        # Import for actual posting
+        from .instagram import InstagramClient, CloudinaryUploader, InstagramProgress
+        import shutil
+
+        # Initialize progress display
+        display = InstagramPostingDisplay()
+
+        async def progress_callback(progress: InstagramProgress):
+            display.update(progress)
+
+        # Create uploader and client
+        uploader = CloudinaryUploader(
+            config=config,
+            progress_callback=lambda step, cur, tot: progress_callback(
+                InstagramProgress(
+                    status=InstagramProgress().status,
+                    current_step=step,
+                    images_uploaded=cur,
+                    total_images=tot,
+                )
+            ),
+        )
+
+        client = InstagramClient(
+            config=config,
+            progress_callback=progress_callback,
+        )
+
+        result = None
+        try:
+            # Run with live progress display
+            with Live(console=console, refresh_per_second=4) as live:
+                async def update_display():
+                    while True:
+                        live.update(display.render())
+                        await asyncio.sleep(0.25)
+
+                display_task = asyncio.create_task(update_display())
+
+                try:
+                    # Step 1: Upload images to Cloudinary
+                    display.update(InstagramProgress(
+                        current_step="Uploading images to Cloudinary...",
+                        total_images=len(slide_paths),
+                    ))
+
+                    folder = f"socials-automator/{profile_path.name}/{post_id_display}"
+                    image_urls = await uploader.upload_batch(slide_paths, folder=folder)
+
+                    # Update progress
+                    display.update(InstagramProgress(
+                        current_step="Images uploaded, creating Instagram containers...",
+                        images_uploaded=len(image_urls),
+                        total_images=len(slide_paths),
+                        image_urls=image_urls,
+                        progress_percent=30.0,
+                    ))
+
+                    # Step 2: Publish to Instagram
+                    result = await client.publish_carousel(
+                        image_urls=image_urls,
+                        caption=caption,
+                    )
+
+                    # Step 3: Cleanup Cloudinary uploads
+                    if result.success:
+                        await uploader.cleanup_async()
+
+                finally:
+                    display_task.cancel()
+                    try:
+                        await display_task
+                    except asyncio.CancelledError:
+                        pass
+
+        except Exception as e:
+            console.print(f"[red]Error publishing: {e}[/red]")
+            failed_count += 1
+            if not post_all:
+                raise typer.Exit(1)
+            continue
+
+        # Show result
+        if result and result.success:
+            console.print(Panel(
+                f"[bold green]Published successfully![/bold green]\n\n"
+                f"[bold]Media ID:[/] {result.media_id}\n"
+                f"[bold]URL:[/] {result.permalink or 'N/A'}",
+                title="Success",
+                border_style="green",
+            ))
+
+            # Update post metadata with Instagram info
+            post_metadata["instagram"] = result.to_dict()
+            with open(metadata_path, "w") as f:
+                json.dump(post_metadata, f, indent=2)
+
+            # Move from pending-post to posted folder
+            pending_parent = post_path.parent
+            posted_dir = pending_parent.parent / "posted"
+            posted_dir.mkdir(parents=True, exist_ok=True)
+            new_post_path = posted_dir / post_path.name
+
+            try:
+                shutil.move(str(post_path), str(new_post_path))
+                console.print(f"\n[green]Post moved to:[/green] {new_post_path}")
+            except Exception as e:
+                console.print(f"\n[yellow]Warning: Could not move post folder: {e}[/yellow]")
+
+            published_count += 1
+        else:
+            error_msg = result.error_message if result else "Unknown error"
+            console.print(Panel(
+                f"[bold red]Publishing failed[/bold red]\n\n"
+                f"[bold]Error:[/] {error_msg}",
+                title="Error",
+                border_style="red",
+            ))
+            failed_count += 1
+            if not post_all:
+                raise typer.Exit(1)
+
+    # Show summary for batch posting
+    if post_all or dry_run:
+        console.print(f"\n{'='*60}")
+        console.print(f"[bold]Publishing Summary[/bold]")
+        console.print(f"{'='*60}")
+        console.print(f"  [green]Published:[/green] {published_count}")
+        if failed_count > 0:
+            console.print(f"  [red]Failed:[/red] {failed_count}")
+        console.print(f"  [dim]Total:[/dim] {len(posts_to_publish)}")
+
+        if failed_count > 0:
+            raise typer.Exit(1)
 
 
 @app.command()

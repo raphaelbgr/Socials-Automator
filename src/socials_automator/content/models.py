@@ -171,6 +171,13 @@ class GenerationProgress(BaseModel):
     total_image_calls: int = 0
     total_cost_usd: float = 0.0
 
+    # Tool calling tracking (AI-driven research)
+    tool_call_status: str = ""  # "calling", "executing", "complete"
+    tool_call_name: str = ""  # Current tool being called
+    tool_call_args: dict[str, Any] = Field(default_factory=dict)  # Arguments passed
+    tool_calls_history: list[dict[str, Any]] = Field(default_factory=list)  # All tool calls
+    total_tool_calls: int = 0
+
     @property
     def progress_percent(self) -> float:
         """Get progress percentage."""

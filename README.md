@@ -4,13 +4,16 @@ AI-powered Instagram carousel content generator. Automatically creates professio
 
 ## Features
 
-- **Multi-provider AI text generation** - Z.AI, OpenAI, Groq, Gemini with automatic fallback
-- **Multi-provider image generation** - DALL-E, fal.ai Flux, Replicate SDXL
+- **Multi-provider AI text generation** - Z.AI, OpenAI, Groq, Gemini, LM Studio with automatic fallback
+- **Multi-provider image generation** - DALL-E, fal.ai Flux, Replicate SDXL, ComfyUI
 - **Smart slide count** - AI decides optimal number of slides (3-10) based on topic
 - **Square format output** - 1080x1080 Instagram-optimized images
 - **Auto topic generation** - AI generates fresh topics based on your niche
 - **Post history awareness** - Avoids repeating recent topics
 - **Profile-based config** - Manage multiple Instagram accounts
+- **AI-driven research** - AI decides when to search the web for facts (--ai-tools)
+- **Batch posting** - Post all queued content in one command
+- **Loop mode** - Continuously generate posts at intervals (--loop-each)
 
 ## Usage Workflows
 
@@ -92,11 +95,34 @@ python -m socials_automator.cli generate ai.for.mortals -n 5
 # Schedule all generated posts
 python -m socials_automator.cli schedule ai.for.mortals --all
 
-# Post one at a time (oldest first)
+# View the queue
+python -m socials_automator.cli queue ai.for.mortals
+
+# Post ALL pending posts in order (default behavior)
 python -m socials_automator.cli post ai.for.mortals
-python -m socials_automator.cli post ai.for.mortals
-# ...
+
+# Or post just one at a time
+python -m socials_automator.cli post ai.for.mortals --one
 ```
+
+---
+
+### Workflow 5: Continuous Generation (Loop Mode)
+
+Run the generator in a loop for continuous content creation:
+
+```bash
+# Generate a new post every 5 minutes
+python -m socials_automator.cli generate ai.for.mortals --loop-each 5m
+
+# Generate and post every hour
+python -m socials_automator.cli generate ai.for.mortals --loop-each 1h --post
+
+# Use specific AI providers in loop mode
+python -m socials_automator.cli generate ai.for.mortals --loop-each 10m --text-ai lmstudio --image-ai comfy
+```
+
+Press Ctrl+C to stop the loop.
 
 ---
 
@@ -173,7 +199,10 @@ python -m socials_automator.cli generate --help
 | Command | Description |
 |---------|-------------|
 | `generate` | Generate carousel posts for a profile |
-| `post` | Publish a generated post to Instagram |
+| `post` | Publish pending posts to Instagram (all by default) |
+| `queue` | List all posts in the publishing queue |
+| `schedule` | Move generated posts to pending queue |
+| `token` | Manage Instagram access tokens |
 | `new-profile` | Create a new profile interactively |
 | `list-profiles` | List all available profiles |
 | `list-niches` | List available niches from niches.json |
@@ -204,6 +233,12 @@ python -m socials_automator.cli generate <profile> [OPTIONS]
 | `--slides` | `-s` | Force specific slide count (overrides AI decision) | AI decides |
 | `--min-slides` | | Minimum slides when AI decides | 3 |
 | `--max-slides` | | Maximum slides when AI decides | 10 |
+| `--post` | | Publish to Instagram after generating | False |
+| `--auto-retry` | | Retry indefinitely until valid content generated | False |
+| `--text-ai` | | Override text AI provider (zai, groq, gemini, openai, lmstudio, ollama) | Config |
+| `--image-ai` | | Override image AI provider (dalle, fal_flux, comfy) | Config |
+| `--loop-each` | | Run continuously with interval (e.g., 5m, 1h, 30s) | None |
+| `--ai-tools` | | Enable AI tool calling - AI decides when to search web | False |
 
 **Examples:**
 ```bash
@@ -221,13 +256,31 @@ python -m socials_automator.cli generate ai.for.mortals -t "AI tools for writers
 
 # Generate post with 4-8 slides (AI decides within range)
 python -m socials_automator.cli generate ai.for.mortals --min-slides 4 --max-slides 8
+
+# Generate and immediately post to Instagram
+python -m socials_automator.cli generate ai.for.mortals -t "AI productivity tips" --post
+
+# Use local LM Studio for text and ComfyUI for images
+python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfy
+
+# Enable AI-driven research (AI decides when to search the web)
+python -m socials_automator.cli generate ai.for.mortals --ai-tools -t "Latest AI trends 2025"
+
+# Retry until valid content is generated
+python -m socials_automator.cli generate ai.for.mortals --auto-retry
+
+# Run in loop mode - generate new post every 10 minutes
+python -m socials_automator.cli generate ai.for.mortals --loop-each 10m
+
+# Loop mode with posting
+python -m socials_automator.cli generate ai.for.mortals --loop-each 1h --post
 ```
 
 ---
 
 ### post
 
-Publish a generated carousel post to Instagram. Requires Instagram API and Cloudinary credentials (see [Instagram Posting Setup](#instagram-posting-setup)).
+Publish pending carousel posts to Instagram. **By default, posts ALL pending posts** in chronological order. Requires Instagram API and Cloudinary credentials (see [Instagram Posting Setup](#instagram-posting-setup)).
 
 ```bash
 python -m socials_automator.cli post <profile> [post-id] [OPTIONS]
@@ -237,17 +290,22 @@ python -m socials_automator.cli post <profile> [post-id] [OPTIONS]
 | Argument | Description |
 |----------|-------------|
 | `profile` | Profile name (required) |
-| `post-id` | Post ID to publish (optional, defaults to most recent) |
+| `post-id` | Post ID to publish (optional, posts only this specific post) |
 
 **Options:**
-| Option | Description |
-|--------|-------------|
-| `--dry-run` | Validate the post without actually publishing |
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--one` | `-1` | Post only the oldest pending (instead of all) | False |
+| `--dry-run` | | Validate the post without actually publishing | False |
 
 **Examples:**
 ```bash
-# Post the most recent generated content
+# Post ALL pending posts (default behavior)
 python -m socials_automator.cli post ai.for.mortals
+
+# Post only the oldest pending post
+python -m socials_automator.cli post ai.for.mortals --one
+python -m socials_automator.cli post ai.for.mortals -1
 
 # Post a specific post by ID
 python -m socials_automator.cli post ai.for.mortals 20251211-001
@@ -257,12 +315,100 @@ python -m socials_automator.cli post ai.for.mortals --dry-run
 ```
 
 **Workflow:**
-1. Uploads slide images to Cloudinary (Instagram requires public URLs)
-2. Creates Instagram media containers for each image
-3. Creates carousel container combining all slides
-4. Publishes to Instagram
-5. Cleans up temporary Cloudinary uploads
-6. Updates post metadata with Instagram URL
+1. Collects all pending posts from `pending-post/` folder
+2. For each post (oldest first):
+   - Uploads slide images to Cloudinary (Instagram requires public URLs)
+   - Creates Instagram media containers for each image
+   - Creates carousel container combining all slides
+   - Publishes to Instagram
+   - Cleans up temporary Cloudinary uploads
+   - Moves post to `posted/` folder
+3. Shows summary of published/failed posts
+
+---
+
+### queue
+
+List all posts in the publishing queue (from `generated/` and `pending-post/` folders).
+
+```bash
+python -m socials_automator.cli queue <profile>
+```
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `profile` | Profile name (required) |
+
+**Examples:**
+```bash
+# View the publishing queue
+python -m socials_automator.cli queue ai.for.mortals
+```
+
+**Output:**
+```
+┏━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Status  ┃ Post ID           ┃ Slides  ┃ Topic                   ┃
+┡━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ pending │ 12-001-ai-tools   │ 6       │ 5 AI tools for email    │
+│ pending │ 12-002-chatgpt    │ 5       │ ChatGPT productivity    │
+│ generated│ 12-003-automation│ 7       │ Automation tips         │
+└─────────┴───────────────────┴─────────┴─────────────────────────┘
+
+Total: 3 post(s) in queue
+```
+
+---
+
+### schedule
+
+Move generated posts to the pending-post queue for publishing.
+
+```bash
+python -m socials_automator.cli schedule <profile> [OPTIONS]
+```
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `profile` | Profile name (required) |
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--all` | Schedule all generated posts |
+
+**Examples:**
+```bash
+# Schedule all generated posts
+python -m socials_automator.cli schedule ai.for.mortals --all
+```
+
+---
+
+### token
+
+Manage Instagram access tokens. Tokens expire and need periodic refresh.
+
+```bash
+python -m socials_automator.cli token <profile> [OPTIONS]
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--refresh` | Refresh the access token |
+| `--check` | Check token validity |
+
+**Examples:**
+```bash
+# Check if token is valid
+python -m socials_automator.cli token ai.for.mortals --check
+
+# Refresh the token
+python -m socials_automator.cli token ai.for.mortals --refresh
+```
 
 ---
 
@@ -673,8 +819,15 @@ Socials-Automator/
 │       ├── brand/          # Brand assets (logo, fonts)
 │       ├── knowledge/      # Knowledge base
 │       └── posts/          # Generated posts
+│           └── 2025/12/
+│               ├── generated/     # New posts
+│               ├── pending-post/  # Ready to publish
+│               └── posted/        # Published posts
+├── logs/
+│   └── ai_calls.log        # Detailed AI execution logs
 ├── src/socials_automator/
 │   ├── cli.py              # Command-line interface
+│   ├── cli_display.py      # Rich CLI progress displays
 │   ├── content/            # Content generation
 │   │   ├── generator.py    # Main generator
 │   │   ├── planner.py      # Content planning
@@ -683,15 +836,19 @@ Socials-Automator/
 │   │   ├── composer.py     # Image composition
 │   │   └── templates.py    # Slide templates
 │   ├── providers/          # AI providers
-│   │   ├── text.py         # Text generation
+│   │   ├── text.py         # Text generation (with tool calling)
 │   │   ├── image.py        # Image generation
 │   │   └── config.py       # Provider config
 │   ├── instagram/          # Instagram posting
 │   │   ├── client.py       # Instagram Graph API client
 │   │   ├── uploader.py     # Cloudinary image uploader
 │   │   └── models.py       # Instagram data models
-│   ├── knowledge/          # Knowledge base
-│   └── research/           # Topic research
+│   ├── tools/              # AI tool calling
+│   │   ├── definitions.py  # Tool schemas (web_search, news_search)
+│   │   └── executor.py     # Tool execution
+│   ├── research/           # Web research
+│   │   └── web_search.py   # DuckDuckGo parallel search
+│   └── knowledge/          # Knowledge base
 ├── .env.example            # Example environment file
 ├── pyproject.toml          # Python package config
 └── README.md
@@ -730,6 +887,12 @@ Socials-Automator/
 ## Roadmap
 
 - [x] Instagram API integration (`post` command)
+- [x] Batch posting - post all queued content
+- [x] Queue management (`queue` command)
+- [x] AI tool calling - AI decides when to search (`--ai-tools`)
+- [x] Loop mode for continuous generation (`--loop-each`)
+- [x] Provider override flags (`--text-ai`, `--image-ai`)
+- [x] Auto-retry for robust generation (`--auto-retry`)
 - [ ] Scheduled posting (`--schedule "2025-12-11 10:00"`)
 - [ ] Multiple social platforms (Twitter/X, LinkedIn)
 - [ ] Video/Reels generation

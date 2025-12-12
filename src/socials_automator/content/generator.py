@@ -21,11 +21,45 @@ _ai_logger.propagate = False  # Don't propagate to root logger (no console outpu
 _ai_file_handler = logging.FileHandler(_log_dir / "ai_calls.log", encoding="utf-8")
 _ai_file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
 _ai_logger.addHandler(_ai_file_handler)
+
+
 from ..providers.config import load_provider_config
 from ..design import SlideComposer, HookSlideTemplate, ContentSlideTemplate, CTASlideTemplate
 from ..knowledge import KnowledgeStore, PostRecord, PromptLog, PromptLogEntry
 from .planner import ContentPlanner
 from .models import CarouselPost, SlideContent, SlideType, PostPlan, HookType, GenerationProgress
+
+
+# Logging helper functions for traceable execution flow
+def _log_section(post_id: str, title: str) -> None:
+    """Log a section separator for readability."""
+    _ai_logger.info(f"POST:{post_id} | {'='*60}")
+    _ai_logger.info(f"POST:{post_id} | {title}")
+    _ai_logger.info(f"POST:{post_id} | {'='*60}")
+
+
+def _log_phase_start(post_id: str, phase_num: int, phase_name: str, details: str = "") -> None:
+    """Log the start of a generation phase."""
+    _ai_logger.info(f"POST:{post_id} | PHASE_START | phase:{phase_num} | name:{phase_name} | {details}")
+
+
+def _log_phase_end(post_id: str, phase_num: int, phase_name: str, duration: float, details: str = "") -> None:
+    """Log the end of a generation phase."""
+    _ai_logger.info(f"POST:{post_id} | PHASE_END | phase:{phase_num} | name:{phase_name} | duration:{duration:.2f}s | {details}")
+
+
+def _log_tool_call(post_id: str, tool_name: str, args_preview: str, result_preview: str = "", success: bool = True, duration_ms: int = 0) -> None:
+    """Log a tool call (AI-driven research)."""
+    status = "SUCCESS" if success else "FAILED"
+    _ai_logger.info(f"POST:{post_id} | TOOL_CALL | tool:{tool_name} | status:{status} | duration:{duration_ms}ms | args:{args_preview[:100]} | result:{result_preview[:100]}")
+
+
+def _log_ai_call(post_id: str, provider: str, model: str, task: str, prompt_preview: str, response_preview: str = "", duration: float = 0, cost: float = 0) -> None:
+    """Log an AI API call with full details."""
+    _ai_logger.info(
+        f"POST:{post_id} | AI_CALL | provider:{provider} | model:{model} | task:{task} | "
+        f"duration:{duration:.2f}s | cost:${cost:.4f} | prompt:{prompt_preview[:150]}... | response:{response_preview[:100]}..."
+    )
 
 
 ProgressCallback = Callable[[GenerationProgress], Awaitable[None]]
@@ -64,6 +98,7 @@ class ContentGenerator:
         auto_retry: bool = False,
         text_provider_override: str | None = None,
         image_provider_override: str | None = None,
+        ai_tools: bool = False,
     ):
         """Initialize the content generator.
 
@@ -76,8 +111,10 @@ class ContentGenerator:
             auto_retry: If True, retry indefinitely until valid content.
             text_provider_override: Override text provider (e.g., 'lmstudio', 'openai').
             image_provider_override: Override image provider (e.g., 'dalle', 'comfy').
+            ai_tools: If True, use AI-driven tool calling for research (AI decides when to search).
         """
         self.auto_retry = auto_retry
+        self.ai_tools = ai_tools
         self.profile_path = profile_path
         self.profile_config = profile_config or self._load_profile_config()
         self.progress_callback = progress_callback or self._default_progress
@@ -165,23 +202,42 @@ class ContentGenerator:
         if event.get("cost_usd"):
             self._total_cost += event["cost_usd"]
 
-        # Log AI call to file
+        # Log AI call to file with improved traceability
         post_id = self._current_post_id or "unknown"
         provider = event.get("provider", "unknown")
         model = event.get("model", "unknown")
         duration = event.get("duration_seconds", 0)
         cost = event.get("cost_usd", 0)
         task = event.get("task", "unknown")
+        failed_providers = event.get("failed_providers", [])
 
-        if event_type in ["text_response", "image_response"]:
+        if event_type == "text_call":
+            prompt_preview = (event.get("prompt_preview", "") or "")[:150]
+            has_tools = event.get("has_tools", False)
+            tool_info = f" | tools:{event.get('tool_count', 0)}" if has_tools else ""
+            failed_info = f" | failed_first:{','.join(failed_providers)}" if failed_providers else ""
+            _ai_logger.info(
+                f"POST:{post_id} | TEXT_CALL | provider:{provider} | model:{model} | task:{task}{tool_info}{failed_info} | prompt:{prompt_preview}..."
+            )
+        elif event_type == "text_response":
+            prompt_preview = (event.get("prompt_preview", "") or "")[:100]
+            response_preview = (event.get("response_preview", "") or "")[:100]
+            tool_calls_count = event.get("tool_calls_count", 0)
+            tool_info = f" | tool_calls:{tool_calls_count}" if tool_calls_count else ""
+            _ai_logger.info(
+                f"POST:{post_id} | TEXT_RESPONSE | provider:{provider} | model:{model} | task:{task} | "
+                f"duration:{duration:.2f}s | cost:${cost:.4f}{tool_info} | response:{response_preview}..."
+            )
+        elif event_type == "image_response":
             prompt_preview = (event.get("prompt_preview", "") or "")[:100]
             _ai_logger.info(
-                f"POST:{post_id} | {event_type.upper()} | provider:{provider} | model:{model} | "
+                f"POST:{post_id} | IMAGE_RESPONSE | provider:{provider} | model:{model} | "
                 f"task:{task} | duration:{duration:.2f}s | cost:${cost:.4f} | prompt:{prompt_preview}..."
             )
         elif event_type in ["text_error", "image_error"]:
             error = event.get("error", "unknown")
-            _ai_logger.error(f"POST:{post_id} | {event_type.upper()} | provider:{provider} | error:{error}")
+            failed_info = f" | fallback_from:{','.join(failed_providers)}" if failed_providers else ""
+            _ai_logger.error(f"POST:{post_id} | {event_type.upper()} | provider:{provider} | error:{error}{failed_info}")
 
         # Build update dict
         update: dict[str, Any] = {
@@ -332,6 +388,192 @@ class ContentGenerator:
                 await self._emit_progress(progress)
             return None
 
+    async def _research_topic_with_tools(self, topic: str) -> str | None:
+        """Research a topic using AI-driven tool calling.
+
+        The AI decides when and what to search for, like InfiniteResearch.
+
+        Args:
+            topic: The topic to research.
+
+        Returns:
+            Research context string from AI tool calls, or None if no research done.
+        """
+        try:
+            from ..tools import TOOL_SCHEMAS, ToolExecutor
+        except ImportError:
+            _ai_logger.warning("Tools module unavailable")
+            return await self._research_topic(topic)  # Fallback to standard research
+
+        # Create tool executor with progress callback
+        async def tool_callback(event: dict) -> None:
+            if not self._current_progress:
+                return
+
+            event_type = event.get("type", "")
+
+            if event_type == "tool_call_start":
+                tool_name = event.get("tool_name", "")
+                args = event.get("arguments", {})
+
+                # Update progress with tool call info
+                progress = self._current_progress.model_copy(update={
+                    "tool_call_status": "executing",
+                    "tool_call_name": tool_name,
+                    "tool_call_args": args,
+                    "current_action": f"Tool: {tool_name}({', '.join(f'{k}={v}' for k, v in list(args.items())[:2])}...)",
+                })
+                await self._emit_progress(progress)
+
+            elif event_type == "tool_call_complete":
+                tool_name = event.get("tool_name", "")
+                metadata = event.get("metadata", {})
+                success = event.get("success", False)
+
+                # Add to history
+                history = list(self._current_progress.tool_calls_history)
+                history.append({
+                    "tool": tool_name,
+                    "success": success,
+                    "duration_ms": event.get("duration_ms", 0),
+                    "metadata": metadata,
+                })
+
+                progress = self._current_progress.model_copy(update={
+                    "tool_call_status": "complete" if success else "failed",
+                    "tool_calls_history": history,
+                    "total_tool_calls": len(history),
+                    "current_action": f"Tool {tool_name}: {metadata.get('total_results', 0)} results" if success else f"Tool {tool_name} failed",
+                })
+                await self._emit_progress(progress)
+
+        executor = ToolExecutor(callback=tool_callback, post_id=self._current_post_id)
+
+        # Build the AI prompt with instructions to use tools
+        system_prompt = """You are a research assistant helping create engaging Instagram carousel content.
+You have access to tools for web search and news search.
+
+When given a topic, decide if you need to search for:
+- Current facts, statistics, or examples
+- Expert opinions or quotes
+- Recent news or trends
+- Best practices or tips
+
+If the topic is factual or would benefit from current data, use the web_search tool.
+If the topic relates to current events or trends, use the news_search tool.
+You can use both tools if helpful.
+
+After gathering research, synthesize the key findings into a concise summary that will help create accurate, engaging content."""
+
+        user_prompt = f"""Research this topic for an Instagram carousel post:
+
+TOPIC: {topic}
+
+Decide what research would help create accurate, engaging content. Use the available tools to gather information, then provide a summary of key findings.
+
+If the topic is simple or doesn't need research, you can skip tools and provide general guidance."""
+
+        # Emit starting status
+        if self._current_progress:
+            progress = self._current_progress.model_copy(update={
+                "web_search_status": "searching",
+                "current_action": "AI deciding research strategy...",
+            })
+            await self._emit_progress(progress)
+
+        _ai_logger.info(f"POST:{self._current_post_id} | AI_RESEARCH | topic:{topic}")
+
+        # First AI call - let it decide what tools to use
+        try:
+            response = await self.text_provider.generate_with_tools(
+                prompt=user_prompt,
+                tools=TOOL_SCHEMAS,
+                system=system_prompt,
+                task="research",
+                temperature=0.5,  # Lower temp for more focused research decisions
+                max_tokens=1500,
+            )
+        except Exception as e:
+            _ai_logger.warning(f"AI research failed: {e}, falling back to standard search")
+            return await self._research_topic(topic)
+
+        # Build conversation messages for tool loop
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        # Handle tool calls in a loop (AI might call multiple tools)
+        max_iterations = 5  # Prevent infinite loops
+        iteration = 0
+        all_research = []
+
+        while response.get("tool_calls") and iteration < max_iterations:
+            iteration += 1
+            tool_calls = response["tool_calls"]
+
+            _ai_logger.info(f"POST:{self._current_post_id} | TOOL_CALLS | iteration:{iteration} | calls:{len(tool_calls)}")
+
+            # Add assistant message with tool calls
+            messages.append({
+                "role": "assistant",
+                "content": response.get("content"),
+                "tool_calls": tool_calls,
+            })
+
+            # Execute tools and collect results
+            results = await executor.execute_tool_calls(tool_calls)
+
+            # Add tool results to messages
+            for call, result in zip(tool_calls, results):
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": call["id"],
+                    "content": result.to_message(),
+                })
+
+                if result.success:
+                    all_research.append(result.result)
+
+            # Continue conversation with tool results
+            try:
+                response = await self.text_provider.continue_with_tool_results(
+                    messages=messages,
+                    tools=TOOL_SCHEMAS,
+                    task="research",
+                    temperature=0.5,
+                    max_tokens=1500,
+                )
+            except Exception as e:
+                _ai_logger.warning(f"AI continuation failed: {e}")
+                break
+
+        # Get final content (either from last response or collected research)
+        final_content = response.get("content", "")
+
+        # Combine AI summary with raw research data
+        if all_research:
+            research_context = "\n\n---\n\n".join(all_research)
+            if final_content:
+                research_context = f"{final_content}\n\n---\nRAW RESEARCH DATA:\n{research_context}"
+        else:
+            research_context = final_content if final_content else None
+
+        # Update final status
+        if self._current_progress:
+            progress = self._current_progress.model_copy(update={
+                "web_search_status": "complete" if research_context else "skipped",
+                "current_action": f"Research complete ({executor.total_tool_calls} tool calls)",
+            })
+            await self._emit_progress(progress)
+
+        _ai_logger.info(
+            f"POST:{self._current_post_id} | AI_RESEARCH_COMPLETE | "
+            f"tool_calls:{executor.total_tool_calls} | context_len:{len(research_context or '')}"
+        )
+
+        return research_context
+
     def _generate_search_queries(self, topic: str) -> list[str]:
         """Generate search queries from a topic.
 
@@ -400,7 +642,8 @@ class ContentGenerator:
         self._current_post_id = post_id  # Track for AI call logging
         prompt_log = PromptLog(post_id=post_id)
 
-        _ai_logger.info(f"=== NEW POST SESSION === POST:{post_id} | topic: {topic}")
+        _log_section(post_id, f"NEW POST SESSION | topic: {topic[:80]}...")
+        _ai_logger.info(f"POST:{post_id} | CONFIG | content_pillar:{content_pillar} | slides:target={target_slides}/min={min_slides}/max={max_slides} | ai_tools:{self.ai_tools}")
 
         progress = GenerationProgress(
             post_id=post_id,
@@ -411,13 +654,24 @@ class ContentGenerator:
 
         # Step 0: Web research (if no context provided)
         if research_context is None:
+            _log_phase_start(post_id, 0, "Research", f"ai_tools:{self.ai_tools}")
+            research_start = time.time()
+
             progress.current_step = "Researching topic"
             progress.current_action = "Searching the web for relevant information..."
             await self._emit_progress(progress)
 
-            research_context = await self._research_topic(topic)
+            # Use AI-driven tool calling if enabled
+            if self.ai_tools:
+                research_context = await self._research_topic_with_tools(topic)
+            else:
+                research_context = await self._research_topic(topic)
+
+            research_duration = time.time() - research_start
             if research_context:
-                _ai_logger.info(f"POST:{post_id} | WEB_RESEARCH | context_length:{len(research_context)}")
+                _log_phase_end(post_id, 0, "Research", research_duration, f"context_length:{len(research_context)}")
+            else:
+                _log_phase_end(post_id, 0, "Research", research_duration, "no_context")
 
         # Step 1: Plan the post
         progress.current_step = "Planning content structure"
@@ -547,11 +801,14 @@ class ContentGenerator:
             total_cost_usd=post.total_cost_usd,
         ))
 
-        _ai_logger.info(
-            f"=== POST COMPLETE === POST:{post_id} | slides:{post.slides_count} | "
-            f"time:{post.generation_time_seconds:.1f}s | cost:${post.total_cost_usd:.4f} | "
-            f"text_calls:{self._total_text_calls} | image_calls:{self._total_image_calls}"
-        )
+        _log_section(post_id, "POST GENERATION COMPLETE")
+        _ai_logger.info(f"POST:{post_id} | SUMMARY | slides:{post.slides_count} | hook_type:{post.hook_type.value}")
+        _ai_logger.info(f"POST:{post_id} | TIMING | total:{post.generation_time_seconds:.1f}s")
+        _ai_logger.info(f"POST:{post_id} | COST | total:${post.total_cost_usd:.4f}")
+        _ai_logger.info(f"POST:{post_id} | CALLS | text:{self._total_text_calls} | image:{self._total_image_calls}")
+        _ai_logger.info(f"POST:{post_id} | PROVIDERS | text:{post.text_provider} | image:{post.image_provider}")
+        _ai_logger.info(f"POST:{post_id} | OUTPUT | path:{self._get_output_path(post)}")
+        _ai_logger.info(f"POST:{post_id} | {'='*60}")
 
         return post
 

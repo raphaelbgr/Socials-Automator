@@ -44,6 +44,10 @@ class ContentGenerationDisplay:
         self.web_search_complete = False
         self.web_search_results: dict = {}
 
+        # Tool call tracking
+        self.tool_calls_history: list[dict] = []
+        self.current_tool_call: dict = {}
+
     def add_event(self, progress: GenerationProgress):
         """Add a progress event."""
         event = {
@@ -99,6 +103,16 @@ class ContentGenerationDisplay:
             if progress.web_search_status == "complete":
                 self.web_search_complete = True
 
+        # Track tool calls (AI-driven research)
+        if progress.tool_call_status:
+            self.current_tool_call = {
+                "status": progress.tool_call_status,
+                "name": progress.tool_call_name,
+                "args": progress.tool_call_args,
+            }
+        if progress.tool_calls_history:
+            self.tool_calls_history = progress.tool_calls_history
+
         # Track phase completion
         current_phase = progress.current_phase
         if current_phase > 0:
@@ -120,6 +134,45 @@ class ContentGenerationDisplay:
                     }
 
         self._last_phase = current_phase
+
+    def _render_tool_calls_box(self) -> str:
+        """Render the AI tool calls section."""
+        if not self.tool_calls_history and not self.current_tool_call:
+            return ""
+
+        lines = []
+
+        # Show completed tool calls
+        for i, call in enumerate(self.tool_calls_history):
+            tool = call.get("tool", "unknown")
+            success = call.get("success", False)
+            duration = call.get("duration_ms", 0)
+            metadata = call.get("metadata", {})
+
+            if success:
+                icon = "[green][OK][/]"
+                border = "[green]"
+            else:
+                icon = "[red][X][/]"
+                border = "[red]"
+
+            # Format tool info
+            results = metadata.get("total_results", 0)
+            sources = metadata.get("unique_sources", 0)
+            queries = metadata.get("queries", [])
+
+            lines.append(f"{border}|[/]   {icon} {tool}({len(queries)} queries)")
+            if results > 0:
+                lines.append(f"[dim]|[/]      -> {results} results, {sources} sources ({duration}ms)")
+
+        # Show current tool call in progress
+        if self.current_tool_call.get("status") == "executing":
+            tool_name = self.current_tool_call.get("name", "")
+            args = self.current_tool_call.get("args", {})
+            queries = args.get("queries", [])
+            lines.append(f"[yellow]|[/]   [yellow]...[/] {tool_name}({len(queries)} queries)")
+
+        return "\n".join(lines)
 
     def _render_web_search_box(self) -> str:
         """Render the web search phase box."""
@@ -152,9 +205,19 @@ class ContentGenerationDisplay:
 
         lines = []
         lines.append(f"{border}+{'-' * 58}+[/]")
-        lines.append(f"{border}|[/] {status_icon} [bold]Phase 0: Web Research[/]{' ' * 33} {border}|[/]")
 
-        if is_current:
+        # Show title - if tool calls exist, show "AI Research" instead of "Web Research"
+        has_tool_calls = bool(self.tool_calls_history) or bool(self.current_tool_call)
+        title = "AI Research (Tool Calling)" if has_tool_calls else "Web Research"
+        padding = 30 if has_tool_calls else 33
+        lines.append(f"{border}|[/] {status_icon} [bold]Phase 0: {title}[/]{' ' * padding} {border}|[/]")
+
+        # Show tool calls if using AI tools
+        if has_tool_calls:
+            tool_calls_box = self._render_tool_calls_box()
+            if tool_calls_box:
+                lines.append(tool_calls_box)
+        elif is_current:
             queries = ws.get("queries", [])
             if queries:
                 lines.append(f"{border}|[/]   [dim]Searching {len(queries)} queries...[/]{' ' * 30} {border}|[/]")
@@ -170,8 +233,8 @@ class ContentGenerationDisplay:
                 domain_str = ", ".join(domains)
                 if len(domain_str) > 45:
                     domain_str = domain_str[:42] + "..."
-                padding = 45 - len(domain_str)
-                lines.append(f"{border}|[/]   [dim]Domains:[/] {domain_str}{' ' * padding} {border}|[/]")
+                padding_len = 45 - len(domain_str)
+                lines.append(f"{border}|[/]   [dim]Domains:[/] {domain_str}{' ' * padding_len} {border}|[/]")
 
             duration_str = f"{duration}ms"
             lines.append(f"{border}|[/]   [dim]Duration:[/] {duration_str}{' ' * (44 - len(duration_str))} {border}|[/]")
