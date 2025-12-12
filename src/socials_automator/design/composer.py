@@ -563,6 +563,7 @@ class SlideComposer:
         handle: str | None = None,
         secondary_text: str | None = None,
         template: CTASlideTemplate | None = None,
+        background_image: bytes | None = None,
         logo_path: Path | None = None,
     ) -> bytes:
         """Create a call-to-action slide.
@@ -572,6 +573,7 @@ class SlideComposer:
             handle: Instagram handle to display.
             secondary_text: Optional secondary text.
             template: Slide template to use.
+            background_image: Optional background image bytes.
             logo_path: Path to logo file.
 
         Returns:
@@ -579,8 +581,16 @@ class SlideComposer:
         """
         template = template or CTASlideTemplate()
 
-        # Create background based on template setting
-        if template.background_type == "solid":
+        # Create background - use provided image or template setting
+        if background_image:
+            # Use provided background image with overlay
+            base = self._create_solid_background(
+                template.width, template.height, template.colors.background
+            )
+            img = self._add_image_background(
+                base, background_image, overlay_opacity=0.7  # Heavier overlay for CTA readability
+            )
+        elif template.background_type == "solid":
             # Use solid black background
             img = self._create_solid_background(
                 template.width,

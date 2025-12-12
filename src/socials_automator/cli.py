@@ -14,13 +14,11 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 from rich.table import Table
 from rich.live import Live
-from rich.layout import Layout
-from rich.text import Text
-from rich.syntax import Syntax
 from rich import box
 
 from .content import ContentGenerator
 from .content.models import GenerationProgress
+from .cli_display import ContentGenerationDisplay, InstagramPostingDisplay
 
 # Configure logging to suppress console output - all logs go to files only
 # This prevents WARNING/INFO messages from polluting the Rich CLI display
@@ -49,151 +47,6 @@ app = typer.Typer(
 )
 
 console = Console()
-
-
-class VerboseProgressDisplay:
-    """Rich display for verbose progress tracking."""
-
-    def __init__(self):
-        self.events: list[dict] = []
-        self.current_status = "Initializing..."
-        self.stats = {
-            "text_calls": 0,
-            "image_calls": 0,
-            "total_cost": 0.0,
-            "providers_used": set(),
-            "text_provider": None,
-            "text_model": None,
-            "text_prompt_preview": None,
-            "image_provider": None,
-            "image_model": None,
-            "image_prompt_preview": None,
-        }
-
-    def add_event(self, progress: GenerationProgress):
-        """Add a progress event."""
-        event = {
-            "step": progress.current_step,
-            "event_type": progress.event_type,
-            "provider": progress.provider,
-            "model": progress.model,
-            "prompt": progress.prompt_preview,
-            "response": progress.response_preview,
-            "duration": progress.duration_seconds,
-            "cost": progress.cost_usd,
-        }
-        self.events.append(event)
-        self.current_status = progress.current_step
-
-        # Update stats from progress totals (more reliable)
-        self.stats["text_calls"] = progress.total_text_calls
-        self.stats["image_calls"] = progress.total_image_calls
-        self.stats["total_cost"] = progress.total_cost_usd
-
-        # Track providers (persist values - don't overwrite with None)
-        if progress.text_provider:
-            self.stats["text_provider"] = progress.text_provider
-        if progress.text_model:
-            self.stats["text_model"] = progress.text_model
-        if progress.text_prompt_preview:
-            self.stats["text_prompt_preview"] = progress.text_prompt_preview
-        if progress.text_provider:
-            self.stats["providers_used"].add(progress.text_provider)
-
-        if progress.image_provider:
-            self.stats["image_provider"] = progress.image_provider
-            self.stats["providers_used"].add(progress.image_provider)
-        if progress.image_model:
-            self.stats["image_model"] = progress.image_model
-        if progress.image_prompt_preview:
-            self.stats["image_prompt_preview"] = progress.image_prompt_preview
-
-    def render(self, progress: GenerationProgress) -> Panel:
-        """Render the progress display."""
-        # Build content
-        lines = []
-
-        # Status header
-        status_color = {
-            "planning": "yellow",
-            "generating": "cyan",
-            "completed": "green",
-            "error": "red",
-        }.get(progress.status, "white")
-
-        lines.append(f"[bold {status_color}]Status:[/] {progress.status.upper()}")
-        lines.append(f"[bold]Step:[/] {progress.current_step}")
-
-        # Show current action prominently (validation attempts, etc.)
-        if progress.current_action:
-            action_color = "yellow" if "Retry" in progress.current_action else "cyan"
-            lines.append(f"[bold {action_color}]Action:[/] {progress.current_action}")
-
-        # Show validation progress if in validation
-        if progress.validation_attempt > 0:
-            if progress.validation_max_attempts > 0:
-                lines.append(f"[bold]Attempt:[/] {progress.validation_attempt}/{progress.validation_max_attempts}")
-            else:
-                lines.append(f"[bold]Attempt:[/] {progress.validation_attempt} (auto-retry)")
-            if progress.validation_error:
-                # Truncate long error messages
-                error_text = progress.validation_error[:60] + "..." if len(progress.validation_error) > 60 else progress.validation_error
-                lines.append(f"[dim red]Last error: {error_text}[/]")
-
-        lines.append(f"[bold]Progress:[/] {progress.completed_steps}/{progress.total_steps} ({progress.progress_percent:.0f}%)")
-        lines.append("")
-
-        # Current slide info
-        if progress.total_slides > 0:
-            lines.append(f"[bold cyan]Slide:[/] {progress.current_slide}/{progress.total_slides}")
-            lines.append("")
-
-        # Text AI Activity - ALWAYS show if we have persisted provider info
-        text_provider = progress.text_provider or self.stats.get("text_provider")
-        text_model = progress.text_model or self.stats.get("text_model")
-        text_prompt = progress.text_prompt_preview or self.stats.get("text_prompt_preview")
-
-        if text_provider:
-            lines.append("[bold magenta]Text AI:[/]")
-            lines.append(f"  Provider: [green]{text_provider}[/]")
-            if text_model:
-                lines.append(f"  Model: [blue]{text_model}[/]")
-            if text_prompt:
-                lines.append(f"  [dim]Last prompt:[/] {text_prompt[:70]}...")
-            if progress.text_failed_providers:
-                failed = " | ".join(progress.text_failed_providers)
-                lines.append(f"  [dim]Failed providers: {failed}[/]")
-            lines.append("")
-
-        # Image AI Activity - show if we have provider info
-        image_provider = progress.image_provider or self.stats.get("image_provider")
-        image_model = progress.image_model or self.stats.get("image_model")
-        image_prompt = progress.image_prompt_preview or self.stats.get("image_prompt_preview")
-
-        if image_provider:
-            lines.append("[bold magenta]Image AI:[/]")
-            lines.append(f"  Provider: [green]{image_provider}[/]")
-            if image_model:
-                lines.append(f"  Model: [blue]{image_model}[/]")
-            if image_prompt:
-                lines.append(f"  [dim]Last prompt:[/] {image_prompt[:70]}...")
-            if progress.image_failed_providers:
-                failed = " | ".join(progress.image_failed_providers)
-                lines.append(f"  [dim]Failed providers: {failed}[/]")
-            lines.append("")
-
-        # Stats
-        lines.append("[bold]Session Stats:[/]")
-        lines.append(f"  Text API calls: {progress.total_text_calls}")
-        lines.append(f"  Image API calls: {progress.total_image_calls}")
-        lines.append(f"  Total cost: ${progress.total_cost_usd:.4f}")
-
-        return Panel(
-            "\n".join(lines),
-            title=f"[bold]Post: {progress.post_id}[/]",
-            border_style="blue",
-            box=box.ROUNDED,
-        )
 
 
 def parse_interval(interval: str) -> int:
@@ -403,7 +256,7 @@ async def _generate_posts(
     image_ai: str | None = None,
 ):
     """Async post generation with progress display."""
-    display = VerboseProgressDisplay()
+    display = ContentGenerationDisplay()
     last_progress: GenerationProgress | None = None
 
     async def progress_callback(progress: GenerationProgress):
@@ -868,57 +721,6 @@ def status(
             console.print(f"  {kw}: {count}")
 
 
-class InstagramProgressDisplay:
-    """Rich display for Instagram publishing progress."""
-
-    def __init__(self):
-        from .instagram.models import InstagramProgress
-        self.progress = InstagramProgress()
-
-    def update(self, progress):
-        """Update the progress state."""
-        self.progress = progress
-
-    def render(self) -> Panel:
-        """Render the progress display."""
-        from .instagram.models import InstagramPostStatus
-
-        progress = self.progress
-        lines = []
-
-        # Status with color
-        status_color = {
-            InstagramPostStatus.PENDING: "white",
-            InstagramPostStatus.UPLOADING: "yellow",
-            InstagramPostStatus.CREATING_CONTAINERS: "cyan",
-            InstagramPostStatus.PUBLISHING: "blue",
-            InstagramPostStatus.PUBLISHED: "green",
-            InstagramPostStatus.FAILED: "red",
-        }.get(progress.status, "white")
-
-        lines.append(f"[bold {status_color}]Status:[/] {progress.status.value.upper()}")
-        lines.append(f"[bold]Step:[/] {progress.current_step}")
-        lines.append(f"[bold]Progress:[/] {progress.progress_percent:.0f}%")
-        lines.append("")
-
-        # Image upload progress
-        if progress.total_images > 0:
-            lines.append(f"[bold cyan]Images:[/] {progress.images_uploaded}/{progress.total_images} uploaded")
-            lines.append(f"[bold cyan]Containers:[/] {progress.containers_created}/{progress.total_images} created")
-            lines.append("")
-
-        # Error display
-        if progress.error:
-            lines.append(f"[bold red]Error:[/] {progress.error}")
-
-        return Panel(
-            "\n".join(lines),
-            title="[bold]Instagram Publishing[/]",
-            border_style="blue",
-            box=box.ROUNDED,
-        )
-
-
 @app.command()
 def schedule(
     profile: str = typer.Argument(..., help="Profile name"),
@@ -1174,10 +976,35 @@ async def _post_to_instagram(
     from .instagram import InstagramClient, CloudinaryUploader, InstagramProgress
     import shutil
 
-    # Find posts in pending-post folder (scan all year/month subfolders)
     posts_dir = profile_path / "posts"
-    pending_posts = []
 
+    # Step 1: Check for posts in 'generated' folders and auto-move to 'pending-post'
+    generated_posts = []
+    for year_dir in posts_dir.glob("*"):
+        if year_dir.is_dir() and year_dir.name.isdigit():
+            for month_dir in year_dir.glob("*"):
+                if month_dir.is_dir() and month_dir.name.isdigit():
+                    generated_dir = month_dir / "generated"
+                    if generated_dir.exists():
+                        for post_dir in generated_dir.iterdir():
+                            if post_dir.is_dir() and (post_dir / "metadata.json").exists():
+                                generated_posts.append((post_dir, month_dir))
+
+    # Auto-move generated posts to pending-post
+    if generated_posts:
+        console.print(f"\n[cyan]Found {len(generated_posts)} post(s) in 'generated' folder(s)[/cyan]")
+        for post_dir, month_dir in generated_posts:
+            pending_dir = month_dir / "pending-post"
+            pending_dir.mkdir(parents=True, exist_ok=True)
+            new_path = pending_dir / post_dir.name
+            try:
+                shutil.move(str(post_dir), str(new_path))
+                console.print(f"  [green][OK][/green] Moved to pending: {post_dir.name}")
+            except Exception as e:
+                console.print(f"  [red][ERROR][/red] Failed to move {post_dir.name}: {e}")
+
+    # Step 2: Find posts in pending-post folder (scan all year/month subfolders)
+    pending_posts = []
     for year_dir in posts_dir.glob("*"):
         if year_dir.is_dir() and year_dir.name.isdigit():
             for month_dir in year_dir.glob("*"):
@@ -1189,11 +1016,11 @@ async def _post_to_instagram(
                                 pending_posts.append(post_dir)
 
     if not pending_posts:
-        console.print("[yellow]No posts in pending-post folders.[/yellow]")
+        console.print("[yellow]No posts ready to publish.[/yellow]")
         console.print("\n[dim]Workflow:[/dim]")
         console.print("  1. Generate posts: [cyan]python -m socials_automator.cli generate <profile> --topic '...'[/cyan]")
-        console.print("  2. Schedule posts: [cyan]python -m socials_automator.cli schedule <profile>[/cyan]")
-        console.print("  3. Post to Instagram: [cyan]python -m socials_automator.cli post <profile>[/cyan]")
+        console.print("  2. Post to Instagram: [cyan]python -m socials_automator.cli post <profile>[/cyan]")
+        console.print("\n[dim]Posts are auto-moved: generated -> pending-post -> posted[/dim]")
         raise typer.Exit(1)
 
     # Sort by folder name (date-number-slug) to get oldest first
@@ -1276,7 +1103,7 @@ async def _post_to_instagram(
         return
 
     # Initialize progress display
-    display = InstagramProgressDisplay()
+    display = InstagramPostingDisplay()
 
     async def progress_callback(progress: InstagramProgress):
         display.update(progress)

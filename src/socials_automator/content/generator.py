@@ -90,11 +90,9 @@ class ContentGenerator:
         # Create providers with event callbacks
         config = load_provider_config()
 
-        # Apply provider overrides
-        if text_provider_override:
-            config["text_provider_override"] = text_provider_override
-        if image_provider_override:
-            config["image_provider_override"] = image_provider_override
+        # Store provider overrides
+        self._text_provider_override = text_provider_override
+        self._image_provider_override = image_provider_override
 
         async def text_event_callback(event: dict[str, Any]) -> None:
             await self._handle_ai_event(event, "text")
@@ -102,8 +100,17 @@ class ContentGenerator:
         async def image_event_callback(event: dict[str, Any]) -> None:
             await self._handle_ai_event(event, "image")
 
-        self.text_provider = text_provider or TextProvider(config, event_callback=text_event_callback)
-        self.image_provider = image_provider or ImageProvider(config, event_callback=image_event_callback)
+        # Create providers with overrides passed directly
+        self.text_provider = text_provider or TextProvider(
+            config,
+            event_callback=text_event_callback,
+            provider_override=text_provider_override,
+        )
+        self.image_provider = image_provider or ImageProvider(
+            config,
+            event_callback=image_event_callback,
+            provider_override=image_provider_override,
+        )
 
         self.planner = ContentPlanner(
             self.profile_config,
@@ -255,6 +262,108 @@ class ContentGenerator:
 
         return self.profile_path / folder
 
+    async def _research_topic(self, topic: str) -> str | None:
+        """Research a topic using web search.
+
+        Args:
+            topic: The topic to research.
+
+        Returns:
+            Research context string for AI, or None if search fails.
+        """
+        try:
+            from ..research import WebSearcher
+        except ImportError:
+            _ai_logger.warning("Web search unavailable: ddgs not installed")
+            # Emit skipped status
+            if self._current_progress:
+                progress = self._current_progress.model_copy(update={
+                    "web_search_status": "skipped",
+                })
+                await self._emit_progress(progress)
+            return None
+
+        try:
+            searcher = WebSearcher(timeout=10, max_results_per_query=5)
+
+            # Generate search queries from topic
+            queries = self._generate_search_queries(topic)
+
+            # Emit searching status
+            if self._current_progress:
+                progress = self._current_progress.model_copy(update={
+                    "web_search_status": "searching",
+                    "web_search_queries": queries,
+                    "current_action": f"Searching {len(queries)} queries...",
+                })
+                await self._emit_progress(progress)
+
+            # Execute parallel search
+            results = await searcher.parallel_search(queries, max_results=5)
+
+            # Emit complete status with results
+            if self._current_progress:
+                progress = self._current_progress.model_copy(update={
+                    "web_search_status": "complete",
+                    "web_search_queries": queries,
+                    "web_search_results": results.total_results,
+                    "web_search_sources": len(results.all_sources),
+                    "web_search_domains": results.unique_domains[:5],
+                    "web_search_duration_ms": results.duration_ms,
+                    "current_action": f"Found {len(results.all_sources)} unique sources",
+                })
+                await self._emit_progress(progress)
+
+            if results.total_results == 0:
+                _ai_logger.info(f"No search results for topic: {topic}")
+                return None
+
+            # Convert to context string for AI
+            return results.to_context_string(max_sources=8)
+
+        except Exception as e:
+            _ai_logger.warning(f"Web search failed: {e}")
+            # Emit failed status
+            if self._current_progress:
+                progress = self._current_progress.model_copy(update={
+                    "web_search_status": "failed",
+                    "current_action": "Search failed, continuing without research",
+                })
+                await self._emit_progress(progress)
+            return None
+
+    def _generate_search_queries(self, topic: str) -> list[str]:
+        """Generate search queries from a topic.
+
+        Args:
+            topic: The content topic.
+
+        Returns:
+            List of search queries (3-5 variations).
+        """
+        queries = []
+
+        # Main topic as-is
+        queries.append(topic)
+
+        # Extract numbers and key terms for variations
+        # e.g., "5 AI tools for email" -> ["AI tools for email", "best AI email tools 2024"]
+        import re
+        # Remove leading numbers like "5 " or "10 "
+        clean_topic = re.sub(r'^\d+\s+', '', topic)
+        if clean_topic != topic:
+            queries.append(clean_topic)
+
+        # Add "best" variation
+        queries.append(f"best {clean_topic} 2024")
+
+        # Add "how to" variation if applicable
+        if not topic.lower().startswith("how"):
+            queries.append(f"how to {clean_topic}")
+
+        # Limit to 5 queries
+        return queries[:5]
+
     async def generate_post(
         self,
         topic: str,
@@ -296,9 +405,19 @@ class ContentGenerator:
         progress = GenerationProgress(
             post_id=post_id,
             status="planning",
-            total_steps=4,  # Initial estimate: Planning + caption + save + buffer
+            total_steps=5,  # Initial estimate: Research + Planning + caption + save + buffer
         )
         await self._emit_progress(progress)
+
+        # Step 0: Web research (if no context provided)
+        if research_context is None:
+            progress.current_step = "Researching topic"
+            progress.current_action = "Searching the web for relevant information..."
+            await self._emit_progress(progress)
+
+            research_context = await self._research_topic(topic)
+            if research_context:
+                _ai_logger.info(f"POST:{post_id} | WEB_RESEARCH | context_length:{len(research_context)}")
 
         # Step 1: Plan the post
         progress.current_step = "Planning content structure"
@@ -340,6 +459,24 @@ class ContentGenerator:
 
         # Step 2: Generate slides
         progress.total_slides = len(plan.slides)
+
+        # Check if using local/free image provider - if so, add image to CTA
+        local_image_providers = {"comfyui", "automatic1111", "stable-diffusion-webui"}
+        is_local_image = (
+            self._image_provider_override
+            and self._image_provider_override.lower() in local_image_providers
+        )
+
+        if is_local_image:
+            # Enable image generation for CTA slide (it's free with local providers)
+            for slide_outline in plan.slides:
+                if slide_outline.get("slide_type") == "cta":
+                    slide_outline["needs_image"] = True
+                    # Generate context-aware image description based on topic
+                    slide_outline["image_description"] = (
+                        f"Abstract background for social media CTA about {topic}, "
+                        "inspiring, motivational, modern gradient colors, subtle patterns"
+                    )
 
         for i, slide_outline in enumerate(plan.slides):
             progress.current_slide = i + 1
@@ -506,6 +643,7 @@ class ContentGenerator:
                 handle=handle,
                 secondary_text=slide.body,
                 template=template,
+                background_image=image_bytes,
                 logo_path=logo_path,
             )
         else:

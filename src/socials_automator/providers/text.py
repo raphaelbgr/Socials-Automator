@@ -33,12 +33,18 @@ class TextProvider:
         response = await provider.generate("Write a haiku about AI")
     """
 
-    def __init__(self, config: ProviderConfig | None = None, event_callback: AIEventCallback = None):
+    def __init__(
+        self,
+        config: ProviderConfig | None = None,
+        event_callback: AIEventCallback = None,
+        provider_override: str | None = None,
+    ):
         """Initialize the text provider.
 
         Args:
             config: Provider configuration. If None, loads from default config file.
             event_callback: Optional callback for AI events (for progress tracking).
+            provider_override: Override provider name (e.g., 'lmstudio', 'openai').
         """
         self.config = config or load_provider_config()
         self._current_provider: str | None = None
@@ -48,10 +54,8 @@ class TextProvider:
         self._total_cost = 0.0
         self._clients: dict[str, AsyncOpenAI] = {}
 
-        # Check for provider override
-        self._provider_override: str | None = None
-        if isinstance(config, dict) and "text_provider_override" in config:
-            self._provider_override = config["text_provider_override"]
+        # Provider override
+        self._provider_override = provider_override
 
     # Providers that are NOT OpenAI-compatible (need their own SDK)
     _INCOMPATIBLE_PROVIDERS = {"anthropic"}
@@ -84,8 +88,8 @@ class TextProvider:
                 }
                 base_url = base_url_map.get(provider_name)
 
-            # Use shorter timeout for local providers
-            timeout = 5 if is_local else provider_config.timeout
+            # Use provider config timeout (local models may need longer)
+            timeout = provider_config.timeout or 120
 
             self._clients[provider_name] = AsyncOpenAI(
                 api_key=api_key or "lm-studio",  # Local providers use dummy key
@@ -139,13 +143,45 @@ class TextProvider:
         messages.append({"role": "user", "content": prompt})
 
         # Try providers in priority order with fallback
-        providers = self.config.get_enabled_text_providers()
+        providers = list(self.config.get_enabled_text_providers())
 
-        # If override is set, prioritize that provider
+        # If override is set, force that provider to be first (even if disabled)
         if self._provider_override:
             override_name = self._provider_override.lower()
-            # Reorder providers to put override first
-            providers = sorted(providers, key=lambda x: 0 if x[0] == override_name else 1)
+
+            # Check if override provider is already in enabled list
+            override_in_list = any(name == override_name for name, _ in providers)
+
+            if not override_in_list:
+                # Check if provider exists in config but is disabled
+                if override_name in self.config.text_providers:
+                    # Add disabled provider to front of list
+                    override_config = self.config.text_providers[override_name]
+                    providers.insert(0, (override_name, override_config))
+                else:
+                    # Create default config for known local providers
+                    default_configs = {
+                        "lmstudio": TextProviderConfig(
+                            priority=0,
+                            enabled=True,
+                            litellm_model="openai/local-model",
+                            base_url="http://localhost:1234/v1",
+                            api_key="lm-studio",
+                            timeout=120,
+                        ),
+                        "ollama": TextProviderConfig(
+                            priority=0,
+                            enabled=True,
+                            litellm_model="ollama/llama3.2",
+                            base_url="http://localhost:11434",
+                            timeout=120,
+                        ),
+                    }
+                    if override_name in default_configs:
+                        providers.insert(0, (override_name, default_configs[override_name]))
+            else:
+                # Reorder to put override first
+                providers = sorted(providers, key=lambda x: 0 if x[0] == override_name else 1)
 
         last_error: Exception | None = None
         failed_providers: list[str] = []
@@ -205,6 +241,10 @@ class TextProvider:
                         result = reasoning
                 self._total_calls += 1
 
+                # Use actual model from response if available (especially for LM Studio)
+                actual_model = getattr(response, "model", model) or model
+                self._current_model = actual_model
+
                 # Estimate cost
                 cost = self._estimate_cost(provider_name, len(prompt) + len(result))
                 self._total_cost += cost
@@ -213,7 +253,7 @@ class TextProvider:
                 await self._emit_event({
                     "type": "text_response",
                     "provider": provider_name,
-                    "model": model,
+                    "model": actual_model,
                     "response_preview": result[:200],
                     "duration_seconds": duration,
                     "cost_usd": cost,

@@ -35,6 +35,7 @@ dependencies = [
 
     # Web Research & Scraping (removed trafilatura due to grpcio dep)
     "feedparser>=6.0.10",
+    "ddgs>=7.0.0",  # DuckDuckGo search
 
     # Utilities
     "python-dotenv>=1.0.0",

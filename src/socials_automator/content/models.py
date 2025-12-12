@@ -118,6 +118,28 @@ class GenerationProgress(BaseModel):
     total_slides: int = 0
     errors: list[str] = Field(default_factory=list)
 
+    # Web search tracking (Phase 0)
+    web_search_status: str = ""  # "searching", "complete", "skipped", "failed"
+    web_search_queries: list[str] = Field(default_factory=list)
+    web_search_results: int = 0  # Total results found
+    web_search_sources: int = 0  # Unique sources
+    web_search_domains: list[str] = Field(default_factory=list)  # Top domains
+    web_search_duration_ms: int = 0
+
+    # Phase tracking (new 4-phase architecture)
+    current_phase: int = 0  # 0=Research, 1=Planning, 2=Structure, 3=Content, 4=CTA
+    total_phases: int = 5  # Including research phase
+    phase_name: str = ""  # "Research", "Planning", "Structure", "Content", "CTA"
+    phase_input: str = ""  # What was sent to AI
+    phase_output: str = ""  # What AI returned (preview)
+    content_count: int = 0  # Number of content slides
+    content_type: str = ""  # "tip", "prompt", "tool", etc.
+    slide_titles: list[str] = Field(default_factory=list)  # From Phase 2
+    generated_slides: list[dict[str, str]] = Field(default_factory=list)  # From Phase 3
+
+    # Per-phase completion info (provider, model, prompt used)
+    phase_results: dict[int, dict[str, str]] = Field(default_factory=dict)  # {phase_num: {provider, model, prompt_preview}}
+
     # Validation tracking
     validation_attempt: int = 0
     validation_max_attempts: int = 6

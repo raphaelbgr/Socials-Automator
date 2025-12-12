@@ -59,9 +59,10 @@ class ImageProviderConfig(BaseModel):
 
     priority: int
     enabled: bool = True
-    type: str  # fal, replicate, openai
+    type: str  # fal, replicate, openai, comfyui
     model: str
     api_key_env: str | None = None
+    base_url_env: str | None = None
     timeout: int = 90
     cost_per_image: float = 0.0
     settings: dict[str, Any] = Field(default_factory=dict)
@@ -70,6 +71,12 @@ class ImageProviderConfig(BaseModel):
         """Get API key from environment."""
         if self.api_key_env:
             return os.getenv(self.api_key_env)
+        return None
+
+    def get_base_url(self) -> str | None:
+        """Get base URL from environment."""
+        if self.base_url_env:
+            return os.getenv(self.base_url_env)
         return None
 
 

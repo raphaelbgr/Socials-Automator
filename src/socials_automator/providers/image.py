@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import os
 import time
+import uuid
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Literal, Callable, Awaitable
+from typing import Any, Callable, Awaitable
 
 import httpx
 from PIL import Image
@@ -50,25 +52,30 @@ class ImageProvider:
         "story": (1080, 1920),  # 9:16 ratio
     }
 
-    def __init__(self, config: ProviderConfig | None = None, event_callback: AIEventCallback = None):
+    def __init__(
+        self,
+        config: ProviderConfig | None = None,
+        event_callback: AIEventCallback = None,
+        provider_override: str | None = None,
+    ):
         """Initialize image provider.
 
         Args:
             config: Provider configuration. If None, loads from default config file.
             event_callback: Optional callback for AI events (for progress tracking).
+            provider_override: Override provider name (e.g., 'dalle', 'comfyui').
         """
         self.config = config or load_provider_config()
         self._current_provider: str | None = None
         self._current_model: str | None = None
+        self._actual_model: str | None = None  # Actual model used (e.g., ComfyUI checkpoint)
         self._http_client: httpx.AsyncClient | None = None
         self._event_callback = event_callback
         self._total_calls = 0
         self._total_cost = 0.0
 
-        # Check for provider override
-        self._provider_override: str | None = None
-        if isinstance(config, dict) and "image_provider_override" in config:
-            self._provider_override = config["image_provider_override"]
+        # Provider override
+        self._provider_override = provider_override
 
     async def _emit_event(self, event: dict[str, Any]) -> None:
         """Emit an AI event if callback is set."""
@@ -137,12 +144,39 @@ class ImageProvider:
             full_prompt = f"{prompt}, {style_suffix}"
 
         # Get provider with fallback
-        providers = self.config.get_enabled_image_providers()
+        providers = list(self.config.get_enabled_image_providers())
 
-        # If override is set, prioritize that provider
+        # If override is set, force that provider to be first (even if disabled)
         if self._provider_override:
             override_name = self._provider_override.lower()
-            providers = sorted(providers, key=lambda x: 0 if x[0] == override_name else 1)
+
+            # Check if override provider is already in enabled list
+            override_in_list = any(name == override_name for name, _ in providers)
+
+            if not override_in_list:
+                # Check if provider exists in config but is disabled
+                if override_name in self.config.image_providers:
+                    # Add disabled provider to front of list
+                    override_config = self.config.image_providers[override_name]
+                    providers.insert(0, (override_name, override_config))
+                else:
+                    # Create default config for known local providers
+                    default_configs = {
+                        "comfyui": ImageProviderConfig(
+                            priority=0,
+                            enabled=True,
+                            type="comfyui",
+                            model="local",
+                            base_url="http://127.0.0.1:8188",
+                            timeout=120,
+                            cost_per_image=0.0,
+                        ),
+                    }
+                    if override_name in default_configs:
+                        providers.insert(0, (override_name, default_configs[override_name]))
+            else:
+                # Reorder to put override first
+                providers = sorted(providers, key=lambda x: 0 if x[0] == override_name else 1)
 
         last_error: Exception | None = None
         failed_providers: list[str] = []
@@ -177,6 +211,10 @@ class ImageProvider:
                     image_bytes = await self._generate_openai(
                         provider_config, full_prompt, size, **kwargs
                     )
+                elif provider_config.type == "comfyui":
+                    image_bytes = await self._generate_comfyui(
+                        provider_config, full_prompt, size, negative_prompt, **kwargs
+                    )
                 else:
                     raise ValueError(f"Unknown provider type: {provider_config.type}")
 
@@ -185,11 +223,15 @@ class ImageProvider:
                 cost = provider_config.cost_per_image
                 self._total_cost += cost
 
+                # Use actual model if detected (e.g., ComfyUI checkpoint)
+                actual_model = self._actual_model or provider_config.model
+                self._current_model = actual_model
+
                 # Emit "complete" event
                 await self._emit_event({
                     "type": "image_response",
                     "provider": provider_name,
-                    "model": provider_config.model,
+                    "model": actual_model,
                     "duration_seconds": duration,
                     "cost_usd": cost,
                     "total_calls": self._total_calls,
@@ -197,6 +239,9 @@ class ImageProvider:
                     "image_size_bytes": len(image_bytes),
                     "failed_providers": failed_providers.copy(),
                 })
+
+                # Reset actual model for next call
+                self._actual_model = None
 
                 return image_bytes
 
@@ -377,6 +422,213 @@ class ImageProvider:
         image_data = base64.b64decode(response.data[0].b64_json)
 
         return self._resize_image(image_data, size)
+
+    async def _generate_comfyui(
+        self,
+        config: ImageProviderConfig,
+        prompt: str,
+        size: tuple[int, int],
+        negative_prompt: str | None = None,
+        **kwargs: Any,
+    ) -> bytes:
+        """Generate image using ComfyUI API.
+
+        ComfyUI uses a workflow-based API. This implementation uses a default
+        text-to-image workflow that works with most SD/SDXL models.
+        """
+        base_url = config.get_base_url()
+        if not base_url:
+            raise ValueError("COMFYUI_BASE_URL not set")
+
+        # Remove trailing slash
+        base_url = base_url.rstrip("/")
+
+        client = await self._get_http_client()
+        client_id = str(uuid.uuid4())
+
+        width, height = size
+
+        # Get checkpoint name from settings or auto-detect
+        checkpoint = config.settings.get("checkpoint")
+        if not checkpoint:
+            checkpoint = await self._get_comfyui_checkpoint(base_url, client)
+
+        # Store actual model name for reporting
+        self._actual_model = checkpoint
+
+        # Build default text-to-image workflow
+        # This workflow works with most SD 1.5 / SDXL models loaded in ComfyUI
+        settings_with_checkpoint = {**config.settings, "checkpoint": checkpoint}
+        workflow = self._build_comfyui_workflow(
+            prompt=prompt,
+            negative_prompt=negative_prompt or "blurry, low quality, distorted",
+            width=width,
+            height=height,
+            settings=settings_with_checkpoint,
+        )
+
+        # Queue the prompt
+        queue_response = await client.post(
+            f"{base_url}/prompt",
+            json={"prompt": workflow, "client_id": client_id},
+        )
+        queue_response.raise_for_status()
+        prompt_id = queue_response.json()["prompt_id"]
+
+        # Poll for completion
+        timeout = config.timeout
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            history_response = await client.get(f"{base_url}/history/{prompt_id}")
+            history_response.raise_for_status()
+            history = history_response.json()
+
+            if prompt_id in history:
+                outputs = history[prompt_id].get("outputs", {})
+                # Find the SaveImage node output
+                for node_id, output in outputs.items():
+                    if "images" in output:
+                        image_info = output["images"][0]
+                        filename = image_info["filename"]
+                        subfolder = image_info.get("subfolder", "")
+                        image_type = image_info.get("type", "output")
+
+                        # Download the image
+                        params = {
+                            "filename": filename,
+                            "subfolder": subfolder,
+                            "type": image_type,
+                        }
+                        image_response = await client.get(
+                            f"{base_url}/view",
+                            params=params,
+                        )
+                        image_response.raise_for_status()
+                        return self._resize_image(image_response.content, size)
+
+            await asyncio.sleep(1)
+
+        raise TimeoutError(f"ComfyUI generation timed out after {timeout}s")
+
+    async def _get_comfyui_checkpoint(self, base_url: str, client: httpx.AsyncClient) -> str:
+        """Get the first available checkpoint from ComfyUI."""
+        try:
+            response = await client.get(f"{base_url}/object_info/CheckpointLoaderSimple")
+            response.raise_for_status()
+            info = response.json()
+
+            # Navigate to the checkpoint list
+            checkpoints = (
+                info.get("CheckpointLoaderSimple", {})
+                .get("input", {})
+                .get("required", {})
+                .get("ckpt_name", [[]])[0]
+            )
+
+            if checkpoints:
+                return checkpoints[0]
+
+            raise ValueError("No checkpoints found in ComfyUI")
+        except Exception as e:
+            raise ValueError(f"Could not auto-detect ComfyUI checkpoint: {e}. Set 'checkpoint' in providers.yaml")
+
+    def _build_comfyui_workflow(
+        self,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        settings: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Build a default ComfyUI text-to-image workflow.
+
+        This workflow uses:
+        - KSampler for generation
+        - CLIP text encoding for prompts
+        - VAE decode for image output
+        - SaveImage to save the result
+
+        Works with any checkpoint model loaded in ComfyUI.
+        """
+        # Get settings with defaults
+        steps = settings.get("steps", 20)
+        cfg = settings.get("cfg", 7.0)
+        sampler = settings.get("sampler", "euler")
+        scheduler = settings.get("scheduler", "normal")
+        seed = settings.get("seed", -1)  # -1 = random
+
+        if seed == -1:
+            import random
+            seed = random.randint(0, 2**32 - 1)
+
+        workflow = {
+            # CheckpointLoaderSimple - loads whatever model is selected in ComfyUI
+            "1": {
+                "class_type": "CheckpointLoaderSimple",
+                "inputs": {
+                    "ckpt_name": settings.get("checkpoint", "v1-5-pruned-emaonly.safetensors")
+                }
+            },
+            # CLIP Text Encode - Positive prompt
+            "2": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {
+                    "text": prompt,
+                    "clip": ["1", 1]  # Connect to checkpoint CLIP output
+                }
+            },
+            # CLIP Text Encode - Negative prompt
+            "3": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {
+                    "text": negative_prompt,
+                    "clip": ["1", 1]
+                }
+            },
+            # Empty Latent Image - Creates the canvas
+            "4": {
+                "class_type": "EmptyLatentImage",
+                "inputs": {
+                    "width": width,
+                    "height": height,
+                    "batch_size": 1
+                }
+            },
+            # KSampler - The main generation node
+            "5": {
+                "class_type": "KSampler",
+                "inputs": {
+                    "seed": seed,
+                    "steps": steps,
+                    "cfg": cfg,
+                    "sampler_name": sampler,
+                    "scheduler": scheduler,
+                    "denoise": 1.0,
+                    "model": ["1", 0],  # Connect to checkpoint model output
+                    "positive": ["2", 0],  # Connect to positive CLIP
+                    "negative": ["3", 0],  # Connect to negative CLIP
+                    "latent_image": ["4", 0]  # Connect to empty latent
+                }
+            },
+            # VAE Decode - Convert latent to image
+            "6": {
+                "class_type": "VAEDecode",
+                "inputs": {
+                    "samples": ["5", 0],  # Connect to KSampler output
+                    "vae": ["1", 2]  # Connect to checkpoint VAE output
+                }
+            },
+            # SaveImage - Save the result
+            "7": {
+                "class_type": "SaveImage",
+                "inputs": {
+                    "filename_prefix": "socials_automator",
+                    "images": ["6", 0]  # Connect to VAE decode output
+                }
+            }
+        }
+
+        return workflow
 
     def _resize_image(self, image_bytes: bytes, target_size: tuple[int, int]) -> bytes:
         """Resize image to exact target dimensions while preserving aspect ratio.

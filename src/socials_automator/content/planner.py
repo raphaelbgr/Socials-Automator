@@ -102,13 +102,41 @@ class ContentPlanner:
         attempt: int = 0,
         max_attempts: int = 6,
         error: str | None = None,
+        phase: int = 0,
+        phase_name: str = "",
+        phase_input: str = "",
+        phase_output: str = "",
+        content_count: int = 0,
+        content_type: str = "",
+        slide_titles: list[str] | None = None,
+        generated_slide: dict[str, str] | None = None,
     ) -> None:
-        """Emit progress update for validation/generation."""
+        """Emit progress update for phase-based generation."""
         if self._current_progress and self.progress_callback:
             self._current_progress.current_action = action
             self._current_progress.validation_attempt = attempt
             self._current_progress.validation_max_attempts = max_attempts
             self._current_progress.validation_error = error
+
+            # Phase tracking
+            if phase > 0:
+                self._current_progress.current_phase = phase
+                self._current_progress.total_phases = max_attempts
+            if phase_name:
+                self._current_progress.phase_name = phase_name
+            if phase_input:
+                self._current_progress.phase_input = phase_input[:100]
+            if phase_output:
+                self._current_progress.phase_output = phase_output[:100]
+            if content_count > 0:
+                self._current_progress.content_count = content_count
+            if content_type:
+                self._current_progress.content_type = content_type
+            if slide_titles:
+                self._current_progress.slide_titles = slide_titles
+            if generated_slide:
+                self._current_progress.generated_slides.append(generated_slide)
+
             await self.progress_callback(self._current_progress)
 
     def _get_system_prompt(self) -> str:
@@ -187,60 +215,266 @@ Return ONLY a JSON array of strings with the hooks, no other text:
 
         return [topic]  # Fallback
 
-    async def _validate_content_matches_hook(
+    async def _call_with_history(
         self,
-        hook_text: str,
-        content_headings: list[str],
-    ) -> dict:
-        """Use AI to validate that content slides match the hook's promise.
+        messages: list[dict[str, str]],
+        task: str = "content_planning",
+        temperature: float = 0.7,
+        max_tokens: int = 1000,
+    ) -> str:
+        """Make an AI call with conversation history.
 
         Args:
-            hook_text: The hook/title text
-            content_headings: List of content slide headings
+            messages: List of message dicts with 'role' and 'content'
+            task: Task name for provider selection
+            temperature: Sampling temperature
+            max_tokens: Max tokens to generate
 
         Returns:
-            Dict with 'valid' (bool) and 'reason' (str) keys
+            The assistant's response text
         """
-        validation_prompt = f"""Validate this Instagram carousel content.
+        # Build the full prompt from history for the text provider
+        # The text provider expects a single prompt, so we format history into it
 
-HOOK/TITLE: "{hook_text}"
+        # Extract system message if present
+        system_msg = None
+        conversation = []
+        for msg in messages:
+            if msg["role"] == "system":
+                system_msg = msg["content"]
+            else:
+                conversation.append(msg)
 
-CONTENT SLIDES ({len(content_headings)} items):
-{chr(10).join(f'{i+1}. {h}' for i, h in enumerate(content_headings))}
+        # Format conversation into prompt
+        if len(conversation) == 1:
+            # Single message - just use it as prompt
+            prompt = conversation[0]["content"]
+        else:
+            # Multiple messages - format as conversation
+            prompt_parts = []
+            for msg in conversation:
+                if msg["role"] == "user":
+                    prompt_parts.append(f"User: {msg['content']}")
+                elif msg["role"] == "assistant":
+                    prompt_parts.append(f"Assistant: {msg['content']}")
+            prompt_parts.append("Assistant:")  # Prompt for next response
+            prompt = "\n\n".join(prompt_parts)
 
-VALIDATION RULES:
-1. If the hook mentions a specific NUMBER (e.g., "5 tips", "7 tools", "3 ways"), the content MUST have EXACTLY that many items
-2. Each content item must be relevant to the hook's topic
-3. Items should be distinct (no duplicates or very similar items)
+        response = await self.text_provider.generate(
+            prompt=prompt,
+            system=system_msg,
+            task=task,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
-Return ONLY a JSON object:
-{{"valid": true/false, "reason": "explanation if invalid"}}
+        return response.strip()
+
+    async def _phase1_planning(
+        self,
+        topic: str,
+        research_context: str | None = None,
+    ) -> tuple[dict[str, Any], list[dict[str, str]]]:
+        """Phase 1: Analyze topic and determine content structure.
+
+        Args:
+            topic: The topic for the carousel post.
+            research_context: Optional web research results to inform content.
+
+        Returns:
+            Tuple of (planning_result, message_history)
+        """
+        system = "You are a social media content strategist. Analyze topics and plan content structure. Return ONLY valid JSON."
+
+        # Build prompt with optional research context
+        research_section = ""
+        if research_context:
+            research_section = f"""
+RESEARCH CONTEXT (use this to inform your planning):
+{research_context}
+
+Use the research above to ensure your content is accurate and current.
+"""
+
+        prompt = f"""Analyze this Instagram carousel topic and plan the content:
+
+TOPIC: "{topic}"
+{research_section}
+Determine:
+1. How many content items are promised/implied (look for numbers like "5 tips", "7 tools")
+2. What type of content (tips, prompts, tools, steps, etc.)
+3. A refined, engaging version of the topic
+
+Return ONLY this JSON:
+{{
+    "content_count": <number of items to create>,
+    "content_type": "<singular type: tip, prompt, tool, step, hack, etc.>",
+    "refined_topic": "<polished version of the topic>",
+    "target_audience": "<who this is for>"
+}}
 
 Examples:
-- Hook "5 AI Tools" with 4 content items → {{"valid": false, "reason": "Hook promises 5 items but only 4 content slides provided"}}
-- Hook "5 AI Tools" with 5 content items → {{"valid": true, "reason": "Content matches hook"}}
-- Hook "Best AI Tips" with 3 items → {{"valid": true, "reason": "No specific number promised, content is valid"}}"""
+- "5 ChatGPT prompts" → {{"content_count": 5, "content_type": "prompt", ...}}
+- "Best AI tools for writers" → {{"content_count": 5, "content_type": "tool", ...}} (default to 5 if not specified)
+- "3 ways to use Claude" → {{"content_count": 3, "content_type": "way", ...}}"""
+
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ]
+
+        response = await self._call_with_history(messages, temperature=0.5)
+        messages.append({"role": "assistant", "content": response})
+
+        data = self._extract_json(response)
+
+        # Ensure we have required fields with defaults
+        result = {
+            "content_count": data.get("content_count", 5),
+            "content_type": data.get("content_type", "tip"),
+            "refined_topic": data.get("refined_topic", topic),
+            "target_audience": data.get("target_audience", "social media users"),
+        }
+
+        _logger.info(f"Phase 1 - Planning: {result['content_count']} {result['content_type']}s")
+
+        return result, messages
+
+    async def _phase2_structure(
+        self,
+        planning: dict[str, Any],
+        hook_type: HookType,
+        history: list[dict[str, str]],
+    ) -> tuple[dict[str, Any], list[dict[str, str]]]:
+        """Phase 2: Create hook and slide structure.
+
+        Returns:
+            Tuple of (structure_result, updated_history)
+        """
+        content_count = planning["content_count"]
+        content_type = planning["content_type"]
+
+        prompt = f"""Based on the planning, create the carousel structure.
+
+Create:
+1. A compelling hook (max 10 words) using {hook_type.value} style
+2. {content_count} slide titles - one for each {content_type}
+3. A description for the hook slide image
+
+Return ONLY this JSON:
+{{
+    "hook_text": "<catchy hook headline>",
+    "hook_subtext": "<optional 5-word subtext or null>",
+    "hook_image_description": "<description for background image>",
+    "slide_titles": [
+        "<title for {content_type} 1>",
+        "<title for {content_type} 2>",
+        ... ({content_count} titles total)
+    ]
+}}
+
+IMPORTANT: Generate EXACTLY {content_count} slide titles."""
+
+        history.append({"role": "user", "content": prompt})
+        response = await self._call_with_history(history, temperature=0.7)
+        history.append({"role": "assistant", "content": response})
+
+        data = self._extract_json(response)
+
+        # Validate slide_titles count
+        titles = data.get("slide_titles", [])
+        if len(titles) != content_count:
+            _logger.warning(f"Phase 2 got {len(titles)} titles instead of {content_count}, adjusting...")
+            # Pad or trim to exact count
+            while len(titles) < content_count:
+                titles.append(f"{content_type.title()} {len(titles) + 1}")
+            titles = titles[:content_count]
+
+        result = {
+            "hook_text": data.get("hook_text", planning["refined_topic"]),
+            "hook_subtext": data.get("hook_subtext"),
+            "hook_image_description": data.get("hook_image_description", f"Abstract background for {planning['refined_topic']}"),
+            "slide_titles": titles,
+        }
+
+        _logger.info(f"Phase 2 - Structure: hook='{result['hook_text'][:30]}...', {len(titles)} titles")
+
+        return result, history
+
+    async def _phase3_content_slide(
+        self,
+        slide_number: int,
+        slide_title: str,
+        content_type: str,
+        history: list[dict[str, str]],
+    ) -> tuple[dict[str, Any], list[dict[str, str]]]:
+        """Phase 3: Generate content for a single slide.
+
+        Returns:
+            Tuple of (slide_content, updated_history)
+        """
+        prompt = f"""Generate content for slide {slide_number}: "{slide_title}"
+
+This is a {content_type} slide. Provide:
+- A clear, specific heading (can refine the title)
+- Body text with 1-2 sentences of actionable detail
+
+Return ONLY this JSON:
+{{
+    "heading": "<specific heading for this {content_type}>",
+    "body": "<1-2 sentences with specific, actionable details>"
+}}
+
+Make it SPECIFIC and VALUABLE - not generic filler."""
+
+        history.append({"role": "user", "content": prompt})
+        response = await self._call_with_history(history, temperature=0.7, max_tokens=300)
+        history.append({"role": "assistant", "content": response})
+
+        data = self._extract_json(response)
+
+        result = {
+            "heading": data.get("heading", slide_title),
+            "body": data.get("body", ""),
+        }
+
+        _logger.info(f"Phase 3 - Slide {slide_number}: '{result['heading'][:30]}...'")
+
+        return result, history
+
+    async def _phase4_cta(
+        self,
+        history: list[dict[str, str]],
+    ) -> dict[str, Any]:
+        """Phase 4: Generate CTA based on all content.
+
+        Returns:
+            CTA slide dict
+        """
+        prompt = """Based on all the content we've created, generate a compelling call-to-action for the final slide.
+
+Return ONLY this JSON:
+{
+    "cta_text": "<short punchy CTA, 2-5 words>",
+    "cta_subtext": "<optional extra line or null>"
+}
+
+Make it encourage saving, sharing, or following."""
+
+        history.append({"role": "user", "content": prompt})
+        response = await self._call_with_history(history, temperature=0.8, max_tokens=100)
 
         try:
-            response = await self.text_provider.generate(
-                prompt=validation_prompt,
-                system="You are a content validator. Return ONLY valid JSON, nothing else.",
-                task="validation",
-                temperature=0.1,
-                max_tokens=200,
-            )
-
-            # Parse JSON response
-            result = json.loads(response.strip())
+            data = self._extract_json(response)
             return {
-                "valid": result.get("valid", False),
-                "reason": result.get("reason", "Unknown validation error")
+                "cta_text": data.get("cta_text", "Follow for more!"),
+                "cta_subtext": data.get("cta_subtext"),
             }
-        except Exception as e:
-            # On error, be lenient and allow the content through
-            import logging
-            logging.warning(f"AI validation failed with error: {e}, allowing content through")
-            return {"valid": True, "reason": "Validation skipped due to error"}
+        except Exception:
+            return {
+                "cta_text": "Follow for more!",
+                "cta_subtext": None,
+            }
 
     async def plan_post(
         self,
@@ -252,16 +486,24 @@ Examples:
         max_slides: int = 10,
         research_context: str | None = None,
     ) -> PostPlan:
-        """Create a full plan for a carousel post.
+        """Create a full plan for a carousel post using 4-phase AI generation.
+
+        This approach guarantees correct slide counts by:
+        1. Phase 1: Planning - extract count and type from topic
+        2. Phase 2: Structure - create hook and slide titles
+        3. Phase 3: Content - generate each slide individually (N calls)
+        4. Phase 4: CTA - create call-to-action with full context
+
+        Each phase builds on the history of previous phases for coherence.
 
         Args:
             topic: Topic for the post.
             content_pillar: Content pillar category.
             hook_type: Hook type to use.
-            target_slides: Target number of slides. If None, AI decides based on content.
-            min_slides: Minimum slides when AI decides (default 3).
-            max_slides: Maximum slides when AI decides (default 10).
-            research_context: Optional research context.
+            target_slides: Target number of slides (can override extracted count).
+            min_slides: Minimum slides (default 3).
+            max_slides: Maximum slides (default 10).
+            research_context: Optional web research context to inform content.
 
         Returns:
             Complete post plan.
@@ -269,294 +511,166 @@ Examples:
         if hook_type is None:
             hook_type = self._select_hook_type(content_pillar)
 
-        # Get context from knowledge base
-        kb_context = ""
-        if self.knowledge:
-            kb_context = self.knowledge.get_recent_context(days=7)
-            topics_to_avoid = self.knowledge.get_topics_to_avoid(days=7)
-            if topics_to_avoid:
-                kb_context += f"\n\nTopics to avoid (recently used): {', '.join(topics_to_avoid[:10])}"
+        total_phases = 4  # Will be updated after phase 1
 
-        # Build slide count instruction
-        if target_slides is not None:
-            slides_instruction = f"Target slides: {target_slides} (including hook and CTA)"
-            content_slides_instruction = f"2. {target_slides - 2} content slides with numbered points or steps"
-        else:
-            slides_instruction = f"Slide count: YOU DECIDE the optimal number of slides (minimum {min_slides}, maximum {max_slides}) based on how much valuable content the topic needs. Don't pad with filler - each slide must add real value."
-            content_slides_instruction = f"2. As many content slides as needed to properly cover the topic ({min_slides - 2} to {max_slides - 2} content slides)"
-
-        # Build planning prompt
-        prompt = f"""Plan an Instagram carousel post about: {topic}
-
-Content pillar: {content_pillar}
-{slides_instruction}
-Hook style: {hook_type.value}
-
-{f"Research context:{chr(10)}{research_context}" if research_context else ""}
-
-{f"Previous posts context:{chr(10)}{kb_context}" if kb_context else ""}
-
-CAROUSEL STRUCTURE (MUST FOLLOW):
-- Slide 1: HOOK slide with eye-catching image (this is the thumbnail people see)
-- Slides 2 to N-1: CONTENT slides (1-8 content slides with the actual tips/prompts/tools)
-- Slide N: CTA slide (call-to-action, always last)
-
-Create a detailed plan with:
-1. A compelling hook (first slide) - max 12 words, with background image
-{content_slides_instruction}
-3. A CTA slide (last slide) - "Follow for more..." or similar
-
-CRITICAL REQUIREMENTS:
-- If the hook mentions a NUMBER (e.g., "5 prompts", "7 tips"), you MUST have EXACTLY that many CONTENT slides
-- Example: "5 AI Tools" = 1 hook + 5 content slides + 1 CTA = 7 total slides
-- Example: "3 Quick Tips" = 1 hook + 3 content slides + 1 CTA = 5 total slides
-- Each content slide MUST contain ACTUAL, SPECIFIC content that matches the topic
-- If the topic is about "prompts", each content slide MUST contain an actual usable prompt
-- If the topic is about "tips", each content slide MUST contain a specific, actionable tip
-- If the topic is about "tools", each content slide MUST name and describe a specific tool
-- NEVER use generic placeholders like "Point 1", "Main tip", "First tool", etc.
-- The body text must provide real value - specific examples, explanations, or instructions
-
-Each content slide should have:
-- A clear heading (the actual tip/prompt/tool name - NOT "Point 1" or generic text)
-- Supporting body text (1-2 sentences with specific details)
-- Whether it needs a background image
-
-Return as JSON:
-{{
-    "hook_text": "The hook text",
-    "hook_subtext": "Optional subtext for hook slide",
-    "slides": [
-        {{"number": 1, "slide_type": "hook", "heading": "...", "body": null, "needs_image": true, "image_description": "..."}},
-        {{"number": 2, "slide_type": "content", "heading": "ACTUAL TIP/PROMPT/ITEM HERE", "body": "Specific explanation with real details...", "needs_image": false, "image_description": null}},
-        ...
-        {{"number": N, "slide_type": "cta", "heading": "Follow for more", "body": null, "needs_image": false, "image_description": null}}
-    ],
-    "keywords": ["keyword1", "keyword2", ...],
-    "caption": "The Instagram caption text",
-    "hashtags": ["#hashtag1", "#hashtag2", ...]
-}}"""
-
-        # Try up to 6 times (or indefinitely with auto_retry)
-        max_attempts = 999999 if self.auto_retry else 6
-        last_error = None
-
-        for attempt in range(max_attempts):
-            # Emit progress: Generating content
-            attempt_str = f"attempt {attempt + 1}" if self.auto_retry else f"attempt {attempt + 1}/6"
-            await self._emit_progress(
-                action=f"Generating content ({attempt_str})",
-                attempt=attempt + 1,
-                max_attempts=6 if not self.auto_retry else 0,  # 0 means unlimited
-            )
-
-            if attempt == 0:
-                # First attempt - use full prompt
-                current_prompt = prompt
-                system_prompt = self._get_system_prompt()
-                temp = 0.7
-            elif attempt == 1:
-                # Second attempt - same prompt, lower temperature
-                current_prompt = prompt
-                system_prompt = self._get_system_prompt()
-                temp = 0.5
-            else:
-                # Later attempts - use simpler, more explicit prompt
-                current_prompt = self._get_simple_planning_prompt(
-                    topic, content_pillar, hook_type, target_slides or 6
-                )
-                system_prompt = "You are a JSON generator. Return ONLY valid JSON, no other text."
-                temp = 0.3
-
-            response = await self.text_provider.generate(
-                prompt=current_prompt,
-                system=system_prompt,
-                task="content_planning",
-                temperature=temp,
-                max_tokens=2000,
-            )
-
-            # Emit progress: Validating
-            await self._emit_progress(
-                action=f"Validating AI output ({attempt_str})",
-                attempt=attempt + 1,
-                max_attempts=6 if not self.auto_retry else 0,
-            )
-
-            # Parse response
-            try:
-                data = self._extract_json(response)
-
-                slides = data.get("slides", [])
-                if slides and len(slides) >= 3:
-                    # Validate that content slides have meaningful content
-                    content_slides = [s for s in slides if s.get("slide_type") == "content"]
-                    has_placeholder = any(
-                        s.get("heading", "").startswith("Point ") or
-                        s.get("body") == "Content to be generated" or
-                        s.get("heading", "").lower() in ["first main point", "second main point", "third main point"]
-                        for s in content_slides
-                    )
-
-                    if has_placeholder:
-                        last_error = "Content slides contain placeholder text instead of actual content"
-                        _logger.warning(f"Attempt {attempt + 1}: Content has placeholders, retrying...")
-                        await self._emit_progress(
-                            action=f"Retry needed: placeholder content detected",
-                            attempt=attempt + 1,
-                            max_attempts=6 if not self.auto_retry else 0,
-                            error=last_error,
-                        )
-                        continue
-
-                    # STRICT Validation: Check if content matches the hook's promise
-                    hook_text = data.get("hook_text", topic)
-                    content_headings = [s.get("heading", "") for s in content_slides]
-
-                    # Check topic first (e.g., "7 AI Prompt Templates...")
-                    number_match = re.search(r'\b(\d+)\s+\w*\s*(?:prompts?|tips?|tricks?|tools?|ways?|steps?|hacks?|ideas?|methods?|examples?|templates?|things?|apps?|features?|secrets?|reasons?)\b', topic, re.IGNORECASE)
-
-                    # Also check hook text
-                    if not number_match:
-                        number_match = re.search(r'\b(\d+)\s+\w*\s*(?:prompts?|tips?|tricks?|tools?|ways?|steps?|hacks?|ideas?|methods?|examples?|templates?|things?|apps?|features?|secrets?|reasons?)\b', hook_text, re.IGNORECASE)
-
-                    _logger.info(f"Validation check: topic='{topic}', hook='{hook_text}', content_slides={len(content_slides)}, number_match={number_match.group(0) if number_match else None}")
-
-                    if number_match:
-                        expected_items = int(number_match.group(1))
-                        actual_items = len(content_slides)
-                        if actual_items != expected_items:
-                            last_error = f"Hook promises {expected_items} items but got {actual_items} content slides"
-                            _logger.warning(f"Attempt {attempt + 1}: MISMATCH! {last_error}")
-                            await self._emit_progress(
-                                action=f"Retry needed: expected {expected_items} slides, got {actual_items}",
-                                attempt=attempt + 1,
-                                max_attempts=6 if not self.auto_retry else 0,
-                                error=last_error,
-                            )
-                            continue
-
-                    # Second: AI validation for quality check
-                    await self._emit_progress(
-                        action=f"AI quality validation ({attempt_str})",
-                        attempt=attempt + 1,
-                        max_attempts=6 if not self.auto_retry else 0,
-                    )
-
-                    validation_result = await self._validate_content_matches_hook(
-                        hook_text=hook_text,
-                        content_headings=content_headings,
-                    )
-
-                    if not validation_result["valid"]:
-                        last_error = validation_result["reason"]
-                        _logger.warning(f"Attempt {attempt + 1}: AI validation failed - {last_error}")
-                        await self._emit_progress(
-                            action=f"Retry needed: AI validation failed",
-                            attempt=attempt + 1,
-                            max_attempts=6 if not self.auto_retry else 0,
-                            error=last_error,
-                        )
-                        continue
-
-                    # Success!
-                    await self._emit_progress(
-                        action="Content validated successfully",
-                        attempt=attempt + 1,
-                        max_attempts=6 if not self.auto_retry else 0,
-                    )
-
-                    return PostPlan(
-                        topic=topic,
-                        content_pillar=content_pillar,
-                        hook_type=hook_type,
-                        hook_text=data.get("hook_text", topic),
-                        hook_subtext=data.get("hook_subtext"),
-                        target_slides=len(slides) if slides else (target_slides or 6),
-                        slides=slides,
-                        keywords=data.get("keywords", []),
-                    )
-                else:
-                    # Empty or too few slides - retry
-                    last_error = f"Only got {len(slides)} slides, need at least 3"
-                    _logger.warning(f"Attempt {attempt + 1}: {last_error}")
-                    await self._emit_progress(
-                        action=f"Retry needed: insufficient slides ({len(slides)})",
-                        attempt=attempt + 1,
-                        max_attempts=6 if not self.auto_retry else 0,
-                        error=last_error,
-                    )
-                    continue
-
-            except (json.JSONDecodeError, KeyError, ValueError) as e:
-                # Log error for debugging
-                last_error = f"Failed to parse AI response: {e}"
-                _logger.warning(f"Attempt {attempt + 1}: {last_error}")
-                if response:
-                    _logger.debug(f"Raw response (first 500 chars): {response[:500]}")
-                await self._emit_progress(
-                    action=f"Retry needed: JSON parse error",
-                    attempt=attempt + 1,
-                    max_attempts=6 if not self.auto_retry else 0,
-                    error=str(e),
-                )
-                continue
-
-        # All retries failed - raise an error instead of using placeholders
-        attempts_msg = "6" if not self.auto_retry else str(attempt + 1)
-        _logger.error(f"All {attempts_msg} parsing attempts failed for topic: {topic}")
-        raise RuntimeError(
-            f"Failed to generate valid content after {attempts_msg} attempts. "
-            f"The AI kept generating {actual_items if 'actual_items' in dir() else 'incorrect number of'} slides "
-            f"instead of the required amount. Last error: {last_error}"
+        # === PHASE 1: Planning ===
+        await self._emit_progress(
+            action="Analyzing topic...",
+            phase=1,
+            phase_name="Planning",
+            phase_input=f'"{topic}"',
+            max_attempts=total_phases,
         )
 
-    def _get_simple_planning_prompt(
-        self,
-        topic: str,
-        content_pillar: str,
-        hook_type: HookType,
-        target_slides: int,
-    ) -> str:
-        """Generate a simpler prompt for retry attempts."""
-        # Determine content type from topic
-        content_type = "tips"
-        if "prompt" in topic.lower():
-            content_type = "prompts"
-        elif "tool" in topic.lower():
-            content_type = "tools"
-        elif "trick" in topic.lower():
-            content_type = "tricks"
-        elif "hack" in topic.lower():
-            content_type = "hacks"
-        elif "way" in topic.lower():
-            content_type = "ways"
-        elif "step" in topic.lower():
-            content_type = "steps"
+        planning, history = await self._phase1_planning(topic, research_context)
+        content_count = planning["content_count"]
+        content_type = planning["content_type"]
 
-        return f"""Create a {target_slides}-slide Instagram carousel about "{topic}".
+        # Override count if specified
+        if target_slides is not None:
+            content_count = max(1, target_slides - 2)  # Subtract hook and CTA
+            planning["content_count"] = content_count
 
-CRITICAL: Each content slide MUST contain REAL, SPECIFIC {content_type} - NOT placeholders!
-- If topic says "5 {content_type}", include exactly 5 specific {content_type}
-- Each heading must be the actual {content_type[:-1] if content_type.endswith('s') else content_type}, not "First point" or "Main tip"
-- Body text must explain the specific {content_type[:-1] if content_type.endswith('s') else content_type} with real details
+        # Clamp to min/max
+        content_count = max(min_slides - 2, min(max_slides - 2, content_count))
+        planning["content_count"] = content_count
 
-Return this exact JSON structure with REAL CONTENT:
-```json
-{{
-  "hook_text": "Catchy hook headline (max 10 words)",
-  "slides": [
-    {{"number": 1, "slide_type": "hook", "heading": "Hook headline matching topic", "body": null, "needs_image": true, "image_description": "Description for hook image"}},
-    {{"number": 2, "slide_type": "content", "heading": "ACTUAL SPECIFIC {content_type.upper()[:-1]} #1", "body": "Real explanation with specific details.", "needs_image": false, "image_description": null}},
-    {{"number": 3, "slide_type": "content", "heading": "ACTUAL SPECIFIC {content_type.upper()[:-1]} #2", "body": "Real explanation with specific details.", "needs_image": false, "image_description": null}},
-    {{"number": 4, "slide_type": "content", "heading": "ACTUAL SPECIFIC {content_type.upper()[:-1]} #3", "body": "Real explanation with specific details.", "needs_image": false, "image_description": null}},
-    {{"number": {target_slides}, "slide_type": "cta", "heading": "Follow for more!", "body": null, "needs_image": false, "image_description": null}}
-  ],
-  "keywords": ["keyword1", "keyword2", "keyword3"]
-}}
-```
+        total_phases = 3 + content_count  # Phase 1, 2, N content slides, CTA
 
-IMPORTANT: Return ONLY the JSON with REAL CONTENT, no explanation before or after."""
+        # Emit Phase 1 result
+        await self._emit_progress(
+            action="Planning complete",
+            phase=1,
+            phase_name="Planning",
+            phase_output=f'{content_count} {content_type}s identified',
+            content_count=content_count,
+            content_type=content_type,
+            max_attempts=total_phases,
+        )
+
+        # === PHASE 2: Structure ===
+        await self._emit_progress(
+            action="Creating hook and structure...",
+            phase=2,
+            phase_name="Structure",
+            phase_input=f'{content_count} {content_type}s + {hook_type.value} hook',
+            max_attempts=total_phases,
+        )
+
+        structure, history = await self._phase2_structure(planning, hook_type, history)
+
+        # Build hook slide
+        hook_slide = {
+            "number": 1,
+            "slide_type": "hook",
+            "heading": structure["hook_text"],
+            "body": structure.get("hook_subtext"),
+            "needs_image": True,
+            "image_description": structure.get("hook_image_description", f"Abstract background for {topic}"),
+        }
+
+        # Emit Phase 2 result
+        await self._emit_progress(
+            action="Structure complete",
+            phase=2,
+            phase_name="Structure",
+            phase_output=f'Hook: "{structure["hook_text"][:40]}..."',
+            slide_titles=structure["slide_titles"],
+            max_attempts=total_phases,
+        )
+
+        # === PHASE 3: Content Slides (one call per slide) ===
+        content_slides = []
+        for i, title in enumerate(structure["slide_titles"]):
+            slide_num = i + 1
+
+            await self._emit_progress(
+                action=f"Generating {content_type} {slide_num}/{content_count}...",
+                phase=3,
+                phase_name="Content",
+                phase_input=f'Slide {slide_num}: "{title[:40]}"',
+                max_attempts=total_phases,
+            )
+
+            slide_content, history = await self._phase3_content_slide(
+                slide_number=slide_num,
+                slide_title=title,
+                content_type=content_type,
+                history=history,
+            )
+
+            content_slides.append({
+                "number": slide_num + 1,  # +1 because hook is slide 1
+                "slide_type": "content",
+                "heading": slide_content["heading"],
+                "body": slide_content["body"],
+                "needs_image": False,
+                "image_description": None,
+            })
+
+            # Emit slide completion
+            await self._emit_progress(
+                action=f"{content_type.title()} {slide_num} complete",
+                phase=3,
+                phase_name="Content",
+                phase_output=f'"{slide_content["heading"][:40]}..."',
+                generated_slide={"heading": slide_content["heading"], "body": slide_content["body"][:50] + "..."},
+                max_attempts=total_phases,
+            )
+
+        # === PHASE 4: CTA ===
+        await self._emit_progress(
+            action="Creating call-to-action...",
+            phase=4,
+            phase_name="CTA",
+            phase_input="Full conversation history",
+            max_attempts=total_phases,
+        )
+
+        cta_data = await self._phase4_cta(history)
+        cta_slide = {
+            "number": len(content_slides) + 2,
+            "slide_type": "cta",
+            "heading": cta_data["cta_text"],
+            "body": cta_data.get("cta_subtext"),
+            "needs_image": False,
+            "image_description": None,
+        }
+
+        # Combine all slides
+        all_slides = [hook_slide] + content_slides + [cta_slide]
+
+        # Generate keywords
+        keywords = self._extract_keywords(topic, structure["hook_text"])
+
+        await self._emit_progress(
+            action="Generation complete!",
+            phase=4,
+            phase_name="Complete",
+            phase_output=f'{len(all_slides)} slides ready',
+            max_attempts=total_phases,
+        )
+
+        _logger.info(f"Successfully generated {len(all_slides)} slides: 1 hook + {len(content_slides)} content + 1 CTA")
+
+        return PostPlan(
+            topic=topic,
+            content_pillar=content_pillar,
+            hook_type=hook_type,
+            hook_text=structure["hook_text"],
+            hook_subtext=structure.get("hook_subtext"),
+            target_slides=len(all_slides),
+            slides=all_slides,
+            keywords=keywords,
+        )
+
+    def _extract_keywords(self, topic: str, hook_text: str) -> list[str]:
+        """Extract keywords from topic and hook text."""
+        # Simple keyword extraction - split on spaces and filter
+        words = (topic + " " + hook_text).lower().split()
+        stop_words = {"the", "a", "an", "is", "are", "for", "to", "and", "or", "of", "in", "on", "with", "your", "you", "how", "what", "why", "when"}
+        keywords = [w.strip(".,!?") for w in words if len(w) > 3 and w not in stop_words]
+        return list(dict.fromkeys(keywords))[:10]  # Unique, max 10
 
     def _extract_json(self, response: str) -> dict[str, Any]:
         """Extract JSON from AI response, handling various formats.
