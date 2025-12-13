@@ -1,499 +1,266 @@
-"""CLI display components for progress visualization."""
+"""CLI display components for progress visualization - Simple print version."""
 
 from __future__ import annotations
 
 from rich.panel import Panel
-from rich import box
+from rich.console import Console
 
 from .content.models import GenerationProgress
 
+console = Console()
+
 
 class ContentGenerationDisplay:
-    """Rich display for content generation progress with phase visualization.
-
-    Displays:
-    - Phase 0: Web Research (search queries, results, domains)
-    - Phase 1: Planning (topic analysis)
-    - Phase 2: Structure (hook and titles)
-    - Phase 3: Content (individual slides)
-    - Phase 4: CTA (call-to-action)
-    """
+    """Simple print-based display. Logs every step as it happens."""
 
     def __init__(self):
-        self.events: list[dict] = []
-        self.current_status = "Initializing..."
         self.stats = {
             "text_calls": 0,
-            "image_calls": 0,
             "total_cost": 0.0,
-            "providers_used": set(),
-            "text_provider": None,
-            "text_model": None,
-            "text_prompt_preview": None,
-            "image_provider": None,
-            "image_model": None,
-            "image_prompt_preview": None,
         }
-        # Phase tracking - store results for each completed phase
-        self.phase_results: dict[int, dict] = {}
-        self.generated_slides: list[dict] = []
-        self.slide_providers: dict[int, dict] = {}
-        self._last_phase = 0
+        self._printed: set[str] = set()  # Track what we've printed
+        self._web_search_count = 0
 
-        # Web search tracking
-        self.web_search_complete = False
-        self.web_search_results: dict = {}
+    def _print_once(self, key: str, msg: str) -> bool:
+        """Print message only once per key. Returns True if printed."""
+        if key not in self._printed:
+            print(msg)
+            self._printed.add(key)
+            return True
+        return False
 
-        # Tool call tracking
-        self.tool_calls_history: list[dict] = []
-        self.current_tool_call: dict = {}
-
-    def add_event(self, progress: GenerationProgress):
-        """Add a progress event."""
-        event = {
-            "step": progress.current_step,
-            "event_type": progress.event_type,
-            "provider": progress.provider,
-            "model": progress.model,
-            "prompt": progress.prompt_preview,
-            "response": progress.response_preview,
-            "duration": progress.duration_seconds,
-            "cost": progress.cost_usd,
-        }
-        self.events.append(event)
-        self.current_status = progress.current_step
-
-        # Update stats from progress totals
-        self.stats["text_calls"] = progress.total_text_calls
-        self.stats["image_calls"] = progress.total_image_calls
-        self.stats["total_cost"] = progress.total_cost_usd
-
-        # Track providers (persist values)
-        if progress.text_provider:
-            self.stats["text_provider"] = progress.text_provider
-        if progress.text_model:
-            self.stats["text_model"] = progress.text_model
-        if progress.text_prompt_preview:
-            self.stats["text_prompt_preview"] = progress.text_prompt_preview
-        if progress.text_provider:
-            self.stats["providers_used"].add(progress.text_provider)
-
-        if progress.image_provider:
-            self.stats["image_provider"] = progress.image_provider
-            self.stats["providers_used"].add(progress.image_provider)
-        if progress.image_model:
-            self.stats["image_model"] = progress.image_model
-        if progress.image_prompt_preview:
-            self.stats["image_prompt_preview"] = progress.image_prompt_preview
-
-        # Track generated slides
-        if progress.generated_slides:
-            self.generated_slides = progress.generated_slides
-
-        # Track web search results
-        if progress.web_search_status:
-            self.web_search_results = {
-                "status": progress.web_search_status,
-                "queries": progress.web_search_queries,
-                "results": progress.web_search_results,
-                "sources": progress.web_search_sources,
-                "domains": progress.web_search_domains,
-                "duration_ms": progress.web_search_duration_ms,
-            }
-            if progress.web_search_status == "complete":
-                self.web_search_complete = True
-
-        # Track tool calls (AI-driven research)
-        if progress.tool_call_status:
-            self.current_tool_call = {
-                "status": progress.tool_call_status,
-                "name": progress.tool_call_name,
-                "args": progress.tool_call_args,
-            }
-        if progress.tool_calls_history:
-            self.tool_calls_history = progress.tool_calls_history
-
-        # Track phase completion
-        current_phase = progress.current_phase
-        if current_phase > 0:
-            if current_phase not in self.phase_results or progress.text_provider:
-                self.phase_results[current_phase] = {
-                    "provider": progress.text_provider or self.stats.get("text_provider") or "",
-                    "model": progress.text_model or self.stats.get("text_model") or "",
-                    "prompt_preview": progress.text_prompt_preview or progress.phase_input or "",
-                    "output": progress.phase_output or "",
-                }
-
-            # Track slide-level providers for Phase 3
-            if current_phase == 3 and progress.current_slide > 0:
-                slide_num = progress.current_slide
-                if progress.text_provider:
-                    self.slide_providers[slide_num] = {
-                        "provider": progress.text_provider,
-                        "model": progress.text_model or "",
-                    }
-
-        self._last_phase = current_phase
-
-    def _render_tool_calls_box(self) -> str:
-        """Render the AI tool calls section."""
-        if not self.tool_calls_history and not self.current_tool_call:
-            return ""
-
-        lines = []
-
-        # Show completed tool calls
-        for i, call in enumerate(self.tool_calls_history):
-            tool = call.get("tool", "unknown")
-            success = call.get("success", False)
-            duration = call.get("duration_ms", 0)
-            metadata = call.get("metadata", {})
-
-            if success:
-                icon = "[green][OK][/]"
-                border = "[green]"
-            else:
-                icon = "[red][X][/]"
-                border = "[red]"
-
-            # Format tool info
-            results = metadata.get("total_results", 0)
-            sources = metadata.get("unique_sources", 0)
-            queries = metadata.get("queries", [])
-
-            lines.append(f"{border}|[/]   {icon} {tool}({len(queries)} queries)")
-            if results > 0:
-                lines.append(f"[dim]|[/]      -> {results} results, {sources} sources ({duration}ms)")
-
-        # Show current tool call in progress
-        if self.current_tool_call.get("status") == "executing":
-            tool_name = self.current_tool_call.get("name", "")
-            args = self.current_tool_call.get("args", {})
-            queries = args.get("queries", [])
-            lines.append(f"[yellow]|[/]   [yellow]...[/] {tool_name}({len(queries)} queries)")
-
-        return "\n".join(lines)
-
-    def _render_web_search_box(self) -> str:
-        """Render the web search phase box."""
-        ws = self.web_search_results
-
-        if not ws:
-            return ""
-
-        status = ws.get("status", "")
-        is_complete = status == "complete"
-        is_current = status == "searching"
-        is_failed = status == "failed"
-        is_skipped = status == "skipped"
-
-        if is_current:
-            border = "[bold yellow]"
-            status_icon = "[yellow]...[/]"
-        elif is_complete:
-            border = "[green]"
-            status_icon = "[green][OK][/]"
-        elif is_failed:
-            border = "[red]"
-            status_icon = "[red][X][/]"
-        elif is_skipped:
-            border = "[dim]"
-            status_icon = "[dim][-][/]"
+    def add_event(self, progress: GenerationProgress | dict):
+        """Process event and print status."""
+        if isinstance(progress, dict):
+            self._handle_dict_event(progress)
         else:
-            border = "[dim]"
-            status_icon = "[dim][ ][/]"
+            self._handle_progress(progress)
 
-        lines = []
-        lines.append(f"{border}+{'-' * 58}+[/]")
+    def _handle_dict_event(self, event: dict):
+        """Handle tool/AI events."""
+        event_type = event.get("type", "")
 
-        # Show title - if tool calls exist, show "AI Research" instead of "Web Research"
-        has_tool_calls = bool(self.tool_calls_history) or bool(self.current_tool_call)
-        title = "AI Research (Tool Calling)" if has_tool_calls else "Web Research"
-        padding = 30 if has_tool_calls else 33
-        lines.append(f"{border}|[/] {status_icon} [bold]Phase 0: {title}[/]{' ' * padding} {border}|[/]")
+        if event_type == "tool_call_start":
+            tool = event.get("tool_name", "")
+            args = event.get("arguments", {})
+            call_id = event.get("call_id", "")
 
-        # Show tool calls if using AI tools
-        if has_tool_calls:
-            tool_calls_box = self._render_tool_calls_box()
-            if tool_calls_box:
-                lines.append(tool_calls_box)
-        elif is_current:
-            queries = ws.get("queries", [])
-            if queries:
-                lines.append(f"{border}|[/]   [dim]Searching {len(queries)} queries...[/]{' ' * 30} {border}|[/]")
-        elif is_complete:
-            results = ws.get("results", 0)
-            sources = ws.get("sources", 0)
-            duration = ws.get("duration_ms", 0)
-            domains = ws.get("domains", [])[:4]
+            if tool in ("web_search", "news_search"):
+                queries = args.get("queries", [])
+                self._web_search_count += 1
+                if queries:
+                    query = queries[0][:55]
+                    self._print_once(f"search_{call_id}", f"  [Search #{self._web_search_count}] {query}...")
 
-            lines.append(f"{border}|[/]   [cyan]Results:[/] {results} found, {sources} unique sources{' ' * (26 - len(str(results)) - len(str(sources)))} {border}|[/]")
+        elif event_type == "tool_call_complete":
+            tool = event.get("tool_name", "")
+            success = event.get("success", False)
+            meta = event.get("metadata", {})
+            call_id = event.get("call_id", "")
 
-            if domains:
-                domain_str = ", ".join(domains)
-                if len(domain_str) > 45:
-                    domain_str = domain_str[:42] + "..."
-                padding_len = 45 - len(domain_str)
-                lines.append(f"{border}|[/]   [dim]Domains:[/] {domain_str}{' ' * padding_len} {border}|[/]")
+            if tool in ("web_search", "news_search"):
+                results = meta.get("total_results", 0)
+                status = "[OK]" if success else "[FAIL]"
+                self._print_once(f"search_done_{call_id}", f"    {status} Found {results} results")
 
-            duration_str = f"{duration}ms"
-            lines.append(f"{border}|[/]   [dim]Duration:[/] {duration_str}{' ' * (44 - len(duration_str))} {border}|[/]")
-        elif is_failed:
-            lines.append(f"{border}|[/]   [red]Search failed - continuing without research[/]{' ' * 8} {border}|[/]")
-        elif is_skipped:
-            lines.append(f"{border}|[/]   [dim]Skipped (context provided)[/]{' ' * 26} {border}|[/]")
+        elif event_type == "text_response":
+            self.stats["text_calls"] += 1
+            self.stats["total_cost"] += event.get("cost_usd", 0)
 
-        lines.append(f"{border}+{'-' * 58}+[/]")
+    def _handle_progress(self, p: GenerationProgress):
+        """Handle GenerationProgress events."""
+        phase = p.current_phase
+        step = p.current_step or ""
+        action = p.current_action or ""
+        status = p.status or ""
+        phase_name = p.phase_name or ""
+        phase_output = p.phase_output or ""
 
-        return "\n".join(lines)
+        # Update stats
+        if p.total_text_calls:
+            self.stats["text_calls"] = p.total_text_calls
+        if p.total_cost_usd:
+            self.stats["total_cost"] = p.total_cost_usd
 
-    def _render_phase_box(
-        self,
-        phase_num: int,
-        name: str,
-        input_text: str,
-        output_text: str,
-        is_current: bool,
-        is_complete: bool,
-        provider: str = "",
-        model: str = "",
-        prompt_preview: str = "",
-    ) -> str:
-        """Render a single phase box with provider/model info."""
-        if is_current:
-            border = "[bold yellow]"
-            status_icon = "[yellow]...[/]"
-        elif is_complete:
-            border = "[green]"
-            status_icon = "[green][OK][/]"
-        else:
-            border = "[dim]"
-            status_icon = "[dim][ ][/]"
+        # === PHASE 0: Preparation ===
+        if phase == 0:
+            self._print_once("phase_0", f"\n[Phase 0] {phase_name or 'Preparation'}")
 
-        lines = []
-        lines.append(f"{border}+{'-' * 58}+[/]")
+            # Print step updates
+            if step:
+                key = f"p0_{step[:25]}"
+                if "history" in step.lower() or "loading" in step.lower():
+                    self._print_once(key, "  ... Loading post history")
+                elif "duplicate" in step.lower() or "avoid" in step.lower() or "checking" in step.lower():
+                    self._print_once(key, "  ... Checking recent posts")
+                elif "trending" in step.lower() or "research" in step.lower():
+                    self._print_once(key, "  ... Researching trending topics")
+                elif "ai" in step.lower() and "generat" in step.lower():
+                    self._print_once(key, "  ... AI generating topics")
+                elif "found" in step.lower() or "selected" in step.lower():
+                    self._print_once(key, f"  [OK] {step}")
+                else:
+                    self._print_once(key, f"  ... {step}")
 
-        # Show provider/model on header line
-        provider_model = ""
-        if provider:
-            if model:
-                provider_model = f" [cyan]({provider}/{model})[/]"
-            else:
-                provider_model = f" [cyan]({provider})[/]"
+        # === PHASE 1: Planning ===
+        elif phase == 1:
+            self._print_once("phase_1", f"\n[Phase 1] Planning")
 
-        if provider_model:
-            padding = max(0, 42 - len(name) - len(provider) - (len(model) + 1 if model else 0))
-            lines.append(f"{border}|[/] {status_icon} [bold]Phase {phase_num}: {name}[/]{provider_model}{' ' * padding} {border}|[/]")
-        else:
-            lines.append(f"{border}|[/] {status_icon} [bold]Phase {phase_num}: {name}[/]{' ' * (45 - len(name))} {border}|[/]")
+            if "analyzing" in action.lower():
+                self._print_once("p1_analyze", "  ... Analyzing topic")
+            elif "complete" in action.lower():
+                # Show result
+                if p.content_count and p.content_type:
+                    self._print_once("p1_done", f"  [OK] {p.content_count} {p.content_type}s identified")
+                elif phase_output:
+                    self._print_once("p1_done", f"  [OK] {phase_output}")
 
-        # Show prompt preview
-        if prompt_preview:
-            prompt_display = prompt_preview[:45] + "..." if len(prompt_preview) > 45 else prompt_preview
-            prompt_display = prompt_display.replace("\n", " ").strip()
-            lines.append(f"{border}|[/]   [dim]Prompt:[/] {prompt_display[:45]:<45} {border}|[/]")
+        # === PHASE 2: Structure ===
+        elif phase == 2:
+            self._print_once("phase_2", f"\n[Phase 2] Structure")
 
-        if output_text:
-            output_display = output_text[:45] + "..." if len(output_text) > 45 else output_text
-            lines.append(f"{border}|[/]   [cyan]Output:[/] {output_display:<45} {border}|[/]")
+            if "creating" in action.lower() or "hook" in action.lower():
+                self._print_once("p2_create", "  ... Creating hook and structure")
+            elif "complete" in action.lower():
+                if phase_output:
+                    self._print_once("p2_done", f"  [OK] {phase_output}")
+                # Show ALL slide titles
+                if p.slide_titles:
+                    for i, title in enumerate(p.slide_titles, 1):
+                        self._print_once(f"p2_title_{i}", f"       Slide {i}: {title[:45]}")
 
-        lines.append(f"{border}+{'-' * 58}+[/]")
+        # === PHASE 3: Content ===
+        elif phase == 3:
+            self._print_once("phase_3", f"\n[Phase 3] Content")
 
-        return "\n".join(lines)
+            slide = p.current_slide
+            if slide:
+                # Generating
+                if "generating" in action.lower():
+                    total = p.total_slides or "?"
+                    self._print_once(f"p3_gen_{slide}", f"  ... Slide {slide}/{total}")
+                # Validation retry
+                elif "regenerat" in action.lower():
+                    self._print_once(f"p3_retry_{slide}_{p.validation_attempt}",
+                                    f"      [!] Regenerating (quality check)")
+                # Complete
+                elif "complete" in action.lower():
+                    heading = phase_output[:40] if phase_output else f"Slide {slide}"
+                    self._print_once(f"p3_done_{slide}", f"  [OK] {heading}")
+            elif p.validation_error:
+                self._print_once(f"p3_err_{p.validation_attempt}",
+                                f"      [!] {p.validation_error[:50]}")
+
+        # === PHASE 4: CTA ===
+        elif phase == 4:
+            self._print_once("phase_4", f"\n[Phase 4] CTA")
+
+            if "creating" in action.lower() or "call-to-action" in action.lower():
+                self._print_once("p4_create", "  ... Creating call-to-action")
+            elif "complete" in action.lower():
+                if phase_output:
+                    self._print_once("p4_done", f"  [OK] {phase_output}")
+
+        # === Caption ===
+        if "caption" in step.lower():
+            self._print_once("caption_start", "\n[Caption]")
+            self._print_once("caption_gen", "  ... Generating caption")
+
+        # === Completion ===
+        if status == "completed":
+            cost = self.stats.get("total_cost", 0)
+            calls = self.stats.get("text_calls", 0)
+            self._print_once("done", f"\n[Done] {calls} AI calls, ${cost:.4f} total")
+        elif status == "failed" and p.errors:
+            self._print_once("failed", f"\n[FAILED] {p.errors[-1]}")
 
     def render(self, progress: GenerationProgress) -> Panel:
-        """Render the phase-based progress display."""
-        lines = []
-
-        # Header with topic
-        lines.append(f"[bold]Topic:[/] {progress.post_id}")
-        lines.append("")
-
-        # Phase visualization
-        current_phase = progress.current_phase
-        content_count = progress.content_count or 5
-        content_type = progress.content_type or "item"
-
-        # Get current provider info
-        current_provider = progress.text_provider or ""
-        current_model = progress.text_model or ""
-        current_prompt = progress.text_prompt_preview or ""
-
-        # Phase 0: Web Research
-        web_search_box = self._render_web_search_box()
-        if web_search_box:
-            lines.append(web_search_box)
-            if self.web_search_complete or progress.web_search_status in ("complete", "failed", "skipped"):
-                lines.append("                              [dim]v[/]")
-
-        # Phase 1: Planning
-        phase1_complete = current_phase > 1
-        phase1_current = current_phase == 1
-        phase1_output = f"{content_count} {content_type}s" if phase1_complete else ""
-
-        p1_result = self.phase_results.get(1, {})
-        p1_provider = p1_result.get("provider", "") if phase1_complete else (current_provider if phase1_current else "")
-        p1_model = p1_result.get("model", "") if phase1_complete else (current_model if phase1_current else "")
-        p1_prompt = p1_result.get("prompt_preview", "") if phase1_complete else (current_prompt if phase1_current else "")
-
-        lines.append(self._render_phase_box(
-            1, "Planning",
-            "",
-            phase1_output if phase1_complete else (progress.phase_output if phase1_current else ""),
-            phase1_current, phase1_complete,
-            provider=p1_provider,
-            model=p1_model,
-            prompt_preview=p1_prompt if (phase1_current or phase1_complete) else "",
-        ))
-
-        if current_phase >= 1:
-            lines.append("                              [dim]v[/]")
-
-        # Phase 2: Structure
-        phase2_complete = current_phase > 2
-        phase2_current = current_phase == 2
-        if current_phase >= 2:
-            p2_result = self.phase_results.get(2, {})
-            p2_provider = p2_result.get("provider", "") if phase2_complete else (current_provider if phase2_current else "")
-            p2_model = p2_result.get("model", "") if phase2_complete else (current_model if phase2_current else "")
-            p2_prompt = p2_result.get("prompt_preview", "") if phase2_complete else (current_prompt if phase2_current else "")
-
-            lines.append(self._render_phase_box(
-                2, "Structure",
-                "",
-                progress.phase_output if (phase2_current or phase2_complete) else "",
-                phase2_current, phase2_complete,
-                provider=p2_provider,
-                model=p2_model,
-                prompt_preview=p2_prompt if (phase2_current or phase2_complete) else "",
-            ))
-            lines.append("                              [dim]v[/]")
-
-        # Phase 3: Content (show individual slides)
-        if current_phase >= 3:
-            p3_result = self.phase_results.get(3, {})
-            p3_provider = p3_result.get("provider", "") or current_provider
-            p3_model = p3_result.get("model", "") or current_model
-
-            phase3_header = f"Phase 3: Content ({content_count} {content_type}s)"
-            provider_model_str = ""
-            if p3_provider:
-                provider_model_str = f" [cyan]({p3_provider}" + (f"/{p3_model})" if p3_model else ")") + "[/]"
-            lines.append(f"[{'bold yellow' if current_phase == 3 else 'green' if current_phase > 3 else 'dim'}]+{'-' * 58}+[/]")
-            lines.append(f"[{'bold yellow' if current_phase == 3 else 'green' if current_phase > 3 else 'dim'}]|[/] [bold]{phase3_header}[/]{provider_model_str}")
-
-            # Show slide titles and their status
-            slide_titles = progress.slide_titles or []
-            generated = self.generated_slides
-
-            for i, title in enumerate(slide_titles):
-                slide_num = i + 1
-                if slide_num <= len(generated):
-                    heading = generated[i].get("heading", title)[:30]
-                    slide_info = self.slide_providers.get(slide_num, {})
-                    slide_prov = slide_info.get("provider", p3_provider)
-                    prov_str = f" [dim]({slide_prov})[/]" if slide_prov else ""
-                    lines.append(f"[green]|[/]   [green][OK][/] Slide {slide_num}: {heading}...{prov_str}")
-                elif current_phase == 3 and progress.phase_input and f"Slide {slide_num}" in progress.phase_input:
-                    provider_suffix = f" [cyan]({current_provider}/{current_model})[/]" if current_provider else "[yellow](generating)[/]"
-                    lines.append(f"[yellow]|[/]   [yellow]...[/] Slide {slide_num}: {title[:25]}... {provider_suffix}")
-                else:
-                    lines.append(f"[dim]|[/]   [ ] Slide {slide_num}: {title[:35]}...")
-
-            lines.append(f"[{'bold yellow' if current_phase == 3 else 'green' if current_phase > 3 else 'dim'}]+{'-' * 58}+[/]")
-            lines.append("                              [dim]v[/]")
-
-        # Phase 4: CTA
-        if current_phase >= 4:
-            phase4_complete = progress.phase_name == "Complete"
-            phase4_current = current_phase == 4 and not phase4_complete
-
-            p4_result = self.phase_results.get(4, {})
-            p4_provider = p4_result.get("provider", "") if phase4_complete else (current_provider if phase4_current else "")
-            p4_model = p4_result.get("model", "") if phase4_complete else (current_model if phase4_current else "")
-            p4_prompt = p4_result.get("prompt_preview", "") if phase4_complete else (current_prompt if phase4_current else "")
-
-            lines.append(self._render_phase_box(
-                4, "CTA",
-                "",
-                progress.phase_output if phase4_complete else "",
-                phase4_current, phase4_complete,
-                provider=p4_provider,
-                model=p4_model,
-                prompt_preview=p4_prompt if (phase4_current or phase4_complete) else "",
-            ))
-
-        lines.append("")
-
-        # Current action
-        if progress.current_action:
-            action_color = "yellow" if "..." in progress.current_action else "green"
-            lines.append(f"[bold {action_color}]Current:[/] {progress.current_action}")
-
-        # Stats footer
-        lines.append("")
-        lines.append(f"[dim]API Calls: {progress.total_text_calls} text | Cost: ${progress.total_cost_usd:.4f}[/]")
-
-        # Provider info
-        text_provider = progress.text_provider or self.stats.get("text_provider")
-        if text_provider:
-            text_model = progress.text_model or self.stats.get("text_model") or ""
-            lines.append(f"[dim]Provider: {text_provider} / {text_model}[/]")
-
-        return Panel(
-            "\n".join(lines),
-            title="[bold blue]Content Generation[/]",
-            border_style="blue",
-            box=box.ROUNDED,
-        )
+        """Return empty panel (Live display not used)."""
+        return Panel("", title="", border_style="dim")
 
 
 class InstagramPostingDisplay:
-    """Rich display for Instagram publishing progress."""
+    """Simple display for Instagram posting progress."""
 
     def __init__(self):
-        from .instagram.models import InstagramProgress
-        self.progress = InstagramProgress()
+        self.current_status = "Initializing..."
+        self.images_uploaded = 0
+        self.total_images = 0
+        self.containers_created = 0
+        self._printed: set[str] = set()
 
-    def update(self, progress):
-        """Update the progress state."""
-        self.progress = progress
+    def _print_once(self, key: str, msg: str):
+        """Print message only once."""
+        if key not in self._printed:
+            print(msg)
+            self._printed.add(key)
+
+    def update(self, progress=None, **kwargs):
+        """Update posting status and print progress."""
+        if progress is not None:
+            # Extract from progress object
+            if hasattr(progress, 'current_step'):
+                step = progress.current_step or ""
+            elif isinstance(progress, dict):
+                step = progress.get('current_step', '')
+            else:
+                step = ""
+
+            if hasattr(progress, 'images_uploaded'):
+                self.images_uploaded = progress.images_uploaded or 0
+            if hasattr(progress, 'total_images'):
+                self.total_images = progress.total_images or 0
+            if hasattr(progress, 'containers_created'):
+                self.containers_created = progress.containers_created or 0
+
+            # Print step
+            if step:
+                self._print_step(step)
+            return
+
+        # Handle keyword arguments
+        step = kwargs.get('step', '')
+        if kwargs.get('total_images'):
+            self.total_images = kwargs['total_images']
+        if kwargs.get('images_uploaded'):
+            self.images_uploaded = kwargs['images_uploaded']
+        if kwargs.get('containers_created'):
+            self.containers_created = kwargs['containers_created']
+
+        if step:
+            self._print_step(step)
+
+    def _print_step(self, step: str):
+        """Print a step (deduplicated)."""
+        key = step[:30]
+        if key in self._printed:
+            return
+        self._printed.add(key)
+
+        s = step.lower()
+        if "upload" in s:
+            print(f"  [Upload] {step}")
+        elif "container" in s:
+            print(f"  [Container] {step}")
+        elif "carousel" in s:
+            print(f"  [Carousel] {step}")
+        elif "publish" in s:
+            print(f"  [Publish] {step}")
+        elif "rate limit" in s:
+            print(f"  [!] Rate limit - checking status...")
+        elif "success" in s or "published" in s:
+            print(f"  [OK] {step}")
+        elif "error" in s or "fail" in s:
+            print(f"  [X] {step}")
+        else:
+            print(f"  ... {step}")
 
     def render(self) -> Panel:
-        """Render the progress display."""
-        from .instagram.models import InstagramPostStatus
-
-        progress = self.progress
-        lines = []
-
-        # Status with color
-        status_color = {
-            InstagramPostStatus.PENDING: "white",
-            InstagramPostStatus.UPLOADING: "yellow",
-            InstagramPostStatus.CREATING_CONTAINERS: "cyan",
-            InstagramPostStatus.PUBLISHING: "blue",
-            InstagramPostStatus.PUBLISHED: "green",
-            InstagramPostStatus.FAILED: "red",
-        }.get(progress.status, "white")
-
-        lines.append(f"[bold {status_color}]Status:[/] {progress.status.value.upper()}")
-        lines.append(f"[bold]Step:[/] {progress.current_step}")
-        lines.append(f"[bold]Progress:[/] {progress.progress_percent:.0f}%")
-        lines.append("")
-
-        # Image upload progress
-        if progress.total_images > 0:
-            lines.append(f"[bold cyan]Images:[/] {progress.images_uploaded}/{progress.total_images} uploaded")
-            lines.append(f"[bold cyan]Containers:[/] {progress.containers_created}/{progress.total_images} created")
-            lines.append("")
-
-        # Error display
-        if progress.error:
-            lines.append(f"[bold red]Error:[/] {progress.error}")
-
+        """Render summary panel."""
         return Panel(
-            "\n".join(lines),
-            title="[bold]Instagram Publishing[/]",
-            border_style="blue",
-            box=box.ROUNDED,
+            f"Status: {self.current_status}\n"
+            f"Images: {self.images_uploaded}/{self.total_images}\n"
+            f"Containers: {self.containers_created}",
+            title="Instagram Publishing",
+            border_style="cyan",
         )

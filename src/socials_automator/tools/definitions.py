@@ -99,6 +99,49 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_image",
+            "description": (
+                "Generate an image using AI (ComfyUI/DALL-E). Use this when you need a custom image "
+                "for slide backgrounds or illustrations. Returns the image path. "
+                "Best for: concept visualizations, abstract backgrounds, thematic illustrations."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": (
+                            "Detailed image description. Be specific about: "
+                            "subject, style (realistic/abstract/minimal), colors, mood, lighting. "
+                            "Example: 'Abstract technology background with flowing blue and purple gradients, "
+                            "subtle circuit patterns, dark base, professional and modern'"
+                        ),
+                    },
+                    "negative_prompt": {
+                        "type": "string",
+                        "description": (
+                            "Things to avoid in the image. Default: 'blurry, low quality, distorted, text, watermark'"
+                        ),
+                    },
+                    "style": {
+                        "type": "string",
+                        "enum": ["abstract", "realistic", "minimal", "illustration", "photography"],
+                        "description": "Image style. Affects prompt enhancement.",
+                    },
+                    "size": {
+                        "type": "string",
+                        "enum": ["square", "portrait", "landscape"],
+                        "description": "Image dimensions. Default: square (1080x1080)",
+                        "default": "square",
+                    },
+                },
+                "required": ["prompt"],
+            },
+        },
+    },
 ]
 
 

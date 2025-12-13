@@ -29,7 +29,10 @@
         "Spending too much time on repetitive tasks",
         "Technical jargon makes AI feel inaccessible",
         "Don't have time to research which AI tools are worth using",
-        "Worried about job security with AI automation"
+        "Worried about job security with AI automation",
+        "Want extra income but don't know how to monetize AI skills",
+        "See others making money with AI but don't know where to start",
+        "Confused about which AI skills are actually valuable"
       ],
       "desires": [
         "Save hours every week with automation",
@@ -38,7 +41,11 @@
         "Get quick wins they can implement today",
         "Understand AI trends without the hype",
         "Find the best AI tools for their specific needs",
-        "Feel confident using modern technology"
+        "Feel confident using modern technology",
+        "Make extra money with AI side hustles",
+        "Build a profitable AI-powered business",
+        "Turn AI skills into freelance income",
+        "Create passive income streams with AI"
       ]
     }
   },
@@ -65,35 +72,51 @@
       {
         "id": "tool_tutorials",
         "name": "Tool Tutorials",
-        "description": "Step-by-step guides on using specific AI tools",
-        "frequency_percent": 30,
+        "description": "Step-by-step guides on using specific AI tools - exact buttons to click, prompts to copy",
+        "frequency_percent": 20,
         "examples": ["How to use ChatGPT for X", "Midjourney basics", "Claude vs ChatGPT"]
       },
       {
         "id": "productivity_hacks",
         "name": "Productivity Hacks",
-        "description": "Quick tips to save time with AI",
-        "frequency_percent": 25,
+        "description": "Quick tips to save time with AI - specific prompts and workflows",
+        "frequency_percent": 20,
         "examples": ["5 prompts that save me 2 hours/day", "Automate your email responses"]
+      },
+      {
+        "id": "ai_money_making",
+        "name": "AI Money Making",
+        "description": "How to make money and build income streams using AI tools",
+        "frequency_percent": 25,
+        "examples": [
+          "5 AI side hustles you can start today",
+          "How to make $500/week with ChatGPT",
+          "Turn AI into your money-making machine",
+          "AI freelance services that pay well",
+          "Sell AI-generated content legally",
+          "Build a business with AI in 2024",
+          "AI tools that pay for themselves",
+          "From $0 to $1000/month with AI"
+        ]
       },
       {
         "id": "tool_comparisons",
         "name": "Tool Comparisons",
-        "description": "Side-by-side comparisons of AI tools",
-        "frequency_percent": 15,
+        "description": "Side-by-side comparisons of AI tools with clear winner",
+        "frequency_percent": 10,
         "examples": ["ChatGPT vs Claude vs Gemini", "Best AI for writing", "Free vs paid AI tools"]
       },
       {
         "id": "ai_news_simplified",
         "name": "AI News Simplified",
-        "description": "Breaking down AI news in simple terms",
-        "frequency_percent": 15,
+        "description": "Breaking down AI news in simple terms - what it means for you",
+        "frequency_percent": 10,
         "examples": ["What GPT-5 means for you", "New feature explained", "AI trend breakdown"]
       },
       {
         "id": "prompt_templates",
         "name": "Prompt Templates",
-        "description": "Ready-to-use prompts for common tasks",
+        "description": "Ready-to-use prompts - copy and paste directly",
         "frequency_percent": 15,
         "examples": ["10 prompts for marketers", "The perfect email prompt", "Research prompts"]
       }
@@ -291,6 +314,10 @@
         "#AIHacks", "#ProductivityHacks", "#NoCode", "#AIAssistant", "#TechEducation",
         "#LearnAI", "#AITutorial", "#SmartWork", "#EfficiencyTips", "#ModernWork"
       ],
+      "money_making": [
+        "#AISideHustle", "#MakeMoneyWithAI", "#AIFreelancing", "#AIBusiness", "#PassiveIncomeAI",
+        "#AIEntrepreneur", "#SideHustleIdeas", "#OnlineIncome", "#AIMoneyMaker", "#FreelanceAI"
+      ],
       "niche": [
         "#AIForMortals", "#AIForBeginners", "#AIForEveryone", "#SimpleAI", "#AIWithoutCode",
         "#EverydayAI", "#PracticalAI", "#AIProductivity", "#PromptEngineering", "#AIAutomation"
@@ -317,7 +344,12 @@
         "OpenAI",
         "ClaudeAI",
         "LocalLLaMA",
-        "StableDiffusion"
+        "StableDiffusion",
+        "sidehustle",
+        "Entrepreneur",
+        "freelance",
+        "passive_income",
+        "WorkOnline"
       ],
       "twitter_accounts": [
         "@OpenAI",
@@ -349,13 +381,23 @@
       "ChatGPT update",
       "Claude 3",
       "GPT-5",
-      "AI tools 2024",
+      "AI tools 2025",
       "best AI apps",
       "AI automation",
       "AI productivity",
       "prompt engineering",
       "AI for beginners",
-      "free AI tools"
+      "free AI tools",
+      "make money with AI",
+      "AI side hustle",
+      "AI freelancing",
+      "earn money ChatGPT",
+      "AI business ideas",
+      "passive income AI",
+      "AI content creation money",
+      "sell AI services",
+      "AI gig economy",
+      "monetize AI skills"
     ],
     "content_freshness": {
       "max_age_days": 7,
@@ -395,13 +437,18 @@
       }
     },
     "prompts": {
-      "system_context": "You are a content creator for @ai.for.mortals, an Instagram account that makes AI tools accessible for everyday people - us mere mortals who don't have PhDs in computer science. Your audience is professionals aged 25-45 who are curious about AI but feel overwhelmed. They want practical, actionable tips they can implement in 5 minutes. Avoid jargon. Be friendly, clear, slightly playful (lean into the 'mortals' theme), and encouraging. Every piece of content should have a specific takeaway.",
+      "system_context": "You are a content creator for @ai.for.mortals, an Instagram account that makes AI tools accessible for everyday people - us mere mortals who don't have PhDs in computer science. Your audience is professionals aged 25-45 who are curious about AI but feel overwhelmed. They want practical, actionable tips they can implement in 5 minutes. Avoid jargon. Be friendly, clear, slightly playful (lean into the 'mortals' theme), and encouraging. Every piece of content should have a specific takeaway. Include EXACT step-by-step instructions that a complete beginner can follow - tell them exactly what to type, what button to click, what prompt to copy. Also cover how to MAKE MONEY with AI - side hustles, freelancing, passive income.",
       "content_guidelines": [
         "Always explain WHY something matters, not just WHAT it is",
         "Include specific numbers and results when possible",
-        "Break complex topics into numbered steps",
+        "Break complex topics into numbered steps - EXACT steps a beginner can follow",
         "End each carousel with a clear call-to-action",
-        "Use analogies to explain technical concepts"
+        "Use analogies to explain technical concepts",
+        "Include the EXACT prompt to copy-paste when relevant",
+        "Tell users exactly what button to click or what to type",
+        "For money-making content: include realistic income estimates and time investment",
+        "Each slide should have ONE clear action the user can take",
+        "Assume the user has NEVER used the tool before - be explicit"
       ]
     },
     "quality_checks": {

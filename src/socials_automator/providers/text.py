@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from typing import Any, AsyncIterator, Callable, Awaitable
 
 import httpx
+import instructor
 from openai import AsyncOpenAI, APIConnectionError, AuthenticationError, APIStatusError
 from pydantic import BaseModel
 
 from .config import ProviderConfig, TextProviderConfig, load_provider_config
+
+
+_logger = logging.getLogger("ai_calls")
 
 
 # Type for AI event callback
@@ -53,9 +58,16 @@ class TextProvider:
         self._total_calls = 0
         self._total_cost = 0.0
         self._clients: dict[str, AsyncOpenAI] = {}
+        self._instructor_clients: dict[str, instructor.AsyncInstructor] = {}
 
         # Provider override
         self._provider_override = provider_override
+
+    # Providers that return JSON in markdown code blocks (need MD_JSON mode)
+    _MD_JSON_PROVIDERS = {"lmstudio", "ollama", "deepseek"}
+
+    # Providers with native tool/function calling support (use TOOLS mode)
+    _TOOLS_MODE_PROVIDERS = {"openai", "groq", "gemini", "zai"}
 
     # Providers that are NOT OpenAI-compatible (need their own SDK)
     _INCOMPATIBLE_PROVIDERS = {"anthropic"}
@@ -99,13 +111,86 @@ class TextProvider:
 
         return self._clients[provider_name]
 
-    def _get_model_name(self, provider_config: TextProviderConfig) -> str:
-        """Extract model name from litellm_model format."""
+    def _get_instructor_client(
+        self, provider_name: str, provider_config: TextProviderConfig
+    ) -> instructor.AsyncInstructor | None:
+        """Get or create an Instructor-wrapped client for a provider.
+
+        Uses appropriate mode based on provider capabilities:
+        - TOOLS mode for providers with native tool calling (OpenAI, Groq, Gemini)
+        - MD_JSON mode for providers returning JSON in markdown blocks (LMStudio, Ollama, DeepSeek)
+        - JSON mode as fallback for others
+
+        Returns None if base client couldn't be created.
+        """
+        client = self._get_client(provider_name, provider_config)
+        if client is None:
+            return None
+
+        cache_key = provider_name
+        if cache_key not in self._instructor_clients:
+            # Select mode based on provider capabilities
+            if provider_name.lower() in self._TOOLS_MODE_PROVIDERS:
+                mode = instructor.Mode.TOOLS
+            elif provider_name.lower() in self._MD_JSON_PROVIDERS:
+                mode = instructor.Mode.MD_JSON
+            else:
+                # Default to JSON mode for unknown providers
+                mode = instructor.Mode.JSON
+
+            _logger.debug(f"Creating instructor client for {provider_name} with mode {mode}")
+
+            self._instructor_clients[cache_key] = instructor.from_openai(
+                client, mode=mode
+            )
+
+        return self._instructor_clients[cache_key]
+
+    def _get_model_name(self, provider_name: str, provider_config: TextProviderConfig) -> str:
+        """Extract model name from litellm_model format.
+
+        For local providers (lmstudio, ollama), auto-detects available models
+        if the configured model is a placeholder like 'local-model'.
+        """
         # litellm_model is like "openai/gpt-4o" or "groq/llama-3.3-70b-versatile"
         model = provider_config.litellm_model
         if "/" in model:
-            return model.split("/", 1)[1]
+            model = model.split("/", 1)[1]
+
+        # For local providers, detect actual model if placeholder is used
+        if model in ("local-model", "local") and provider_name in ("lmstudio", "ollama"):
+            detected = self._detect_local_model(provider_config)
+            if detected:
+                return detected
+
         return model
+
+    def _detect_local_model(self, provider_config: TextProviderConfig) -> str | None:
+        """Detect available model from local provider (LMStudio/Ollama)."""
+        import httpx
+
+        base_url = provider_config.get_base_url() or "http://localhost:1234/v1"
+
+        try:
+            # Query models endpoint synchronously (called before async operation)
+            with httpx.Client(timeout=5) as client:
+                response = client.get(f"{base_url}/models")
+                if response.status_code == 200:
+                    data = response.json()
+                    models = data.get("data", [])
+                    # Filter out embedding models, prefer chat models
+                    chat_models = [
+                        m["id"] for m in models
+                        if "embed" not in m["id"].lower()
+                    ]
+                    if chat_models:
+                        return chat_models[0]
+                    elif models:
+                        return models[0]["id"]
+        except Exception:
+            pass  # Fall back to configured model
+
+        return None
 
     async def _emit_event(self, event: dict[str, Any]) -> None:
         """Emit an AI event if callback is set."""
@@ -194,7 +279,7 @@ class TextProvider:
                 if client is None:
                     continue
 
-                model = self._get_model_name(provider_config)
+                model = self._get_model_name(provider_name, provider_config)
 
                 self._current_provider = provider_name
                 self._current_model = model
@@ -210,6 +295,14 @@ class TextProvider:
                 })
 
                 start_time = time.time()
+
+                # Log FULL request
+                _logger.info(
+                    f"AI_REQUEST | provider:{provider_name} | model:{model} | task:{task}\n"
+                    f"--- SYSTEM ---\n{system or '(none)'}\n"
+                    f"--- PROMPT ---\n{prompt}\n"
+                    f"--- END REQUEST ---"
+                )
 
                 # Build request kwargs
                 request_kwargs: dict[str, Any] = {
@@ -248,6 +341,14 @@ class TextProvider:
                 # Estimate cost
                 cost = self._estimate_cost(provider_name, len(prompt) + len(result))
                 self._total_cost += cost
+
+                # Log FULL response
+                _logger.info(
+                    f"AI_RESPONSE | provider:{provider_name} | model:{actual_model} | "
+                    f"task:{task} | duration:{duration:.2f}s | cost:${cost:.4f}\n"
+                    f"--- RESPONSE ---\n{result}\n"
+                    f"--- END RESPONSE ---"
+                )
 
                 # Emit "response" event
                 await self._emit_event({
@@ -329,48 +430,201 @@ class TextProvider:
         response_model: type[BaseModel],
         system: str | None = None,
         task: str | None = None,
+        max_retries: int = 3,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
         **kwargs: Any,
     ) -> BaseModel:
-        """Generate structured output matching a Pydantic model."""
-        schema = response_model.model_json_schema()
-        schema_str = json.dumps(schema, indent=2)
+        """Generate structured output matching a Pydantic model using Instructor.
 
-        structured_prompt = f"""{prompt}
+        Uses Instructor library for reliable JSON extraction with:
+        - Automatic schema enforcement
+        - Validation retries with error context
+        - Mode selection based on provider (TOOLS, MD_JSON, or JSON)
 
-Respond with valid JSON matching this schema:
-```json
-{schema_str}
-```
+        Args:
+            prompt: The user prompt to send to the model.
+            response_model: Pydantic model class for the response.
+            system: Optional system prompt for context.
+            task: Optional task name for tracking.
+            max_retries: Number of retry attempts on validation failure (default 3).
+            temperature: Sampling temperature (0-2).
+            max_tokens: Maximum tokens to generate.
+            **kwargs: Additional arguments.
 
-Return ONLY the JSON, no other text."""
+        Returns:
+            Instance of response_model with extracted data.
 
-        response_text = await self.generate(
-            prompt=structured_prompt,
-            system=system,
-            task=task,
-            **kwargs,
-        )
+        Raises:
+            Exception: If all providers fail or validation fails after retries.
+        """
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
 
-        # Parse JSON from response
-        try:
-            json_str = response_text.strip()
-            if json_str.startswith("```"):
-                lines = json_str.split("\n")
-                json_lines = []
-                in_block = False
-                for line in lines:
-                    if line.startswith("```"):
-                        in_block = not in_block
-                        continue
-                    if in_block:
-                        json_lines.append(line)
-                json_str = "\n".join(json_lines)
+        # Try providers in priority order with fallback
+        providers = list(self.config.get_enabled_text_providers())
 
-            data = json.loads(json_str)
-            return response_model.model_validate(data)
+        # Apply provider override (same logic as generate())
+        if self._provider_override:
+            override_name = self._provider_override.lower()
+            override_in_list = any(name == override_name for name, _ in providers)
 
-        except (json.JSONDecodeError, ValueError) as e:
-            raise ValueError(f"Failed to parse structured response: {e}\nResponse: {response_text}")
+            if not override_in_list:
+                if override_name in self.config.text_providers:
+                    override_config = self.config.text_providers[override_name]
+                    providers.insert(0, (override_name, override_config))
+                else:
+                    default_configs = {
+                        "lmstudio": TextProviderConfig(
+                            priority=0,
+                            enabled=True,
+                            litellm_model="openai/local-model",
+                            base_url="http://localhost:1234/v1",
+                            api_key="lm-studio",
+                            timeout=120,
+                        ),
+                        "ollama": TextProviderConfig(
+                            priority=0,
+                            enabled=True,
+                            litellm_model="ollama/llama3.2",
+                            base_url="http://localhost:11434",
+                            timeout=120,
+                        ),
+                    }
+                    if override_name in default_configs:
+                        providers.insert(0, (override_name, default_configs[override_name]))
+            else:
+                providers = sorted(providers, key=lambda x: 0 if x[0] == override_name else 1)
+
+        last_error: Exception | None = None
+        failed_providers: list[str] = []
+
+        for provider_name, provider_config in providers:
+            try:
+                instructor_client = self._get_instructor_client(provider_name, provider_config)
+
+                if instructor_client is None:
+                    continue
+
+                model = self._get_model_name(provider_name, provider_config)
+
+                self._current_provider = provider_name
+                self._current_model = model
+
+                # Emit "calling" event
+                await self._emit_event({
+                    "type": "text_call",
+                    "provider": provider_name,
+                    "model": model,
+                    "prompt_preview": prompt[:200],
+                    "task": task,
+                    "structured": True,
+                    "response_model": response_model.__name__,
+                    "failed_providers": failed_providers.copy(),
+                })
+
+                start_time = time.time()
+
+                # Log FULL request for structured extraction
+                _logger.info(
+                    f"AI_REQUEST_STRUCTURED | provider:{provider_name} | model:{model} | "
+                    f"task:{task} | response_model:{response_model.__name__}\n"
+                    f"--- SYSTEM ---\n{system or '(none)'}\n"
+                    f"--- PROMPT ---\n{prompt}\n"
+                    f"--- END REQUEST ---"
+                )
+
+                # Use Instructor for structured extraction with retries
+                result = await instructor_client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    response_model=response_model,
+                    max_retries=max_retries,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+
+                duration = time.time() - start_time
+                self._total_calls += 1
+
+                # Estimate cost (use model JSON for rough size estimate)
+                result_json = result.model_dump_json(indent=2)
+                cost = self._estimate_cost(provider_name, len(prompt) + len(result_json))
+                self._total_cost += cost
+
+                # Log FULL structured response
+                _logger.info(
+                    f"AI_RESPONSE_STRUCTURED | provider:{provider_name} | model:{model} | "
+                    f"task:{task} | response_model:{response_model.__name__} | "
+                    f"duration:{duration:.2f}s | cost:${cost:.4f}\n"
+                    f"--- RESPONSE (JSON) ---\n{result_json}\n"
+                    f"--- END RESPONSE ---"
+                )
+
+                # Emit "response" event
+                await self._emit_event({
+                    "type": "text_response",
+                    "provider": provider_name,
+                    "model": model,
+                    "response_preview": result_json[:200],
+                    "duration_seconds": duration,
+                    "cost_usd": cost,
+                    "structured": True,
+                    "response_model": response_model.__name__,
+                    "failed_providers": failed_providers.copy(),
+                })
+
+                return result
+
+            except (APIConnectionError, AuthenticationError, httpx.ConnectError, httpx.TimeoutException, ConnectionError, OSError) as e:
+                last_error = e
+                failed_providers.append(f"{provider_name}")
+                await self._emit_event({
+                    "type": "text_error",
+                    "provider": provider_name,
+                    "error": f"{type(e).__name__}",
+                    "structured": True,
+                    "failed_providers": failed_providers.copy(),
+                })
+                continue
+
+            except APIStatusError as e:
+                last_error = e
+                failed_providers.append(f"{provider_name}")
+                await self._emit_event({
+                    "type": "text_error",
+                    "provider": provider_name,
+                    "error": f"{e.status_code}",
+                    "structured": True,
+                    "failed_providers": failed_providers.copy(),
+                })
+                if self.config.provider_settings.fallback_on_error:
+                    continue
+                raise
+
+            except Exception as e:
+                last_error = e
+                failed_providers.append(f"{provider_name}")
+                error_msg = str(e)[:100]
+                _logger.warning(
+                    f"INSTRUCTOR_ERROR | provider:{provider_name} | error:{error_msg}"
+                )
+                await self._emit_event({
+                    "type": "text_error",
+                    "provider": provider_name,
+                    "error": error_msg,
+                    "structured": True,
+                    "failed_providers": failed_providers.copy(),
+                })
+                if self.config.provider_settings.fallback_on_error:
+                    continue
+                raise
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("No providers available")
 
     async def generate_with_tools(
         self,
@@ -452,7 +706,7 @@ Return ONLY the JSON, no other text."""
                 if client is None:
                     continue
 
-                model = self._get_model_name(provider_config)
+                model = self._get_model_name(provider_name, provider_config)
 
                 self._current_provider = provider_name
                 self._current_model = model
@@ -470,6 +724,16 @@ Return ONLY the JSON, no other text."""
                 })
 
                 start_time = time.time()
+
+                # Log FULL request with tools
+                tool_names = [t.get("function", {}).get("name", "?") for t in tools]
+                _logger.info(
+                    f"AI_REQUEST_TOOLS | provider:{provider_name} | model:{model} | "
+                    f"task:{task} | tools:{tool_names}\n"
+                    f"--- SYSTEM ---\n{system or '(none)'}\n"
+                    f"--- PROMPT ---\n{prompt}\n"
+                    f"--- END REQUEST ---"
+                )
 
                 # Build request with tools
                 request_kwargs: dict[str, Any] = {
@@ -515,6 +779,18 @@ Return ONLY the JSON, no other text."""
 
                 cost = self._estimate_cost(provider_name, len(prompt) + len(content))
                 self._total_cost += cost
+
+                # Log FULL response with tool calls
+                tool_calls_str = ""
+                if tool_calls:
+                    tool_calls_str = "\n--- TOOL CALLS ---\n" + json.dumps(tool_calls, indent=2)
+                _logger.info(
+                    f"AI_RESPONSE_TOOLS | provider:{provider_name} | model:{actual_model} | "
+                    f"task:{task} | duration:{duration:.2f}s | "
+                    f"tool_calls:{len(tool_calls) if tool_calls else 0} | finish:{finish_reason}\n"
+                    f"--- CONTENT ---\n{content or '(none)'}{tool_calls_str}\n"
+                    f"--- END RESPONSE ---"
+                )
 
                 # Emit "response" event
                 await self._emit_event({
@@ -614,7 +890,7 @@ Return ONLY the JSON, no other text."""
                 if client is None:
                     continue
 
-                model = self._get_model_name(provider_config)
+                model = self._get_model_name(provider_name, provider_config)
                 self._current_provider = provider_name
                 self._current_model = model
 
@@ -700,7 +976,7 @@ Return ONLY the JSON, no other text."""
         provider_name, provider_config = providers[0]
 
         client = self._get_client(provider_name, provider_config)
-        model = self._get_model_name(provider_config)
+        model = self._get_model_name(provider_name, provider_config)
 
         self._current_provider = provider_name
         self._current_model = model

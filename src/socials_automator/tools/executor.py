@@ -24,7 +24,7 @@ ToolCallCallback = Callable[[dict[str, Any]], Awaitable[None]] | None
 class ToolExecutor:
     """Executes tools requested by AI agents.
 
-    Handles web_search, news_search, and other tools that AI can call.
+    Handles web_search, news_search, generate_image and other tools that AI can call.
     Reports progress and results via callback for CLI display.
     """
 
@@ -32,17 +32,21 @@ class ToolExecutor:
         self,
         callback: ToolCallCallback = None,
         post_id: str | None = None,
+        image_provider: Any = None,
     ):
         """Initialize the tool executor.
 
         Args:
             callback: Optional callback for tool execution events.
             post_id: Post ID for logging context.
+            image_provider: Optional image provider for generate_image tool.
         """
         self.callback = callback
         self.post_id = post_id or "unknown"
         self._web_searcher = None
+        self._image_provider = image_provider
         self._total_tool_calls = 0
+        self._generated_images: list[tuple[str, bytes]] = []  # (path, bytes)
 
     async def _get_web_searcher(self):
         """Lazy-load the web searcher."""
@@ -90,6 +94,8 @@ class ToolExecutor:
                 result = await self._execute_web_search(arguments)
             elif tool_name == "news_search":
                 result = await self._execute_news_search(arguments)
+            elif tool_name == "generate_image":
+                result = await self._execute_generate_image(arguments)
             else:
                 result = ToolResult(
                     tool_name=tool_name,
@@ -225,6 +231,101 @@ class ToolExecutor:
                 result=None,
                 error="News search unavailable: ddgs not installed",
             )
+
+    async def _get_image_provider(self):
+        """Lazy-load the image provider if not provided."""
+        if self._image_provider is None:
+            from ..providers import ImageProvider
+            self._image_provider = ImageProvider()
+        return self._image_provider
+
+    async def _execute_generate_image(self, args: dict[str, Any]) -> ToolResult:
+        """Execute image generation tool.
+
+        Args:
+            args: {"prompt": str, "negative_prompt": str, "style": str, "size": str}
+
+        Returns:
+            ToolResult with generated image info.
+        """
+        prompt = args.get("prompt", "")
+        negative_prompt = args.get("negative_prompt", "blurry, low quality, distorted, text, watermark")
+        style = args.get("style", "abstract")
+        size = args.get("size", "square")
+
+        if not prompt:
+            return ToolResult(
+                tool_name="generate_image",
+                success=False,
+                result=None,
+                error="No prompt provided",
+            )
+
+        # Enhance prompt based on style
+        style_suffixes = {
+            "abstract": "abstract art style, modern design, clean composition",
+            "realistic": "photorealistic, high detail, professional photography",
+            "minimal": "minimalist design, simple shapes, clean background",
+            "illustration": "digital illustration, artistic style, vibrant colors",
+            "photography": "professional photograph, natural lighting, high resolution",
+        }
+        style_suffix = style_suffixes.get(style, "")
+        if style_suffix:
+            enhanced_prompt = f"{prompt}, {style_suffix}"
+        else:
+            enhanced_prompt = prompt
+
+        try:
+            provider = await self._get_image_provider()
+
+            # Map size to provider format
+            size_map = {
+                "square": "square",
+                "portrait": "portrait",
+                "landscape": (1350, 1080),  # Landscape is not preset
+            }
+            provider_size = size_map.get(size, "square")
+
+            # Generate image
+            image_bytes = await provider.generate(
+                prompt=enhanced_prompt,
+                size=provider_size,
+                negative_prompt=negative_prompt,
+                task="ai_tool_image",
+            )
+
+            # Store image for later use
+            image_index = len(self._generated_images)
+            image_path = f"ai_generated_{image_index}.jpg"
+            self._generated_images.append((image_path, image_bytes))
+
+            return ToolResult(
+                tool_name="generate_image",
+                success=True,
+                result=f"Image generated successfully: {image_path} ({len(image_bytes)} bytes)",
+                metadata={
+                    "image_path": image_path,
+                    "image_index": image_index,
+                    "size_bytes": len(image_bytes),
+                    "prompt": prompt[:100],
+                    "style": style,
+                    "size": size,
+                    "provider": provider.current_provider,
+                },
+            )
+
+        except Exception as e:
+            return ToolResult(
+                tool_name="generate_image",
+                success=False,
+                result=None,
+                error=f"Image generation failed: {str(e)[:100]}",
+            )
+
+    @property
+    def generated_images(self) -> list[tuple[str, bytes]]:
+        """Get list of generated images from tool calls."""
+        return self._generated_images
 
     async def execute_tool_calls(
         self,

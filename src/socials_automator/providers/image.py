@@ -45,10 +45,10 @@ class ImageProvider:
         )
     """
 
-    # Standard Instagram sizes
+    # Standard Instagram sizes (1080x1080 is the standard square format)
     INSTAGRAM_SIZES = {
-        "square": (1080, 1080),
-        "portrait": (1080, 1350),  # 4:5 ratio - best for carousels
+        "square": (1080, 1080),  # Instagram carousel square format
+        "portrait": (1080, 1350),  # 4:5 ratio - best for feed
         "story": (1080, 1920),  # 9:16 ratio
     }
 
@@ -456,14 +456,41 @@ class ImageProvider:
         # Store actual model name for reporting
         self._actual_model = checkpoint
 
+        # Enhance prompt with quality keywords for better local generation
+        quality_prompt = (
+            f"{prompt}, masterpiece, best quality, ultra detailed, "
+            "sharp focus, high resolution, professional photography, "
+            "8k uhd, cinematic lighting, intricate details"
+        )
+
+        # Comprehensive negative prompt for high quality output
+        default_negative = (
+            "blurry, low quality, distorted, deformed, ugly, bad anatomy, "
+            "worst quality, low resolution, jpeg artifacts, watermark, "
+            "text, signature, out of focus, grainy, noisy, oversaturated, "
+            "underexposed, overexposed, duplicate, morbid, mutilated, "
+            "pixelated, compression artifacts, disfigured"
+        )
+        full_negative = f"{negative_prompt}, {default_negative}" if negative_prompt else default_negative
+
+        # For best quality, generate at SDXL native (1024x1024) if targeting 1080x1080
+        # This avoids stretching issues with models not trained at 1080x1080
+        # Small upscale from 1024->1080 is better than distortion from wrong native res
+        gen_width = width
+        gen_height = height
+        if width == 1080 and height == 1080:
+            # Generate at 1024x1024 (SDXL native) - will upscale to 1080 in _resize_image
+            gen_width = 1024
+            gen_height = 1024
+
         # Build default text-to-image workflow
         # This workflow works with most SD 1.5 / SDXL models loaded in ComfyUI
         settings_with_checkpoint = {**config.settings, "checkpoint": checkpoint}
         workflow = self._build_comfyui_workflow(
-            prompt=prompt,
-            negative_prompt=negative_prompt or "blurry, low quality, distorted",
-            width=width,
-            height=height,
+            prompt=quality_prompt,
+            negative_prompt=full_negative,
+            width=gen_width,
+            height=gen_height,
             settings=settings_with_checkpoint,
         )
 
@@ -550,11 +577,11 @@ class ImageProvider:
 
         Works with any checkpoint model loaded in ComfyUI.
         """
-        # Get settings with defaults
-        steps = settings.get("steps", 20)
-        cfg = settings.get("cfg", 7.0)
-        sampler = settings.get("sampler", "euler")
-        scheduler = settings.get("scheduler", "normal")
+        # Get settings with high-quality defaults for 1080x1080
+        steps = settings.get("steps", 50)  # More steps for crisp output
+        cfg = settings.get("cfg", 7.0)  # Balanced guidance scale
+        sampler = settings.get("sampler", "dpmpp_2m_sde")  # High quality sampler
+        scheduler = settings.get("scheduler", "karras")  # Better noise scheduling
         seed = settings.get("seed", -1)  # -1 = random
 
         if seed == -1:
@@ -665,9 +692,9 @@ class ImageProvider:
             top = (new_height - target_height) // 2
             img = img.crop((left, top, left + target_width, top + target_height))
 
-        # Save as JPEG
+        # Save as high-quality JPEG (98% quality, no subsampling for sharpness)
         output = BytesIO()
-        img.save(output, format="JPEG", quality=95, optimize=True)
+        img.save(output, format="JPEG", quality=98, subsampling=0, optimize=True)
         return output.getvalue()
 
     async def generate_and_save(

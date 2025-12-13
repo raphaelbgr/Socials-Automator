@@ -109,6 +109,7 @@ class GenerationProgress(BaseModel):
     """Progress tracking for generation."""
 
     post_id: str
+    topic: str = ""  # The actual topic being generated
     status: str = "starting"
     current_step: str = ""
     current_action: str = ""  # Detailed action like "Validating AI output #1", "Generating content"

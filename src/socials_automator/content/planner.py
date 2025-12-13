@@ -12,7 +12,16 @@ from pydantic import BaseModel
 
 from ..providers import TextProvider, get_text_provider
 from ..knowledge import KnowledgeStore
+from ..services import StructuredExtractor
 from .models import PostPlan, HookType, SlideType, GenerationProgress
+from .responses import (
+    PlanningResponse,
+    StructureResponse,
+    ContentSlideResponse,
+    CTAResponse,
+    HookListResponse,
+    ContentValidationResponse,
+)
 
 # Get logger for file-only logging (configured in cli.py)
 _logger = logging.getLogger("ai_calls")
@@ -72,6 +81,7 @@ class ContentPlanner:
         knowledge_store: KnowledgeStore | None = None,
         progress_callback: ProgressCallback | None = None,
         auto_retry: bool = False,
+        extractor: StructuredExtractor | None = None,
     ):
         """Initialize the content planner.
 
@@ -81,12 +91,19 @@ class ContentPlanner:
             knowledge_store: Knowledge store for context.
             progress_callback: Callback for progress updates.
             auto_retry: If True, retry indefinitely until valid content.
+            extractor: Structured data extractor using Instructor.
         """
         self.profile = profile_config
         self.text_provider = text_provider or get_text_provider()
         self.knowledge = knowledge_store
         self.progress_callback = progress_callback
         self.auto_retry = auto_retry
+
+        # Create extractor with same event callback as text provider
+        self.extractor = extractor or StructuredExtractor(
+            event_callback=self.text_provider._event_callback,
+            provider_override=self.text_provider._provider_override,
+        )
 
         # Current progress state (set by generator)
         self._current_progress: GenerationProgress | None = None
@@ -110,6 +127,8 @@ class ContentPlanner:
         content_type: str = "",
         slide_titles: list[str] | None = None,
         generated_slide: dict[str, str] | None = None,
+        current_slide: int = 0,
+        total_slides: int = 0,
     ) -> None:
         """Emit progress update for phase-based generation."""
         if self._current_progress and self.progress_callback:
@@ -136,13 +155,28 @@ class ContentPlanner:
                 self._current_progress.slide_titles = slide_titles
             if generated_slide:
                 self._current_progress.generated_slides.append(generated_slide)
+            if current_slide > 0:
+                self._current_progress.current_slide = current_slide
+            if total_slides > 0:
+                self._current_progress.total_slides = total_slides
 
             await self.progress_callback(self._current_progress)
 
     def _get_system_prompt(self) -> str:
-        """Get the system prompt from profile config."""
+        """Get the system prompt from profile config with current datetime context."""
+        from datetime import datetime
+
         prompts = self.ai_config.get("prompts", {})
-        return prompts.get("system_context", "You are a social media content creator.")
+        base_prompt = prompts.get("system_context", "You are a social media content creator.")
+
+        # Add current datetime context
+        now = datetime.now()
+        datetime_context = (
+            f"\n\nCurrent date and time: {now.strftime('%Y-%m-%d %H:%M:%S')} "
+            f"({now.strftime('%A, %B %d, %Y')})"
+        )
+
+        return base_prompt + datetime_context
 
     def _get_hook_templates(self, hook_type: HookType) -> list[str]:
         """Get hook templates for a type."""
@@ -284,7 +318,7 @@ Return ONLY a JSON array of strings with the hooks, no other text:
         Returns:
             Tuple of (planning_result, message_history)
         """
-        system = "You are a social media content strategist. Analyze topics and plan content structure. Return ONLY valid JSON."
+        system = "You are a social media content strategist. Analyze topics and plan content structure."
 
         # Build prompt with optional research context
         research_section = ""
@@ -305,40 +339,30 @@ Determine:
 2. What type of content (tips, prompts, tools, steps, etc.)
 3. A refined, engaging version of the topic
 
-Return ONLY this JSON:
-{{
-    "content_count": <number of items to create>,
-    "content_type": "<singular type: tip, prompt, tool, step, hack, etc.>",
-    "refined_topic": "<polished version of the topic>",
-    "target_audience": "<who this is for>"
-}}
-
 Examples:
-- "5 ChatGPT prompts" → {{"content_count": 5, "content_type": "prompt", ...}}
-- "Best AI tools for writers" → {{"content_count": 5, "content_type": "tool", ...}} (default to 5 if not specified)
-- "3 ways to use Claude" → {{"content_count": 3, "content_type": "way", ...}}"""
+- "5 ChatGPT prompts" -> content_count: 5, content_type: "prompt"
+- "Best AI tools for writers" -> content_count: 5, content_type: "tool" (default to 5 if not specified)
+- "3 ways to use Claude" -> content_count: 3, content_type: "way" """
 
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": prompt},
-        ]
+        # Use Instructor extractor for structured extraction
+        planning, history = await self.extractor.extract_with_history(
+            prompt=prompt,
+            response_model=PlanningResponse,
+            system=system,
+            task="phase1_planning",
+            temperature=0.5,
+        )
 
-        response = await self._call_with_history(messages, temperature=0.5)
-        messages.append({"role": "assistant", "content": response})
-
-        data = self._extract_json(response)
-
-        # Ensure we have required fields with defaults
         result = {
-            "content_count": data.get("content_count", 5),
-            "content_type": data.get("content_type", "tip"),
-            "refined_topic": data.get("refined_topic", topic),
-            "target_audience": data.get("target_audience", "social media users"),
+            "content_count": planning.content_count,
+            "content_type": planning.content_type,
+            "refined_topic": planning.refined_topic,
+            "target_audience": planning.target_audience,
         }
 
         _logger.info(f"Phase 1 - Planning: {result['content_count']} {result['content_type']}s")
 
-        return result, messages
+        return result, history
 
     async def _phase2_structure(
         self,
@@ -361,39 +385,29 @@ Create:
 2. {content_count} slide titles - one for each {content_type}
 3. A description for the hook slide image
 
-Return ONLY this JSON:
-{{
-    "hook_text": "<catchy hook headline>",
-    "hook_subtext": "<optional 5-word subtext or null>",
-    "hook_image_description": "<description for background image>",
-    "slide_titles": [
-        "<title for {content_type} 1>",
-        "<title for {content_type} 2>",
-        ... ({content_count} titles total)
-    ]
-}}
-
 IMPORTANT: Generate EXACTLY {content_count} slide titles."""
 
-        history.append({"role": "user", "content": prompt})
-        response = await self._call_with_history(history, temperature=0.7)
-        history.append({"role": "assistant", "content": response})
-
-        data = self._extract_json(response)
+        # Use Instructor extractor for structured extraction
+        structure, history = await self.extractor.extract_with_history(
+            prompt=prompt,
+            response_model=StructureResponse,
+            history=history,
+            task="phase2_structure",
+            temperature=0.7,
+        )
 
         # Validate slide_titles count
-        titles = data.get("slide_titles", [])
+        titles = list(structure.slide_titles)
         if len(titles) != content_count:
             _logger.warning(f"Phase 2 got {len(titles)} titles instead of {content_count}, adjusting...")
-            # Pad or trim to exact count
             while len(titles) < content_count:
                 titles.append(f"{content_type.title()} {len(titles) + 1}")
             titles = titles[:content_count]
 
         result = {
-            "hook_text": data.get("hook_text", planning["refined_topic"]),
-            "hook_subtext": data.get("hook_subtext"),
-            "hook_image_description": data.get("hook_image_description", f"Abstract background for {planning['refined_topic']}"),
+            "hook_text": structure.hook_text or planning["refined_topic"],
+            "hook_subtext": structure.hook_subtext,
+            "hook_image_description": structure.hook_image_description or f"Abstract background for {planning['refined_topic']}",
             "slide_titles": titles,
         }
 
@@ -407,40 +421,92 @@ IMPORTANT: Generate EXACTLY {content_count} slide titles."""
         slide_title: str,
         content_type: str,
         history: list[dict[str, str]],
+        topic: str = "",
+        max_validation_retries: int = 2,
     ) -> tuple[dict[str, Any], list[dict[str, str]]]:
-        """Phase 3: Generate content for a single slide.
+        """Phase 3: Generate content for a single slide with validation.
+
+        Generates content and validates it. If validation fails, regenerates
+        with feedback about what was wrong.
 
         Returns:
             Tuple of (slide_content, updated_history)
         """
-        prompt = f"""Generate content for slide {slide_number}: "{slide_title}"
+        base_prompt = f"""Generate content for slide {slide_number}: "{slide_title}"
 
 This is a {content_type} slide. Provide:
-- A clear, specific heading (can refine the title)
-- Body text with 1-2 sentences of actionable detail
+- A SHORT heading (max 50 characters / 6-8 words) - be concise!
+- Body text (max 200 characters) - 1-2 SHORT sentences
 
-Return ONLY this JSON:
-{{
-    "heading": "<specific heading for this {content_type}>",
-    "body": "<1-2 sentences with specific, actionable details>"
-}}
+IMPORTANT LENGTH LIMITS:
+- Heading: MAX 50 characters (will be cut off if longer!)
+- Body: MAX 200 characters
 
-Make it SPECIFIC and VALUABLE - not generic filler."""
+Make it SPECIFIC and VALUABLE - not generic filler. Keep it SHORT for mobile readability."""
 
-        history.append({"role": "user", "content": prompt})
-        response = await self._call_with_history(history, temperature=0.7, max_tokens=300)
-        history.append({"role": "assistant", "content": response})
+        prompt = base_prompt
+        working_history = history.copy()
+        last_error = None
 
-        data = self._extract_json(response)
+        for attempt in range(max_validation_retries + 1):
+            # Add retry context if this is a retry
+            if attempt > 0 and last_error:
+                prompt = f"""{base_prompt}
 
-        result = {
-            "heading": data.get("heading", slide_title),
-            "body": data.get("body", ""),
-        }
+IMPORTANT: Your previous attempt was rejected for this reason:
+{last_error}
 
-        _logger.info(f"Phase 3 - Slide {slide_number}: '{result['heading'][:30]}...'")
+Please generate BETTER content that addresses this issue."""
 
-        return result, history
+            # Use Instructor extractor for structured extraction
+            slide_content, working_history = await self.extractor.extract_with_history(
+                prompt=prompt,
+                response_model=ContentSlideResponse,
+                history=working_history if attempt == 0 else history.copy(),  # Fresh history on retry
+                task=f"phase3_slide_{slide_number}",
+                temperature=0.7 + (attempt * 0.1),  # Slightly increase temp on retries
+                max_tokens=300,
+            )
+
+            result = {
+                "heading": slide_content.heading or slide_title,
+                "body": slide_content.body or "",
+            }
+
+            # Validate the content
+            is_valid, error = await self._validate_slide_content(
+                heading=result["heading"],
+                body=result["body"],
+                slide_number=slide_number,
+                content_type=content_type,
+                topic=topic,
+            )
+
+            if is_valid:
+                _logger.info(
+                    f"Phase 3 - Slide {slide_number}: '{result['heading'][:30]}...' "
+                    f"(validated on attempt {attempt + 1})"
+                )
+                return result, working_history
+
+            # Validation failed - prepare for retry
+            last_error = error
+            _logger.warning(
+                f"Phase 3 - Slide {slide_number} validation failed (attempt {attempt + 1}): {error}"
+            )
+
+            await self._emit_progress(
+                action=f"Regenerating {content_type} {slide_number} (quality check failed)...",
+                phase=3,
+                phase_name="Content",
+                error=error,
+            )
+
+        # All retries exhausted - use last result anyway but log warning
+        _logger.warning(
+            f"Phase 3 - Slide {slide_number}: accepting content after {max_validation_retries + 1} attempts"
+        )
+        return result, working_history
 
     async def _phase4_cta(
         self,
@@ -451,30 +517,135 @@ Make it SPECIFIC and VALUABLE - not generic filler."""
         Returns:
             CTA slide dict
         """
-        prompt = """Based on all the content we've created, generate a compelling call-to-action for the final slide.
+        prompt = """Generate a short call-to-action for the final slide.
 
-Return ONLY this JSON:
-{
-    "cta_text": "<short punchy CTA, 2-5 words>",
-    "cta_subtext": "<optional extra line or null>"
-}
+Good examples:
+- "Follow for more tips!"
+- "Save this for later!"
+- "Share with a friend!"
+- "Don't miss the next one - Follow!"
+- "Like if this helped you!"
 
-Make it encourage saving, sharing, or following."""
-
-        history.append({"role": "user", "content": prompt})
-        response = await self._call_with_history(history, temperature=0.8, max_tokens=100)
+Do NOT mention downloading, guides, ebooks, or any external content. Keep it simple - just encourage engagement (follow/save/share/like)."""
 
         try:
-            data = self._extract_json(response)
+            # Use Instructor extractor for structured extraction
+            cta, _ = await self.extractor.extract_with_history(
+                prompt=prompt,
+                response_model=CTAResponse,
+                history=history,
+                task="phase4_cta",
+                temperature=0.8,
+                max_tokens=100,
+            )
+
             return {
-                "cta_text": data.get("cta_text", "Follow for more!"),
-                "cta_subtext": data.get("cta_subtext"),
+                "cta_text": cta.cta_text or "Follow for more!",
+                "cta_subtext": cta.cta_subtext,
             }
-        except Exception:
+        except Exception as e:
+            _logger.warning(f"Phase 4 CTA extraction failed: {e}, using default")
             return {
                 "cta_text": "Follow for more!",
                 "cta_subtext": None,
             }
+
+    async def _validate_slide_content(
+        self,
+        heading: str,
+        body: str,
+        slide_number: int,
+        content_type: str,
+        topic: str,
+    ) -> tuple[bool, str | None]:
+        """Validate slide content quality using AI.
+
+        Checks for:
+        - Gibberish or nonsensical text
+        - Repeated phrases
+        - Content that doesn't match the topic
+        - Too short or incomplete content
+        - Missing actionable information
+
+        Args:
+            heading: Slide heading text.
+            body: Slide body text.
+            slide_number: Slide number.
+            content_type: Type of content (tip, tool, prompt, etc.).
+            topic: Original topic for context.
+
+        Returns:
+            Tuple of (is_valid, error_message or None)
+        """
+        # Quick sanity checks first (no AI needed)
+        if len(heading.strip()) < 5:
+            return False, "Heading too short (less than 5 characters)"
+
+        if len(body.strip()) < 20:
+            return False, "Body text too short (less than 20 characters)"
+
+        # Check for repeated words (sign of gibberish)
+        words = body.lower().split()
+        if len(words) > 5:
+            unique_ratio = len(set(words)) / len(words)
+            if unique_ratio < 0.3:  # More than 70% repeated words
+                return False, f"Too many repeated words (unique ratio: {unique_ratio:.2f})"
+
+        # Check for obvious gibberish patterns
+        gibberish_patterns = [
+            r"(.)\1{4,}",  # Same character repeated 5+ times
+            r"(\w{2,})\s+\1\s+\1",  # Same word repeated 3+ times
+            r"[^\x00-\x7F]{5,}",  # Long non-ASCII sequences (potential encoding issues)
+        ]
+        for pattern in gibberish_patterns:
+            if re.search(pattern, body):
+                return False, f"Detected potential gibberish pattern: {pattern}"
+
+        # AI validation for semantic quality
+        validation_prompt = f"""Validate this Instagram carousel slide content for quality.
+
+TOPIC: {topic}
+CONTENT TYPE: {content_type}
+SLIDE NUMBER: {slide_number}
+
+HEADING: {heading}
+BODY: {body}
+
+Check for these issues:
+1. Is the text coherent and makes sense? (no gibberish)
+2. Does it relate to the topic?
+3. Is it specific and actionable (not generic filler)?
+4. Is the grammar acceptable?
+5. Does it provide real value?
+
+If the content passes ALL checks, set is_valid=true and issues=[]
+If there are problems, set is_valid=false and list the specific issues."""
+
+        try:
+            validation = await self.extractor.extract(
+                prompt=validation_prompt,
+                response_model=ContentValidationResponse,
+                system="You are a content quality validator. Be strict about quality.",
+                task="slide_validation",
+                temperature=0.3,  # Low temp for consistent validation
+                max_tokens=200,
+            )
+
+            if not validation.is_valid:
+                issues_str = "; ".join(validation.issues) if validation.issues else "Unknown issue"
+                _logger.warning(
+                    f"VALIDATION_FAILED | slide:{slide_number} | severity:{validation.severity} | "
+                    f"issues:{issues_str}"
+                )
+                return False, issues_str
+
+            _logger.info(f"VALIDATION_PASSED | slide:{slide_number}")
+            return True, None
+
+        except Exception as e:
+            # If validation fails, log but don't block (graceful degradation)
+            _logger.warning(f"Validation error for slide {slide_number}: {e}, allowing content")
+            return True, None
 
     async def plan_post(
         self,
@@ -531,8 +702,10 @@ Make it encourage saving, sharing, or following."""
             content_count = max(1, target_slides - 2)  # Subtract hook and CTA
             planning["content_count"] = content_count
 
-        # Clamp to min/max
-        content_count = max(min_slides - 2, min(max_slides - 2, content_count))
+        # Clamp to min/max (default: min=3, max=10 total slides)
+        effective_min = (min_slides if min_slides is not None else 3) - 2
+        effective_max = (max_slides if max_slides is not None else 10) - 2
+        content_count = max(effective_min, min(effective_max, content_count))
         planning["content_count"] = content_count
 
         total_phases = 3 + content_count  # Phase 1, 2, N content slides, CTA
@@ -590,6 +763,8 @@ Make it encourage saving, sharing, or following."""
                 phase_name="Content",
                 phase_input=f'Slide {slide_num}: "{title[:40]}"',
                 max_attempts=total_phases,
+                current_slide=slide_num,
+                total_slides=content_count,
             )
 
             slide_content, history = await self._phase3_content_slide(
@@ -597,6 +772,7 @@ Make it encourage saving, sharing, or following."""
                 slide_title=title,
                 content_type=content_type,
                 history=history,
+                topic=topic,  # Pass topic for validation context
             )
 
             content_slides.append({
@@ -616,6 +792,8 @@ Make it encourage saving, sharing, or following."""
                 phase_output=f'"{slide_content["heading"][:40]}..."',
                 generated_slide={"heading": slide_content["heading"], "body": slide_content["body"][:50] + "..."},
                 max_attempts=total_phases,
+                current_slide=slide_num,
+                total_slides=content_count,
             )
 
         # === PHASE 4: CTA ===
@@ -749,8 +927,9 @@ Make it encourage saving, sharing, or following."""
             "image_description": f"Abstract tech background for topic: {topic}",
         })
 
-        # Content slides
-        content_count = max(1, target_slides - 2)
+        # Content slides (default to 5 slides total if not specified)
+        effective_slides = target_slides if target_slides is not None else 5
+        content_count = max(1, effective_slides - 2)
         for i in range(content_count):
             slides.append({
                 "number": i + 2,
@@ -808,14 +987,16 @@ Make it encourage saving, sharing, or following."""
         hook_text: str,
         content_summary: str,
         hashtags: list[str] | None = None,
+        max_retries: int = 3,
     ) -> str:
-        """Generate Instagram caption for a post.
+        """Generate Instagram caption for a post with validation.
 
         Args:
             topic: Post topic.
             hook_text: The hook used.
             content_summary: Summary of post content.
             hashtags: Hashtags to include.
+            max_retries: Maximum retry attempts for bad captions.
 
         Returns:
             Complete caption text.
@@ -847,23 +1028,96 @@ Requirements:
 
 Return ONLY the caption text, nothing else."""
 
-        caption = await self.text_provider.generate(
-            prompt=prompt,
-            system=self._get_system_prompt(),
-            task="content_planning",
-            temperature=0.7,
-        )
+        # Try to generate a valid caption with retries
+        for attempt in range(max_retries):
+            caption = await self.text_provider.generate(
+                prompt=prompt,
+                system=self._get_system_prompt(),
+                task="content_planning",
+                temperature=0.7 + (attempt * 0.1),  # Increase temp on retries
+            )
+
+            caption = caption.strip()
+
+            # Validate caption quality
+            is_valid, error = self._validate_caption(caption, topic)
+            if is_valid:
+                break
+
+            _logger.warning(f"Caption validation failed (attempt {attempt + 1}): {error}")
+            _logger.debug(f"Invalid caption: {caption[:100]}...")
+
+            if attempt == max_retries - 1:
+                # Last attempt failed - use a safe default
+                _logger.error(f"All caption attempts failed, using default for topic: {topic}")
+                caption = f"Check out these {topic.lower()}! Save this for later."
 
         # Truncate caption if too long (for Threads 500 char limit)
-        caption = caption.strip()
-        if len(caption) > 280:
+        # Keep it under 450 chars to leave room for potential additions
+        if len(caption) > 450:
             # Cut at last sentence boundary
-            caption = caption[:280].rsplit('.', 1)[0] + '.'
+            caption = caption[:450].rsplit('.', 1)[0] + '.'
 
-        # Add hashtags (limited to ~200 chars for Threads)
-        hashtags_limited = hashtags[:10]  # Limit hashtags for shorter total
-        hashtags_str = " ".join(hashtags_limited)
+        # Return ONLY the caption text (without hashtags)
+        # Hashtags are stored separately in post.hashtags and combined in caption+hashtags.txt
+        return caption
 
-        full_caption = f"{caption}\n\n{hashtags_str}"
+    def _validate_caption(self, caption: str, topic: str) -> tuple[bool, str | None]:
+        """Validate caption quality without AI (fast checks).
 
-        return full_caption
+        Args:
+            caption: Generated caption text.
+            topic: Original topic for context.
+
+        Returns:
+            Tuple of (is_valid, error_message or None)
+        """
+        # Check minimum length
+        if len(caption) < 20:
+            return False, "Caption too short (less than 20 characters)"
+
+        # Check for incomplete sentences (signs of truncated/bad generation)
+        incomplete_patterns = [
+            r"^(You are|I am|The|A|An)\s+\w+\s*$",  # Incomplete start
+            r"\b(the|a|an|to|for|with|and|or|but)\s*$",  # Ends with article/preposition
+            r"^\s*\d+\.?\d*\s*$",  # Just a number
+        ]
+        for pattern in incomplete_patterns:
+            if re.search(pattern, caption, re.IGNORECASE):
+                return False, f"Caption appears incomplete (matched: {pattern})"
+
+        # Check for gibberish patterns
+        words = caption.split()
+        if len(words) > 3:
+            unique_ratio = len(set(words)) / len(words)
+            if unique_ratio < 0.4:  # Too many repeated words
+                return False, f"Too many repeated words (ratio: {unique_ratio:.2f})"
+
+        # Check for nonsensical phrases (common AI failure modes)
+        nonsense_phrases = [
+            "the other hand",
+            "need to solve",
+            "goal of the",
+            "you are a new",
+            "I don't know",
+            "I'm not sure",
+            "as an AI",
+            "I cannot",
+        ]
+        caption_lower = caption.lower()
+        for phrase in nonsense_phrases:
+            if phrase in caption_lower:
+                return False, f"Contains nonsense phrase: '{phrase}'"
+
+        # Check that caption somewhat relates to topic (at least one topic word)
+        topic_words = set(topic.lower().split())
+        topic_words -= {"the", "a", "an", "for", "to", "and", "or", "of", "in", "on", "with"}
+        caption_words = set(caption_lower.split())
+        if len(topic_words) > 0 and not topic_words & caption_words:
+            # No topic words in caption - might be off-topic
+            # Allow if caption has common social media words
+            social_words = {"save", "follow", "share", "check", "tips", "learn", "discover"}
+            if not social_words & caption_words:
+                return False, "Caption doesn't relate to topic"
+
+        return True, None

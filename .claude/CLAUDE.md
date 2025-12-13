@@ -1,5 +1,78 @@
 # Claude Code Instructions for Socials-Automator
 
+## Project Architecture
+
+### Pipeline Flow
+```
+cli.py -> orchestrator.py -> planner.py -> text.py (AI calls)
+                          -> slides/ (image composition)
+                          -> output.py (save files)
+```
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `cli.py` | Entry point, commands, logging setup |
+| `content/orchestrator.py` | Coordinates generation pipeline |
+| `content/planner.py` | 4-phase AI content generation |
+| `providers/text.py` | LiteLLM wrapper for all text AI |
+| `providers/image.py` | DALL-E, ComfyUI, fal.ai |
+| `services/extractor.py` | Instructor-based JSON extraction |
+| `tools/executor.py` | AI tool calling (web search) |
+| `cli_display.py` | CLI progress display |
+
+### Generation Phases
+1. **Phase 1: Planning** - Analyze topic, determine slide count
+2. **Phase 2: Structure** - Create hook + slide titles
+3. **Phase 3: Content** - Generate each slide (with validation)
+4. **Phase 4: CTA** - Create call-to-action
+
+### Logging
+- `logs/ai_calls.log` - **Full AI request/response I/O**
+- `logs/instagram_api.log` - Instagram API calls
+
+### Config
+- `config/providers.yaml` - AI provider settings (priority, models, API keys)
+- `profiles/<name>/metadata.json` - Profile config (niches, hashtags, prompts)
+
+### Output Files (per post)
+- `caption.txt` - Threads-ready caption (<500 chars)
+- `caption+hashtags.txt` - Full Instagram caption (used for posting)
+- `metadata.json` - Post metadata
+- `slide_01.jpg`, etc. - Slide images
+
+## CRITICAL: No Emojis & ASCII Only
+
+**NEVER use emojis in code or output!** Always use ASCII-compatible characters.
+
+The Windows console (cp1252 encoding) does not support Unicode box-drawing characters or emojis. Use these instead:
+
+| Instead of | Use |
+|------------|-----|
+| ✓ ✔ | `[OK]` |
+| ✗ ✘ | `[X]` |
+| ⋯ … | `...` |
+| ○ ● | `[ ]` `[*]` |
+| → ➔ | `->` |
+| ↓ ↑ | `v` `^` |
+| ╭╮╰╯│─ | `+` `|` `-` |
+| 🔍 📰 🎨 | `@` `#` `*` |
+
+## Tip: Context7 for Documentation
+
+When working with libraries, add `use context7` to get up-to-date docs:
+
+```
+How do I use Agno agents? use context7
+```
+
+Common libraries:
+- Agno: `use library /agno-ai/agno`
+- DuckDuckGo Search: `use library /deedy5/duckduckgo_search`
+- Rich (CLI): `use library /textualize/rich`
+- Pillow: `use library /python-pillow/pillow`
+- LiteLLM: `use library /berriai/litellm`
+
 ## CRITICAL: Git Commits
 
 **NEVER commit or push automatically!** Only commit when the user explicitly asks.

@@ -102,9 +102,8 @@ image_providers:
     model: "dall-e-3"
     api_key_env: "OPENAI_API_KEY"
     timeout: 60
-    cost_per_image: 0.08
+    cost_per_image: 0.04
     settings:
-      # size determined dynamically (1024x1024 for square)
       quality: "standard"
 
   # Nano Banana Pro 2 (requires fal.ai balance)
@@ -135,9 +134,31 @@ image_providers:
     timeout: 120
     cost_per_image: 0.03
 
+  # ComfyUI - Local Stable Diffusion (workflow-based)
+  # High quality settings for local generation (no API costs)
+  comfyui:
+    priority: 5
+    enabled: true
+    type: "comfyui"
+    model: "local"  # Uses whatever model is loaded in ComfyUI
+    base_url_env: "COMFYUI_BASE_URL"
+    timeout: 300  # 5 minutes for high quality generation
+    cost_per_image: 0.0
+    settings:
+      # High quality generation settings
+      steps: 35  # More steps = better quality (default was 20)
+      cfg: 7.5  # Classifier-free guidance scale
+      sampler: "dpmpp_2m_sde"  # High quality sampler
+      scheduler: "karras"  # Better noise scheduling
+      # Workflow settings (optional)
+      workflow_file: null
+      prompt_node_id: null
+      negative_prompt_node_id: null
+
 # Default image provider chain (fallback order)
 image_priority_chain:
-  - dalle  # Only working option currently
+  - dalle
+  - comfyui  # Local option if ComfyUI running
 
 # ============================================
 # TASK-SPECIFIC OVERRIDES

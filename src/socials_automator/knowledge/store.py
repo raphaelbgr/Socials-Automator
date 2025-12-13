@@ -75,14 +75,14 @@ class KnowledgeStore:
     def _load_json(self, path: Path, model: type[BaseModel]) -> BaseModel:
         """Load a JSON file into a Pydantic model."""
         if path.exists():
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             return model.model_validate(data)
         return model()
 
     def _save_json(self, path: Path, model: BaseModel) -> None:
         """Save a Pydantic model to JSON file."""
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(model.model_dump(mode="json"), f, indent=2, default=str)
 
     @property
@@ -406,12 +406,12 @@ class KnowledgeStore:
         # Load existing logs
         logs = []
         if self.prompts_log_path.exists():
-            with open(self.prompts_log_path) as f:
+            with open(self.prompts_log_path, encoding="utf-8") as f:
                 logs = json.load(f)
 
         logs.append(prompt_log.model_dump(mode="json"))
 
-        with open(self.prompts_log_path, "w") as f:
+        with open(self.prompts_log_path, "w", encoding="utf-8") as f:
             json.dump(logs, f, indent=2, default=str)
 
     def get_successful_prompts(self, prompt_type: str, limit: int = 5) -> list[PromptLogEntry]:
@@ -427,7 +427,7 @@ class KnowledgeStore:
         if not self.prompts_log_path.exists():
             return []
 
-        with open(self.prompts_log_path) as f:
+        with open(self.prompts_log_path, encoding="utf-8") as f:
             logs = json.load(f)
 
         entries = []

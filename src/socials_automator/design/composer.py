@@ -402,9 +402,9 @@ class SlideComposer:
         if logo_path and template.show_logo:
             img = self._add_logo(img, logo_path, template.logo_position, template.logo_size, template.logo_padding)
 
-        # Convert to bytes
+        # Convert to bytes (high quality JPEG)
         output = BytesIO()
-        img.save(output, format="JPEG", quality=95, optimize=True)
+        img.save(output, format="JPEG", quality=98, subsampling=0, optimize=True)
         return output.getvalue()
 
     async def create_content_slide(
@@ -470,9 +470,9 @@ class SlideComposer:
 
         # Calculate text area
         text_area_width = template.width - (template.padding_x * 2)
+        max_content_height = template.height - (template.padding_y * 2) - 200  # Reserve space for number/logo
 
         # Dynamic font sizing based on content length for mobile readability
-        # Short content gets bigger fonts for easier reading
         heading_len = len(heading)
         body_len = len(body) if body else 0
         total_len = heading_len + body_len
@@ -489,10 +489,14 @@ class SlideComposer:
             # Medium - use medium-large fonts
             heading_size = int(template.heading_font_size * 1.15)
             body_size = int(template.body_font_size * 1.1)
-        else:
+        elif total_len < 300:
             # Long content - use default fonts
             heading_size = template.heading_font_size
             body_size = template.body_font_size
+        else:
+            # Very long content - use smaller fonts
+            heading_size = int(template.heading_font_size * 0.85)
+            body_size = int(template.body_font_size * 0.85)
 
         # Get fonts with dynamic sizes
         heading_font = self._get_font(template.typography.heading_font, heading_size)
@@ -552,9 +556,9 @@ class SlideComposer:
         if logo_path and template.show_logo:
             img = self._add_logo(img, logo_path, template.logo_position, template.logo_size, template.logo_padding)
 
-        # Convert to bytes
+        # Convert to bytes (high quality JPEG)
         output = BytesIO()
-        img.save(output, format="JPEG", quality=95, optimize=True)
+        img.save(output, format="JPEG", quality=98, subsampling=0, optimize=True)
         return output.getvalue()
 
     async def create_cta_slide(
@@ -663,9 +667,9 @@ class SlideComposer:
         if logo_path and template.show_logo:
             img = self._add_logo(img, logo_path, template.logo_position, template.logo_size, template.logo_padding)
 
-        # Convert to bytes
+        # Convert to bytes (high quality JPEG)
         output = BytesIO()
-        img.save(output, format="JPEG", quality=95, optimize=True)
+        img.save(output, format="JPEG", quality=98, subsampling=0, optimize=True)
         return output.getvalue()
 
     async def save_slide(self, slide_bytes: bytes, output_path: Path) -> Path:

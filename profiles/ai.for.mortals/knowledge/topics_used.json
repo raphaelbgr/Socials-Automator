@@ -1,0 +1,629 @@
+{
+  "topics": [
+    {
+      "topic": "3 ChatGPT email tricks",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-001",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": []
+    },
+    {
+      "topic": "3 ChatGPT email tricks",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-002",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": []
+    },
+    {
+      "topic": "5 AI tools for productivity",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-003",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI tools",
+        "productivity",
+        "work smarter",
+        "time saving",
+        "AI assistants"
+      ]
+    },
+    {
+      "topic": "How to use ChatGPT for emails",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-004",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "ChatGPT",
+        "email productivity",
+        "AI tools",
+        "work efficiency",
+        "email writing",
+        "time saving",
+        "professional communication"
+      ]
+    },
+    {
+      "topic": "5 AI prompt templates for automating weekly reports",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-005",
+      "content_pillar": "prompt_templates",
+      "can_revisit_after_days": 30,
+      "keywords": []
+    },
+    {
+      "topic": "3 AI tools that automate your social media scheduling",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-006",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": []
+    },
+    {
+      "topic": "7 AI Prompt Templates for Creating Social Media Content in Minutes",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-007",
+      "content_pillar": "prompt_templates",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI prompts",
+        "social media content",
+        "content creation",
+        "time-saving",
+        "marketing templates",
+        "AI tools"
+      ]
+    },
+    {
+      "topic": "7 ChatGPT Prompts for Automating Your Morning Routine",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-008",
+      "content_pillar": "prompt_templates",
+      "can_revisit_after_days": 30,
+      "keywords": []
+    },
+    {
+      "topic": "5 AI Tools That Automate Your Client Onboarding Process",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-001",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": []
+    },
+    {
+      "topic": "3 ways AI can help with data analysis",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-002",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI for data analysis",
+        "data analysis tools",
+        "AI analytics",
+        "data visualization",
+        "predictive analytics",
+        "AI for beginners"
+      ]
+    },
+    {
+      "topic": "5 AI Tools That Automate Your Daily Administrative Tasks",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-003",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": []
+    },
+    {
+      "topic": "5 AI Writing Prompts That Will Transform Your Client Proposals",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-004",
+      "content_pillar": "prompt_templates",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI writing prompts",
+        "client proposals",
+        "business writing",
+        "proposal templates",
+        "AI for business"
+      ]
+    },
+    {
+      "topic": "5 AI Tools That Automate Your Meeting Scheduling and Follow-ups",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-005",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI tools",
+        "meeting automation",
+        "productivity",
+        "scheduling",
+        "time management"
+      ]
+    },
+    {
+      "topic": "3 AI tools for email management",
+      "date_used": "2025-12-10",
+      "post_id": "20251210-001",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI tools",
+        "email management",
+        "productivity",
+        "SaneBox",
+        "Grammarly",
+        "Mailchimp"
+      ]
+    },
+    {
+      "topic": "7 AI Myths Debunked: What's Really Possible With AI Today",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-001",
+      "content_pillar": "ai_news_simplified",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI myths",
+        "AI reality",
+        "artificial intelligence",
+        "AI for beginners",
+        "AI misconceptions",
+        "AI demystified"
+      ]
+    },
+    {
+      "topic": "5 ChatGPT Prompts for Creating Compelling Product Descriptions That Sell",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-002",
+      "content_pillar": "prompt_templates",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "ChatGPT prompts",
+        "product descriptions",
+        "copywriting",
+        "e-commerce",
+        "AI marketing"
+      ]
+    },
+    {
+      "topic": "3 AI Tips for Beginners",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-003",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI",
+        "artificial intelligence",
+        "beginner tips"
+      ]
+    },
+    {
+      "topic": "3 Quick AI Hacks",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-004",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI",
+        "productivity",
+        "time-saving",
+        "technology",
+        "automation"
+      ]
+    },
+    {
+      "topic": "2 AI Tools Everyone Needs",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-005",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI tools",
+        "productivity",
+        "technology",
+        "artificial intelligence",
+        "ChatGPT",
+        "Midjourney"
+      ]
+    },
+    {
+      "topic": "4 AI Shortcuts for Writers",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-006",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI writing",
+        "productivity hacks",
+        "content creation",
+        "writing tools",
+        "ChatGPT"
+      ]
+    },
+    {
+      "topic": "5 AI Tools That Transform Your Research Process in Minutes",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-007",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI research tools",
+        "productivity hacks",
+        "time saving apps",
+        "academic research",
+        "work efficiency"
+      ]
+    },
+    {
+      "topic": "5 AI Prompts for Emails",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-008",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI prompts",
+        "email marketing",
+        "copywriting",
+        "personalization",
+        "subject lines"
+      ]
+    },
+    {
+      "topic": "3 AI Apps for Students",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-009",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI tools",
+        "student productivity",
+        "educational technology",
+        "study apps",
+        "AI for learning"
+      ]
+    },
+    {
+      "topic": "7 AI Prompt Templates for Streamlining Your Project Management Workflow",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-010",
+      "content_pillar": "prompt_templates",
+      "can_revisit_after_days": 30,
+      "keywords": []
+    },
+    {
+      "topic": "5 AI prompts for writing better emails",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-011",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI prompts",
+        "email writing",
+        "productivity",
+        "communication",
+        "ChatGPT prompts",
+        "professional writing"
+      ]
+    },
+    {
+      "topic": "7 AI Prompt Templates for Overcoming Writer's Block",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-008",
+      "content_pillar": "prompt_templates",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "writer's block",
+        "AI prompts",
+        "creativity",
+        "writing tips",
+        "overcoming obstacles",
+        "productivity",
+        "AI for writers"
+      ]
+    },
+    {
+      "topic": "3 ChatGPT tricks for productivity",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-001",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "ChatGPT",
+        "productivity",
+        "AI tools",
+        "time management",
+        "work efficiency",
+        "chatgpt tricks",
+        "AI for mortals"
+      ]
+    },
+    {
+      "topic": "5 ChatGPT prompts to automate your weekly planning",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-001",
+      "content_pillar": "prompt_templates",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "ChatGPT prompts",
+        "weekly planning",
+        "productivity",
+        "time management",
+        "automation"
+      ]
+    },
+    {
+      "topic": "5 AI Time Management Prompts to Reclaim Your Week",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-001",
+      "content_pillar": "prompt_templates",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI productivity",
+        "time management",
+        "work efficiency",
+        "prompt engineering",
+        "work-life balance"
+      ]
+    },
+    {
+      "topic": "5 AI Tools That Automate Your Financial Reporting in Minutes",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-001",
+      "content_pillar": "tool_comparisons",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "financial reporting",
+        "AI tools",
+        "automation",
+        "accounting",
+        "financial analysis"
+      ]
+    },
+    {
+      "topic": "7 AI Prompt Templates for Efficient Project Delegation",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-001",
+      "content_pillar": "prompt_templates",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI delegation",
+        "project management",
+        "team productivity",
+        "task automation",
+        "efficient workflows"
+      ]
+    },
+    {
+      "topic": "5 AI Workflow Automations That Save Entrepreneurs 10+ Hours Weekly",
+      "date_used": "2025-12-11",
+      "post_id": "20251211-001",
+      "content_pillar": "productivity_hacks",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "AI productivity",
+        "time management",
+        "entrepreneur tools",
+        "workflow automation",
+        "AI efficiency"
+      ]
+    },
+    {
+      "topic": "5 ChatGPT Prompts for Automating Your Client Follow-up Process",
+      "date_used": "2025-12-12",
+      "post_id": "20251212-001",
+      "content_pillar": "prompt_templates",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "chatgpt",
+        "prompts",
+        "automating",
+        "client",
+        "follow-up",
+        "process",
+        "that",
+        "save",
+        "hours"
+      ]
+    },
+    {
+      "topic": "5 AI Tools That Automate Your Data Analysis Without Coding Skills",
+      "date_used": "2025-12-12",
+      "post_id": "20251212-001",
+      "content_pillar": "tool_comparisons",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "tools",
+        "that",
+        "automate",
+        "data",
+        "analysis",
+        "without",
+        "coding",
+        "skills",
+        "analyze",
+        "like"
+      ]
+    },
+    {
+      "topic": "5 AI Tools That Automate Your Research Process in Minutes",
+      "date_used": "2025-12-12",
+      "post_id": "20251212-001",
+      "content_pillar": "tool_comparisons",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "tools",
+        "that",
+        "automate",
+        "research",
+        "process",
+        "minutes",
+        "done",
+        "hours"
+      ]
+    },
+    {
+      "topic": "5 AI tools for email management",
+      "date_used": "2025-12-12",
+      "post_id": "20251212-001",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "tools",
+        "email",
+        "management",
+        "overload",
+        "solution"
+      ]
+    },
+    {
+      "topic": "3 AI tools for productivity",
+      "date_used": "2025-12-12",
+      "post_id": "20251212-001",
+      "content_pillar": "tool_tutorials",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "tools",
+        "productivity",
+        "secret",
+        "boosters"
+      ]
+    },
+    {
+      "topic": "5 AI-Powered Tools to Automate Your LinkedIn Growth in 2024",
+      "date_used": "2025-12-12",
+      "post_id": "20251212-001",
+      "content_pillar": "tool_comparisons",
+      "can_revisit_after_days": 30,
+      "keywords": [
+        "ai-powered",
+        "tools",
+        "automate",
+        "linkedin",
+        "growth",
+        "2024",
+        "transform"
+      ]
+    }
+  ],
+  "keywords_frequency": {
+    "ai tools": 9,
+    "productivity": 10,
+    "work smarter": 1,
+    "time saving": 2,
+    "ai assistants": 1,
+    "chatgpt": 5,
+    "email productivity": 1,
+    "work efficiency": 4,
+    "email writing": 2,
+    "professional communication": 1,
+    "ai prompts": 4,
+    "social media content": 1,
+    "content creation": 2,
+    "time-saving": 2,
+    "marketing templates": 1,
+    "ai for data analysis": 1,
+    "data analysis tools": 1,
+    "ai analytics": 1,
+    "data visualization": 1,
+    "predictive analytics": 1,
+    "ai for beginners": 2,
+    "ai writing prompts": 1,
+    "client proposals": 1,
+    "business writing": 1,
+    "proposal templates": 1,
+    "ai for business": 1,
+    "meeting automation": 1,
+    "scheduling": 1,
+    "time management": 5,
+    "email management": 1,
+    "sanebox": 1,
+    "grammarly": 1,
+    "mailchimp": 1,
+    "ai myths": 1,
+    "ai reality": 1,
+    "artificial intelligence": 3,
+    "ai misconceptions": 1,
+    "ai demystified": 1,
+    "chatgpt prompts": 3,
+    "product descriptions": 1,
+    "copywriting": 2,
+    "e-commerce": 1,
+    "ai marketing": 1,
+    "ai": 2,
+    "beginner tips": 1,
+    "technology": 2,
+    "automation": 3,
+    "midjourney": 1,
+    "ai writing": 1,
+    "productivity hacks": 2,
+    "writing tools": 1,
+    "ai research tools": 1,
+    "time saving apps": 1,
+    "academic research": 1,
+    "email marketing": 1,
+    "personalization": 1,
+    "subject lines": 1,
+    "student productivity": 1,
+    "educational technology": 1,
+    "study apps": 1,
+    "ai for learning": 1,
+    "communication": 1,
+    "professional writing": 1,
+    "writer's block": 1,
+    "creativity": 1,
+    "writing tips": 1,
+    "overcoming obstacles": 1,
+    "ai for writers": 1,
+    "chatgpt tricks": 1,
+    "ai for mortals": 1,
+    "weekly planning": 1,
+    "ai productivity": 2,
+    "prompt engineering": 1,
+    "work-life balance": 1,
+    "financial reporting": 1,
+    "accounting": 1,
+    "financial analysis": 1,
+    "ai delegation": 1,
+    "project management": 1,
+    "team productivity": 1,
+    "task automation": 1,
+    "efficient workflows": 1,
+    "entrepreneur tools": 1,
+    "workflow automation": 1,
+    "ai efficiency": 1,
+    "prompts": 1,
+    "automating": 1,
+    "client": 1,
+    "follow-up": 1,
+    "process": 2,
+    "that": 3,
+    "save": 1,
+    "hours": 2,
+    "tools": 5,
+    "automate": 3,
+    "data": 1,
+    "analysis": 1,
+    "without": 1,
+    "coding": 1,
+    "skills": 1,
+    "analyze": 1,
+    "like": 1,
+    "research": 1,
+    "minutes": 1,
+    "done": 1,
+    "email": 1,
+    "management": 1,
+    "overload": 1,
+    "solution": 1,
+    "secret": 1,
+    "boosters": 1,
+    "ai-powered": 1,
+    "linkedin": 1,
+    "growth": 1,
+    "2024": 1,
+    "transform": 1
+  }
+}

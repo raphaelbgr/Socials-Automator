@@ -16,7 +16,7 @@ from rich.table import Table
 from rich.live import Live
 from rich import box
 
-from .content import ContentGenerator
+from .content import ContentOrchestrator
 from .content.models import GenerationProgress
 from .cli_display import ContentGenerationDisplay, InstagramPostingDisplay
 
@@ -28,16 +28,28 @@ root_logger = logging.getLogger()
 root_logger.handlers = []
 root_logger.setLevel(logging.CRITICAL)  # Suppress root logger output
 
-# Suppress loggers that might print to console (except ai_calls which has file handler)
+# Suppress loggers that might print to console
 for logger_name in ["httpx", "httpcore", "urllib3", "asyncio"]:
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.WARNING)
     logger.propagate = False
 
-# Ensure ai_calls and instagram_api loggers don't propagate to console
-for logger_name in ["ai_calls", "instagram_api"]:
-    logger = logging.getLogger(logger_name)
-    logger.propagate = False  # Don't propagate to root (keep file handlers)
+# Setup ai_calls logger with FileHandler for full AI request/response logging
+_log_dir = Path(__file__).parent.parent.parent / "logs"
+_log_dir.mkdir(parents=True, exist_ok=True)
+
+ai_calls_logger = logging.getLogger("ai_calls")
+ai_calls_logger.setLevel(logging.DEBUG)
+ai_calls_logger.propagate = False
+ai_calls_logger.handlers = []  # Clear any existing handlers
+_ai_file_handler = logging.FileHandler(_log_dir / "ai_calls.log", encoding="utf-8")
+_ai_file_handler.setLevel(logging.DEBUG)
+_ai_file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
+ai_calls_logger.addHandler(_ai_file_handler)
+
+# Ensure instagram_api logger doesn't propagate to console
+instagram_logger = logging.getLogger("instagram_api")
+instagram_logger.propagate = False
 
 # Create Typer app
 app = typer.Typer(
@@ -84,7 +96,7 @@ def load_profile_config(profile_path: Path) -> dict:
     if not metadata_path.exists():
         raise typer.BadParameter(f"Profile not found: {profile_path.name}")
 
-    with open(metadata_path) as f:
+    with open(metadata_path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -266,12 +278,15 @@ async def _generate_posts(
     display = ContentGenerationDisplay()
     last_progress: GenerationProgress | None = None
 
-    async def progress_callback(progress: GenerationProgress):
+    async def progress_callback(progress: GenerationProgress | dict):
         nonlocal last_progress
-        last_progress = progress
+        # Only update last_progress for GenerationProgress objects
+        # (dict events are tool call events that shouldn't replace progress)
+        if not isinstance(progress, dict):
+            last_progress = progress
         display.add_event(progress)
 
-    generator = ContentGenerator(
+    generator = ContentOrchestrator(
         profile_path=profile_path,
         profile_config=config,
         progress_callback=progress_callback,
@@ -287,125 +302,39 @@ async def _generate_posts(
         pillar = pillars[0]["id"] if pillars else "general"
 
     if verbose:
-        # Verbose mode with live updating panel
+        # Simple line-by-line logging (no Live display)
         post = None
         output_path = None
         posts = []  # For multi-post generation
 
-        with Live(console=console, refresh_per_second=4) as live:
-            if topic:
-                # Generate single post with specified topic
-                console.print(f"\n[bold cyan]Starting generation:[/] {topic}\n")
+        if topic:
+            # Generate single post with specified topic
+            console.print(f"\n[bold cyan]Starting generation:[/] {topic}\n")
 
-                async def update_display():
-                    while True:
-                        if last_progress:
-                            live.update(display.render(last_progress))
-                        await asyncio.sleep(0.25)
+            try:
+                post = await generator.generate_post(
+                    topic=topic,
+                    content_pillar=pillar,
+                    target_slides=slides,
+                    min_slides=min_slides,
+                    max_slides=max_slides,
+                )
+                output_path = await generator.save_post(post)
+            except RuntimeError as e:
+                console.print(f"\n[red]Generation failed:[/] {e}")
+                console.print("[dim]Check logs/ai_calls.log for details[/dim]")
+                return
 
-                # Run generation with display updates
-                display_task = asyncio.create_task(update_display())
+        else:
+            # No topic - use research to find topics
+            console.print(f"\n[bold cyan]Researching trending topics and generating {count} post(s)...[/]\n")
 
-                try:
-                    post = await generator.generate_post(
-                        topic=topic,
-                        content_pillar=pillar,
-                        target_slides=slides,
-                        min_slides=min_slides,
-                        max_slides=max_slides,
-                    )
-                    output_path = await generator.save_post(post)
-                except RuntimeError as e:
-                    display_task.cancel()
-                    try:
-                        await display_task
-                    except asyncio.CancelledError:
-                        pass
-                    # Show a clear error panel
-                    error_lines = [
-                        "[bold red]Content Generation Failed[/bold red]",
-                        "",
-                        f"[red]{e}[/red]",
-                        "",
-                        "[bold yellow]What happened:[/bold yellow]",
-                        "  The AI repeatedly failed to generate content that matches the topic.",
-                        "  For example, if the topic asks for '5 tips', the AI kept generating",
-                        "  a different number of content slides.",
-                        "",
-                        "[bold cyan]Suggestions:[/bold cyan]",
-                        "  1. Try again - AI responses can vary",
-                        "  2. Use a simpler topic (e.g., '3 tips' instead of '7 tips')",
-                        "  3. Check logs/ai_calls.log for detailed error information",
-                        "  4. Consider switching text provider in config/providers.yaml",
-                    ]
-                    console.print(Panel(
-                        "\n".join(error_lines),
-                        title="[bold red]Generation Error[/bold red]",
-                        border_style="red",
-                        box=box.ROUNDED,
-                    ))
-                    return
-                finally:
-                    display_task.cancel()
-                    try:
-                        await display_task
-                    except asyncio.CancelledError:
-                        pass
-
-                # Final update
-                if last_progress:
-                    live.update(display.render(last_progress))
-
-            else:
-                # No topic - use research to find topics
-                console.print(f"\n[bold cyan]Researching trending topics and generating {count} post(s)...[/]\n")
-
-                async def update_display():
-                    while True:
-                        if last_progress:
-                            live.update(display.render(last_progress))
-                        await asyncio.sleep(0.25)
-
-                display_task = asyncio.create_task(update_display())
-
-                try:
-                    posts = await generator.generate_daily_posts(count=count)
-                except RuntimeError as e:
-                    display_task.cancel()
-                    try:
-                        await display_task
-                    except asyncio.CancelledError:
-                        pass
-                    # Show a clear error panel
-                    error_lines = [
-                        "[bold red]Content Generation Failed[/bold red]",
-                        "",
-                        f"[red]{e}[/red]",
-                        "",
-                        "[bold yellow]What happened:[/bold yellow]",
-                        "  The AI repeatedly failed to generate content that matches the topic.",
-                        "  For example, if the topic asks for '5 tips', the AI kept generating",
-                        "  a different number of content slides.",
-                        "",
-                        "[bold cyan]Suggestions:[/bold cyan]",
-                        "  1. Try again - AI responses can vary",
-                        "  2. Use a simpler topic with --topic flag",
-                        "  3. Check logs/ai_calls.log for detailed error information",
-                        "  4. Consider switching text provider in config/providers.yaml",
-                    ]
-                    console.print(Panel(
-                        "\n".join(error_lines),
-                        title="[bold red]Generation Error[/bold red]",
-                        border_style="red",
-                        box=box.ROUNDED,
-                    ))
-                    return
-                finally:
-                    display_task.cancel()
-                    try:
-                        await display_task
-                    except asyncio.CancelledError:
-                        pass
+            try:
+                posts = await generator.generate_daily_posts(count=count)
+            except RuntimeError as e:
+                console.print(f"\n[red]Generation failed:[/red] {e}")
+                console.print("[dim]Check logs/ai_calls.log for details[/dim]")
+                return
 
         # Summary output (outside Live context for clean display)
         if posts:
@@ -483,16 +412,20 @@ async def _generate_posts(
         generated_path = post_path_to_use
         pending_path = generated_path.parent.parent / "pending-post" / generated_path.name
         pending_path.parent.mkdir(parents=True, exist_ok=True)
+        # Remove existing destination to avoid nested folders
+        if pending_path.exists():
+            shutil.rmtree(str(pending_path))
         shutil.move(str(generated_path), str(pending_path))
         console.print(f"\n[dim]Moved to pending-post: {pending_path.name}[/dim]")
 
-        # Now post to Instagram
+        # Now post to Instagram (post ALL pending posts)
         console.print("\n[bold cyan]Publishing to Instagram...[/bold cyan]")
         await _post_to_instagram(
             profile_path=profile_path,
             post_id=None,
             config=ig_config,
             dry_run=False,
+            post_all=True,  # Post all pending posts, not just the newly generated one
         )
 
 
@@ -515,28 +448,31 @@ def _print_instagram_ready(post, output_path: Path):
     console.print(f"[bold]Output:[/bold] {output_path}")
     console.print(f"[bold cyan]{'=' * 60}[/bold cyan]")
 
-    # Build full caption with hashtags
+    # Build captions
     caption_text = post.caption if post.caption else post.hook_text
     hashtags_str = " ".join(f"#{tag.lstrip('#')}" for tag in post.hashtags) if post.hashtags else ""
-    full_text = f"{caption_text}\n\n{hashtags_str}" if hashtags_str else caption_text
-    char_count = len(full_text)
+    full_caption = f"{caption_text}\n\n{hashtags_str}" if hashtags_str else caption_text
 
-    # Threads compatibility indicator
-    threads_ok = char_count <= 500
-    threads_status = "[green]OK for Threads[/green]" if threads_ok else "[red]Too long for Threads (>500)[/red]"
+    # Show Threads-ready caption (caption.txt)
+    threads_char_count = len(caption_text)
+    threads_ok = threads_char_count <= 500
+    threads_status = "[green]OK[/green]" if threads_ok else "[yellow]>500[/yellow]"
 
-    # Instagram-ready content
-    console.print(f"\n[bold yellow]Instagram + Threads Ready ({char_count} chars - {threads_status}):[/bold yellow]")
-    console.print(f"[bold cyan]{'-' * 60}[/bold cyan]\n")
-
-    # Caption (with safe encoding for console)
+    console.print(f"\n[bold magenta]Threads Caption ({threads_char_count} chars - {threads_status}):[/bold magenta]")
+    console.print(f"[dim]File: caption.txt[/dim]")
+    console.print(f"[bold cyan]{'-' * 60}[/bold cyan]")
     console.print(safe_print(caption_text))
+    console.print(f"[bold cyan]{'-' * 60}[/bold cyan]")
 
-    # Hashtags
+    # Show full Instagram caption (caption+hashtags.txt)
+    full_char_count = len(full_caption)
+    console.print(f"\n[bold yellow]Instagram Caption ({full_char_count} chars):[/bold yellow]")
+    console.print(f"[dim]File: caption+hashtags.txt (used for posting)[/dim]")
+    console.print(f"[bold cyan]{'-' * 60}[/bold cyan]")
+    console.print(safe_print(caption_text))
     if hashtags_str:
         console.print(f"\n{safe_print(hashtags_str)}")
-
-    console.print(f"\n[bold cyan]{'-' * 60}[/bold cyan]")
+    console.print(f"[bold cyan]{'-' * 60}[/bold cyan]")
 
 
 def _print_generation_summary(post, output_path: Path, stats: dict):
@@ -592,7 +528,7 @@ def new_profile(
     if niche:
         niches_path = Path.cwd() / "docs" / "niches.json"
         if niches_path.exists():
-            with open(niches_path) as f:
+            with open(niches_path, encoding="utf-8") as f:
                 niches_data = json.load(f)
             for n in niches_data.get("niches", []):
                 if n["id"] == niche:
@@ -637,7 +573,7 @@ def new_profile(
         },
     }
 
-    with open(profile_path / "metadata.json", "w") as f:
+    with open(profile_path / "metadata.json", "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
 
     console.print(f"[green]Created profile:[/green] {profile_path}")
@@ -655,7 +591,7 @@ def list_niches():
         console.print("[yellow]niches.json not found in docs/[/yellow]")
         return
 
-    with open(niches_path) as f:
+    with open(niches_path, encoding="utf-8") as f:
         data = json.load(f)
 
     table = Table(title="Available Niches")
@@ -779,7 +715,7 @@ def schedule(
     console.print(f"\n[bold]Found {len(generated_posts)} generated post(s):[/bold]")
     for i, post_path in enumerate(generated_posts, 1):
         # Load metadata for topic
-        with open(post_path / "metadata.json") as f:
+        with open(post_path / "metadata.json", encoding="utf-8") as f:
             meta = json.load(f)
         topic = meta.get("post", {}).get("topic", post_path.name)
         console.print(f"  {i}. [cyan]{post_path.name}[/cyan]")
@@ -897,7 +833,7 @@ def queue(
     for i, post in enumerate(all_posts, 1):
         # Load metadata for topic
         try:
-            with open(post["path"] / "metadata.json") as f:
+            with open(post["path"] / "metadata.json", encoding="utf-8") as f:
                 meta = json.load(f)
             topic = meta.get("post", {}).get("topic", "Unknown")[:38]
             post_date = meta.get("post", {}).get("date", f"{post['year']}-{post['month']}")
@@ -1143,7 +1079,7 @@ async def _post_to_instagram(
         console.print(f"\n[bold cyan]Publishing Queue ({len(pending_posts)} posts):[/bold cyan]")
         for i, p in enumerate(pending_posts, 1):
             try:
-                with open(p / "metadata.json") as f:
+                with open(p / "metadata.json", encoding="utf-8") as f:
                     meta = json.load(f)
                 topic = meta.get("post", {}).get("topic", "Unknown")[:40]
             except Exception:
@@ -1203,7 +1139,7 @@ async def _post_to_instagram(
             failed_count += 1
             continue
 
-        with open(metadata_path) as f:
+        with open(metadata_path, encoding="utf-8") as f:
             post_metadata = json.load(f)
 
         # Get slide images
@@ -1213,16 +1149,24 @@ async def _post_to_instagram(
             failed_count += 1
             continue
 
-        # Load caption (use UTF-8 for emoji support)
+        # Load full caption with hashtags for Instagram posting
+        # Prefer caption+hashtags.txt (full version), fallback to caption.txt + hashtags.txt
+        full_caption_path = post_path / "caption+hashtags.txt"
         caption_path = post_path / "caption.txt"
-        caption = caption_path.read_text(encoding="utf-8") if caption_path.exists() else ""
-
-        # Load hashtags
         hashtags_path = post_path / "hashtags.txt"
-        if hashtags_path.exists():
-            hashtags = hashtags_path.read_text(encoding="utf-8").strip()
-            if hashtags and not caption.endswith(hashtags):
-                caption = f"{caption}\n\n{hashtags}"
+
+        if full_caption_path.exists():
+            # Use the full caption file directly (caption + hashtags combined)
+            caption = full_caption_path.read_text(encoding="utf-8")
+        elif caption_path.exists():
+            # Fallback: combine caption.txt + hashtags.txt
+            caption = caption_path.read_text(encoding="utf-8")
+            if hashtags_path.exists():
+                hashtags = hashtags_path.read_text(encoding="utf-8").strip()
+                if hashtags and not caption.endswith(hashtags):
+                    caption = f"{caption}\n\n{hashtags}"
+        else:
+            caption = ""
 
         # Extract post info from metadata
         post_info = post_metadata.get("post", {})
@@ -1288,50 +1232,25 @@ async def _post_to_instagram(
 
         result = None
         try:
-            # Run with live progress display
-            with Live(console=console, refresh_per_second=4) as live:
-                async def update_display():
-                    while True:
-                        live.update(display.render())
-                        await asyncio.sleep(0.25)
+            # Simple print-based progress (no Live display)
+            print(f"\n  [Upload] Uploading {len(slide_paths)} images to Cloudinary...")
 
-                display_task = asyncio.create_task(update_display())
+            folder = f"socials-automator/{profile_path.name}/{post_id_display}"
+            image_urls = await uploader.upload_batch(slide_paths, folder=folder)
 
-                try:
-                    # Step 1: Upload images to Cloudinary
-                    display.update(InstagramProgress(
-                        current_step="Uploading images to Cloudinary...",
-                        total_images=len(slide_paths),
-                    ))
+            print(f"  [OK] {len(image_urls)} images uploaded")
+            print(f"  [Container] Creating {len(image_urls)} Instagram containers...")
 
-                    folder = f"socials-automator/{profile_path.name}/{post_id_display}"
-                    image_urls = await uploader.upload_batch(slide_paths, folder=folder)
+            # Publish to Instagram
+            result = await client.publish_carousel(
+                image_urls=image_urls,
+                caption=caption,
+            )
 
-                    # Update progress
-                    display.update(InstagramProgress(
-                        current_step="Images uploaded, creating Instagram containers...",
-                        images_uploaded=len(image_urls),
-                        total_images=len(slide_paths),
-                        image_urls=image_urls,
-                        progress_percent=30.0,
-                    ))
-
-                    # Step 2: Publish to Instagram
-                    result = await client.publish_carousel(
-                        image_urls=image_urls,
-                        caption=caption,
-                    )
-
-                    # Step 3: Cleanup Cloudinary uploads
-                    if result.success:
-                        await uploader.cleanup_async()
-
-                finally:
-                    display_task.cancel()
-                    try:
-                        await display_task
-                    except asyncio.CancelledError:
-                        pass
+            # Cleanup Cloudinary uploads
+            if result.success:
+                print(f"  [Cleanup] Removing temporary Cloudinary images...")
+                await uploader.cleanup_async()
 
         except Exception as e:
             console.print(f"[red]Error publishing: {e}[/red]")
@@ -1352,7 +1271,7 @@ async def _post_to_instagram(
 
             # Update post metadata with Instagram info
             post_metadata["instagram"] = result.to_dict()
-            with open(metadata_path, "w") as f:
+            with open(metadata_path, "w", encoding="utf-8") as f:
                 json.dump(post_metadata, f, indent=2)
 
             # Move from pending-post to posted folder
@@ -1362,6 +1281,9 @@ async def _post_to_instagram(
             new_post_path = posted_dir / post_path.name
 
             try:
+                # If destination already exists, remove it first to avoid nested folders
+                if new_post_path.exists():
+                    shutil.rmtree(str(new_post_path))
                 shutil.move(str(post_path), str(new_post_path))
                 console.print(f"\n[green]Post moved to:[/green] {new_post_path}")
             except Exception as e:
