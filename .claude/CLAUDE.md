@@ -91,7 +91,7 @@ python -m socials_automator.cli post ai.for.mortals
 
 Never run the post command without `--dry-run` unless the user explicitly asks to publish to Instagram.
 
-### WARNING: Meta API Rate Limit Bug
+### WARNING: Meta API Rate Limit Bug (Ghost Publish)
 
 **Rate limit errors do NOT mean the post wasn't published!**
 
@@ -101,7 +101,71 @@ Meta's API can:
 3. Actually publish the post
 4. THEN return a rate limit error
 
-This is a known Meta API issue - the publish happens but the response fails. Always check Instagram manually after a "failed" publish before retrying.
+This is a known Meta API issue - the publish happens but the response fails.
+
+**Error Codes:**
+- `4` = Application rate limit (per-app daily limit)
+- `9` = Application-level rate limit (wait 5+ minutes)
+- `17` = User-level rate limit (per-account limit)
+- `2207032` = Media upload failed (retryable)
+
+**Error Subcodes (more specific):**
+- `2207069` = **DAILY POSTING LIMIT** - Content Publishing API limit (~25 posts/day)
+  - NOT retryable - must wait until midnight UTC
+  - Each carousel counts as multiple actions (1 per image + carousel + publish)
+  - Failed retries also count towards the limit
+  - The Dashboard rate limits may show 0% used - this is a DIFFERENT limit!
+
+**Ghost Publish Detection:**
+The code automatically checks Instagram for recent posts when a rate limit error occurs:
+- Fetches last 5 posts from Instagram
+- Compares post timestamps within 2-minute window of upload
+- If found, marks as success (ghost publish detected)
+- If not found AND publish was attempted, does NOT retry (prevents duplicates)
+
+**CRITICAL - Duplicate Prevention:**
+Never retry after `publish_attempted=True` flag is set. Meta may have published even if error returned.
+
+### Cloudinary Resume State
+
+When posting is interrupted mid-upload, the state is saved in `metadata.json`:
+
+```json
+"_upload_state": {
+  "cloudinary_urls": ["https://res.cloudinary.com/..."],
+  "uploaded_at": "2025-12-15T10:30:00"
+}
+```
+
+On resume, the script reuses these URLs instead of re-uploading. After successful post, this state is cleaned up.
+
+### Loop Mode Behavior
+
+The `--loop-each` flag makes the script run continuously. It should NEVER stop on errors:
+- Uses exponential backoff: `loop_seconds * 2^consecutive_errors` (max 1 hour)
+- Catches ALL exceptions including typer.Exit
+- Resets backoff counter on successful iteration
+- Rate limit errors (code 9) wait 5 minutes before retry
+
+### Content Generation Rules
+
+**Slide Text Sanitization:**
+All slide text (hook, subtext, titles, headings, body) goes through `_sanitize_slide_text()` which removes:
+- Hashtags (#word)
+- Mentions (@word)
+- Emojis (Unicode characters)
+
+Hashtags belong in captions, NOT on image slides.
+
+**Image Prompts:**
+Image prompts should describe environmental/lifestyle scenes, NOT tech interfaces:
+- Good: "Person working in a cozy coffee shop with warm lighting"
+- Bad: "Screenshot of app interface with buttons"
+
+See Phase 2 prompt in `planner.py` for IMAGE STYLE REQUIREMENTS.
+
+**Hook Slide Layout:**
+Instagram displays the first slide in a 4:3 container (cropped from 1:1). The hook slide subtext has extra horizontal padding to prevent text being cut off at the edges.
 
 ## Commands Overview
 

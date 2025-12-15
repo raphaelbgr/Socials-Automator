@@ -1378,7 +1378,19 @@ async def _post_to_instagram(
             upload_state = post_metadata.get("_upload_state", {})
             existing_urls = upload_state.get("cloudinary_urls", [])
 
-            if existing_urls and len(existing_urls) == len(slide_paths):
+            # Check if upload state is too old (stale URLs might cause issues)
+            upload_is_stale = False
+            if existing_urls and upload_state.get("uploaded_at"):
+                try:
+                    uploaded_at = datetime.fromisoformat(upload_state["uploaded_at"])
+                    age_hours = (datetime.now() - uploaded_at).total_seconds() / 3600
+                    if age_hours > 24:
+                        upload_is_stale = True
+                        print(f"\n  [Warning] Cloudinary upload is {age_hours:.1f}h old - uploading fresh")
+                except Exception:
+                    pass
+
+            if existing_urls and len(existing_urls) == len(slide_paths) and not upload_is_stale:
                 # Resume: use existing Cloudinary URLs
                 print(f"\n  [Resume] Found {len(existing_urls)} existing Cloudinary uploads")
 
@@ -1478,42 +1490,65 @@ async def _post_to_instagram(
         else:
             error_msg = result.error_message if result else "Unknown error"
 
+            # Check for DAILY POSTING LIMIT (special case - not retryable, needs explanation)
+            is_daily_limit = "[DAILY_POSTING_LIMIT]" in error_msg
+
             # Check if error is retryable (from our error codes)
             is_retryable = (
-                "[MEDIA_UPLOAD_FAILED]" in error_msg or
-                "[RATE_LIMIT]" in error_msg or
-                "[APP_RATE_LIMIT]" in error_msg or
-                "[USER_RATE_LIMIT]" in error_msg or
-                "ERROR_9" in error_msg or
-                "error code 9" in error_msg.lower()
-            )
-
-            error_panel = (
-                f"[bold red]Publishing failed[/bold red]\n\n"
-                f"[bold]Error:[/] {error_msg}"
-            )
-
-            if is_retryable:
-                error_panel += (
-                    f"\n\n[yellow]This error is usually temporary.[/yellow]\n"
-                    f"[dim]Run the command again to retry - Cloudinary uploads are saved.[/dim]"
+                not is_daily_limit and (
+                    "[MEDIA_UPLOAD_FAILED]" in error_msg or
+                    "[RATE_LIMIT]" in error_msg or
+                    "[APP_RATE_LIMIT]" in error_msg or
+                    "[USER_RATE_LIMIT]" in error_msg or
+                    "ERROR_9" in error_msg or
+                    "error code 9" in error_msg.lower()
                 )
-            else:
-                # Non-retryable error - cleanup Cloudinary to avoid orphaned files
-                if uploader._uploaded_public_ids:
-                    deleted_count = await uploader.cleanup_async()
-                    error_panel += f"\n\n[dim]Cleaned up {deleted_count} Cloudinary files.[/dim]"
-                    # Also remove upload state
-                    if "_upload_state" in post_metadata:
-                        del post_metadata["_upload_state"]
-                        with open(metadata_path, "w", encoding="utf-8") as f:
-                            json.dump(post_metadata, f, indent=2)
+            )
 
-            console.print(Panel(
-                error_panel,
-                title="Error",
-                border_style="red",
-            ))
+            if is_daily_limit:
+                # Special handling for daily posting limit
+                console.print(Panel(
+                    "[bold red]DAILY POSTING LIMIT REACHED[/bold red]\n\n"
+                    "You've hit Instagram's Content Publishing API daily limit.\n\n"
+                    "[bold]What this means:[/bold]\n"
+                    "  - The API allows ~25 posts per day per account\n"
+                    "  - Each carousel uses multiple API calls (1 per image + carousel + publish)\n"
+                    "  - Failed retries also count towards the limit\n\n"
+                    "[bold]What to do:[/bold]\n"
+                    "  - Wait until midnight UTC for the limit to reset\n"
+                    "  - Or try again tomorrow\n\n"
+                    "[dim]Your Cloudinary uploads are saved - they'll be reused when you retry.[/dim]",
+                    title="[bold red]Instagram Daily Limit[/bold red]",
+                    border_style="red",
+                ))
+                # DON'T cleanup Cloudinary - keep uploads for retry tomorrow
+            else:
+                error_panel = (
+                    f"[bold red]Publishing failed[/bold red]\n\n"
+                    f"[bold]Error:[/] {error_msg}"
+                )
+
+                if is_retryable:
+                    error_panel += (
+                        f"\n\n[yellow]This error is usually temporary.[/yellow]\n"
+                        f"[dim]Run the command again to retry - Cloudinary uploads are saved.[/dim]"
+                    )
+                else:
+                    # Non-retryable error - cleanup Cloudinary to avoid orphaned files
+                    if uploader._uploaded_public_ids:
+                        deleted_count = await uploader.cleanup_async()
+                        error_panel += f"\n\n[dim]Cleaned up {deleted_count} Cloudinary files.[/dim]"
+                        # Also remove upload state
+                        if "_upload_state" in post_metadata:
+                            del post_metadata["_upload_state"]
+                            with open(metadata_path, "w", encoding="utf-8") as f:
+                                json.dump(post_metadata, f, indent=2)
+
+                console.print(Panel(
+                    error_panel,
+                    title="Error",
+                    border_style="red",
+                ))
             failed_count += 1
             if not post_all:
                 raise typer.Exit(1)

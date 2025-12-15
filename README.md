@@ -877,6 +877,17 @@ Instagram has these posting limits:
 - **Carousels**: Up to 10 images per carousel
 - **Captions**: Up to 2,200 characters
 
+### Known Meta API Quirks
+
+**Ghost Publish Issue:** Meta's API can return a rate limit error AFTER successfully publishing your post. The system automatically detects this by checking your recent Instagram posts. If you see a rate limit error, don't panic - check Instagram first before retrying.
+
+**Rate Limit Error Codes:**
+- Error 4: Application daily limit reached
+- Error 9: Application-level throttling (wait 5+ minutes)
+- Error 17: User-level rate limit
+
+The system handles these automatically with exponential backoff and ghost publish detection.
+
 ## Project Structure
 
 ```
@@ -954,6 +965,33 @@ Socials-Automator/
 | Z.AI + fal.ai | Cloud API | ~$0.02 |
 | Groq + fal.ai | Cloud API | ~$0.01 (Groq free) |
 | OpenAI (GPT-4o + DALL-E) | Cloud API | ~$0.15 |
+
+## Known Limitations
+
+Features that are **NOT included** in this project:
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Video/Reels** | Not included | Only static carousel images |
+| **Stories** | Not included | Instagram Stories not supported |
+| **Scheduled posting** | Not included | No built-in scheduler (use cron/Task Scheduler with `--loop-each`) |
+| **Multiple platforms** | Not included | Instagram only (no Twitter/X, LinkedIn, TikTok) |
+| **Analytics** | Not included | No engagement tracking or analytics |
+| **Comment management** | Not included | No auto-replies or comment moderation |
+| **Direct messages** | Not included | No DM automation |
+| **User interactions** | Not included | No auto-follow/like/comment on other posts |
+
+**Content Limitations:**
+- Images only (no video generation)
+- English content only (other languages not tested)
+- Carousel format only (no single-image posts)
+- Text overlays use fixed templates (customization requires code changes)
+
+**Technical Limitations:**
+- Instagram Business/Creator account required for posting
+- Facebook Page connection required
+- Cloudinary account required for image hosting
+- Local AI (LM Studio/ComfyUI) requires significant hardware resources
 
 ## Roadmap
 

@@ -29,10 +29,21 @@ _api_logger.addHandler(_file_handler)
 class InstagramAPIError(Exception):
     """Base exception for Instagram API errors."""
 
-    def __init__(self, message: str, error_code: int | None = None, is_retryable: bool = False):
+    def __init__(
+        self,
+        message: str,
+        error_code: int | None = None,
+        error_subcode: int | None = None,
+        is_retryable: bool = False,
+        user_title: str | None = None,
+        user_message: str | None = None,
+    ):
         super().__init__(message)
         self.error_code = error_code
+        self.error_subcode = error_subcode
         self.is_retryable = is_retryable
+        self.user_title = user_title
+        self.user_message = user_message
 
 
 # Known Instagram API error codes with explanations and retry guidance
@@ -84,6 +95,13 @@ INSTAGRAM_ERROR_CODES = {
         "is_retryable": True,
         "retry_delay": 60,
     },
+    9: {
+        "name": "APP_RATE_LIMIT",
+        "description": "Application request limit reached",
+        "user_message": "App rate limit reached. Will retry with longer delay.",
+        "is_retryable": True,
+        "retry_delay": 300,  # 5 minutes - this is a more severe rate limit
+    },
     17: {
         "name": "USER_RATE_LIMIT",
         "description": "User request limit reached",
@@ -106,9 +124,40 @@ INSTAGRAM_ERROR_CODES = {
     },
 }
 
+# Error SUBCODES - these provide more specific info when combined with error codes
+# These take precedence over the main error code when present
+INSTAGRAM_ERROR_SUBCODES = {
+    2207069: {
+        "name": "DAILY_POSTING_LIMIT",
+        "description": "Content Publishing API daily limit exceeded",
+        "user_message": (
+            "You've reached Instagram's DAILY POSTING LIMIT.\n\n"
+            "The Content Publishing API allows ~25 posts per day per account.\n"
+            "This limit resets at midnight UTC.\n\n"
+            "What to do:\n"
+            "  - Wait until midnight UTC (or try again tomorrow)\n"
+            "  - Each carousel counts as multiple actions (1 per image + carousel + publish)\n"
+            "  - Failed retries also count towards the limit"
+        ),
+        "is_retryable": False,  # NOT retryable - must wait for daily reset
+    },
+}
 
-def get_error_info(error_code: int | None) -> dict:
-    """Get detailed error information for an Instagram error code."""
+
+def get_error_info(error_code: int | None, error_subcode: int | None = None) -> dict:
+    """Get detailed error information for an Instagram error code.
+
+    Args:
+        error_code: Main error code from API response.
+        error_subcode: Sub-error code (takes precedence if known).
+
+    Returns:
+        Dict with name, description, user_message, is_retryable, and optional retry_delay.
+    """
+    # Check subcode first - it provides more specific info
+    if error_subcode is not None and error_subcode in INSTAGRAM_ERROR_SUBCODES:
+        return INSTAGRAM_ERROR_SUBCODES[error_subcode]
+
     if error_code is None:
         return {
             "name": "UNKNOWN",
@@ -225,11 +274,15 @@ class InstagramClient:
             if "error" in result:
                 error = result["error"]
                 error_code = error.get("code")
-                error_info = get_error_info(error_code)
+                error_subcode = error.get("error_subcode")
+                error_info = get_error_info(error_code, error_subcode)
                 raise InstagramAPIError(
                     message=error.get("message", "Unknown API error"),
                     error_code=error_code,
+                    error_subcode=error_subcode,
                     is_retryable=error_info.get("is_retryable", False),
+                    user_title=error.get("error_user_title"),
+                    user_message=error_info.get("user_message"),
                 )
 
             return result
@@ -408,6 +461,7 @@ class InstagramClient:
         """
         last_error = None
         container_ids = []
+        publish_attempted = False  # Track if we tried to publish - NEVER retry after this
 
         for attempt in range(max_retries + 1):
             self._progress = InstagramProgress(
@@ -489,6 +543,9 @@ class InstagramClient:
                     85.0,
                 )
 
+                # CRITICAL: Mark that we're attempting publish - NEVER retry after this point
+                # because the post might have gone through even if we get an error
+                publish_attempted = True
                 media_id = await self.publish_container(carousel_id)
 
                 # Get permalink
@@ -514,7 +571,7 @@ class InstagramClient:
 
             except InstagramAPIError as e:
                 last_error = e
-                error_info = get_error_info(e.error_code)
+                error_info = get_error_info(e.error_code, e.error_subcode)
 
                 # Log the error with details
                 _api_logger.warning(
@@ -522,20 +579,77 @@ class InstagramClient:
                     f"[{error_info['name']}] {e}"
                 )
 
-                # Check if we should retry
-                if e.is_retryable and attempt < max_retries:
-                    retry_delay = error_info.get("retry_delay", 30)
-                    user_msg = error_info.get("user_message", str(e))
-
+                # Check for DAILY POSTING LIMIT - don't retry, show clear message
+                if e.error_subcode == 2207069:
+                    _api_logger.error(f"DAILY POSTING LIMIT HIT - not retrying")
                     await self._report_progress(
-                        InstagramPostStatus.CREATING_CONTAINERS,
-                        f"{user_msg} Retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})",
+                        InstagramPostStatus.FAILED,
+                        "Daily posting limit reached!",
                         self._progress.progress_percent,
                     )
+                    # Break out immediately - no point retrying
+                    break
 
-                    _api_logger.info(f"Waiting {retry_delay}s before retry...")
+                # CHECK FOR GHOST PUBLISH only if we've attempted to publish
+                # Ghost publish can ONLY happen after calling publish_container()
+                # Rate limit during container creation does NOT mean post went through
+                if publish_attempted:
+                    _api_logger.warning(f"Checking for ghost publish (publish_attempted={publish_attempted})...")
+                    await self._report_progress(
+                        InstagramPostStatus.PUBLISHING,
+                        "Checking if post went through...",
+                        self._progress.progress_percent,
+                    )
+                    await asyncio.sleep(3)  # Brief wait
+
+                    try:
+                        recent = await self.get_recent_media(limit=1)
+                        if recent:
+                            recent_post = recent[0]
+                            from datetime import timezone
+                            recent_time = datetime.fromisoformat(
+                                recent_post.get("timestamp", "").replace("Z", "+00:00")
+                            )
+                            seconds_ago = (datetime.now(timezone.utc) - recent_time).total_seconds()
+
+                            if seconds_ago < 120:  # Posted in last 2 minutes = ghost publish!
+                                _api_logger.warning(f"GHOST PUBLISH DETECTED! Post is live ({seconds_ago:.0f}s ago)")
+                                await self._report_progress(
+                                    InstagramPostStatus.PUBLISHED,
+                                    "Published! (detected after error)",
+                                    100.0,
+                                )
+                                return InstagramPublishResult(
+                                    success=True,
+                                    media_id=recent_post.get("id"),
+                                    permalink=recent_post.get("permalink"),
+                                    container_ids=container_ids,
+                                    image_urls=image_urls,
+                                    published_at=datetime.now(),
+                                )
+                            else:
+                                _api_logger.info(f"Most recent post is {seconds_ago:.0f}s old - not ours")
+                    except Exception as check_err:
+                        _api_logger.warning(f"Ghost check failed: {check_err}")
+
+                    # If we already attempted publish, don't retry (could cause duplicates)
+                    if publish_attempted:
+                        _api_logger.warning("Post not found after publish attempt - not retrying to avoid duplicates")
+                        break
+
+                # Before publish: retry is safe (we haven't published anything yet)
+                if e.is_retryable and attempt < max_retries:
+                    retry_delay = error_info.get("retry_delay", 30)
+                    # Show clear message about rate limiting during container creation
+                    retry_msg = f"Rate limited during container creation. Retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})"
+                    await self._report_progress(
+                        InstagramPostStatus.CREATING_CONTAINERS,
+                        retry_msg,
+                        self._progress.progress_percent,
+                    )
+                    _api_logger.info(f"Waiting {retry_delay}s before retry (container creation phase)...")
                     await asyncio.sleep(retry_delay)
-                    continue  # Retry from the beginning
+                    continue
 
                 # Not retryable or out of retries - fall through to error handling
                 break
@@ -545,59 +659,59 @@ class InstagramClient:
                 last_error = InstagramAPIError(f"Unexpected error: {e}")
                 break
 
-        # All retries exhausted or non-retryable error
-        # Check for "ghost publish" - post went through despite error
-        if last_error and (
-            "rate limit" in str(last_error).lower() or
-            (hasattr(last_error, 'error_code') and last_error.error_code == 4)
-        ):
-            _api_logger.warning("Rate limit error - checking if post was actually published...")
-            await asyncio.sleep(2)  # Brief wait before checking
+        # All retries exhausted or error after publish
+        # Final check: if we attempted publish, wait a bit more and verify
+        if publish_attempted and last_error:
+            _api_logger.info("Final Instagram check after publish error (waiting 10s)...")
+            await self._report_progress(
+                InstagramPostStatus.PUBLISHING,
+                "Final check - waiting for Instagram to sync...",
+                self._progress.progress_percent,
+            )
+            await asyncio.sleep(10)  # Extra wait for Instagram to sync
+
             try:
                 recent = await self.get_recent_media(limit=1)
                 if recent:
                     recent_post = recent[0]
-                    # Check if this was posted in the last 60 seconds
                     from datetime import timezone
                     recent_time = datetime.fromisoformat(
                         recent_post.get("timestamp", "").replace("Z", "+00:00")
                     )
-                    if (datetime.now(timezone.utc) - recent_time).total_seconds() < 60:
-                        ghost_media_id = recent_post.get("id")
-                        ghost_permalink = recent_post.get("permalink")
-                        _api_logger.warning(f"GHOST PUBLISH DETECTED! Post went through: {ghost_permalink}")
-
+                    seconds_ago = (datetime.now(timezone.utc) - recent_time).total_seconds()
+                    # Extended window - post could have been made up to 5 minutes ago
+                    if seconds_ago < 300:
+                        _api_logger.info(f"Post confirmed on Instagram ({seconds_ago:.0f}s ago)!")
                         await self._report_progress(
                             InstagramPostStatus.PUBLISHED,
-                            "Published (detected after rate limit error)",
+                            "Published! (confirmed on final check)",
                             100.0,
-                        )
-                        _api_logger.info(
-                            f"=== SESSION COMPLETE (GHOST) === Total API calls: {self._api_call_count}"
                         )
                         return InstagramPublishResult(
                             success=True,
-                            media_id=ghost_media_id,
-                            permalink=ghost_permalink,
+                            media_id=recent_post.get("id"),
+                            permalink=recent_post.get("permalink"),
                             container_ids=container_ids,
                             image_urls=image_urls,
                             published_at=datetime.now(),
                         )
-            except Exception:
-                pass  # Ghost check failed, continue with error handling
+                    else:
+                        _api_logger.warning(f"Most recent post is {seconds_ago:.0f}s old - not our post")
+            except Exception as e:
+                _api_logger.warning(f"Final check failed: {e}")
 
         # Build user-friendly error message
         if last_error:
-            error_info = get_error_info(
-                last_error.error_code if hasattr(last_error, 'error_code') else None
-            )
+            error_code = last_error.error_code if hasattr(last_error, 'error_code') else None
+            error_subcode = last_error.error_subcode if hasattr(last_error, 'error_subcode') else None
+            error_info = get_error_info(error_code, error_subcode)
             user_message = error_info.get("user_message", str(last_error))
             error_name = error_info.get("name", "UNKNOWN")
 
             self._progress.error = str(last_error)
             await self._report_progress(
                 InstagramPostStatus.FAILED,
-                f"[{error_name}] {user_message}",
+                f"[{error_name}] {user_message[:50]}..." if len(user_message) > 50 else f"[{error_name}] {user_message}",
                 self._progress.progress_percent,
             )
 

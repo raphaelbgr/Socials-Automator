@@ -29,7 +29,7 @@ class VideoAssembler(IVideoAssembler):
     WIDTH = 1080
     HEIGHT = 1920
     FPS = 30
-    DURATION = 60.0
+    MAX_DURATION = 60.0  # Maximum video duration (can be shorter based on audio)
 
     def __init__(self):
         """Initialize video assembler."""
@@ -114,14 +114,24 @@ class VideoAssembler(IVideoAssembler):
         # Sort clips by segment index
         sorted_clips = sorted(clips, key=lambda c: c.segment_index)
 
-        # Calculate segment durations
+        # Use actual segment durations (updated by VoiceGenerator with real timing)
         segment_durations = [s.duration_seconds for s in script.segments]
 
-        # Adjust to fit total duration
+        # Calculate total duration from actual timing (not fixed 60s)
+        # If segments have been updated with real voice timing, use that
+        if script.segments and script.segments[-1].end_time > 0:
+            actual_duration = script.segments[-1].end_time
+            self.log_progress(f"Using actual audio duration: {actual_duration:.1f}s")
+        else:
+            actual_duration = self.MAX_DURATION
+            self.log_progress(f"Using max duration: {actual_duration:.1f}s")
+
+        # Adjust durations if needed to fit within max
         total_needed = sum(segment_durations)
-        if total_needed > self.DURATION:
-            scale = self.DURATION / total_needed
+        if total_needed > self.MAX_DURATION:
+            scale = self.MAX_DURATION / total_needed
             segment_durations = [d * scale for d in segment_durations]
+            actual_duration = self.MAX_DURATION
 
         # Process each clip
         video_clips = []
@@ -165,12 +175,13 @@ class VideoAssembler(IVideoAssembler):
         # Concatenate all clips
         final_video = concatenate_videoclips(video_clips, method="compose")
 
-        # Ensure we don't exceed target duration
-        if final_video.duration > self.DURATION:
+        # Ensure we don't exceed actual duration (matches audio)
+        target_duration = min(actual_duration, self.MAX_DURATION)
+        if final_video.duration > target_duration:
             if hasattr(final_video, 'subclipped'):
-                final_video = final_video.subclipped(0, self.DURATION)
+                final_video = final_video.subclipped(0, target_duration)
             else:
-                final_video = final_video.subclip(0, self.DURATION)
+                final_video = final_video.subclip(0, target_duration)
 
         self.log_progress(f"Exporting to {output_path}...")
 
@@ -194,7 +205,7 @@ class VideoAssembler(IVideoAssembler):
             post_id=output_path.parent.name,
             title=script.title,
             topic=script.title,
-            duration_seconds=min(final_video.duration, self.DURATION),
+            duration_seconds=min(final_video.duration, target_duration),
             segments=segment_metadata,
             clips_used=[
                 {

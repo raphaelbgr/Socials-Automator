@@ -156,12 +156,36 @@ class ContentOrchestrator:
         return {}
 
     def _generate_post_id(self) -> str:
-        """Generate a unique post ID."""
+        """Generate a unique post ID.
+
+        Format: DD-NNN where DD is day of month, NNN is sequential number.
+        Searches ALL subfolders (generated, pending-post, posted) to ensure
+        the counter is accurate and avoids duplicate IDs.
+        """
+        import re
         now = datetime.now()
+        day_prefix = now.strftime('%d')
         posts_dir = self.profile_path / "posts" / now.strftime("%Y") / now.strftime("%m")
-        existing = list(posts_dir.glob(f"{now.strftime('%d')}-*")) if posts_dir.exists() else []
-        post_num = len(existing) + 1
-        return f"{now.strftime('%Y%m%d')}-{post_num:03d}"
+
+        # Find all existing post numbers for today across ALL subfolders
+        existing_numbers = set()
+        if posts_dir.exists():
+            for subfolder in ["generated", "pending-post", "posted"]:
+                subfolder_path = posts_dir / subfolder
+                if subfolder_path.exists():
+                    for post_folder in subfolder_path.glob(f"{day_prefix}-*"):
+                        if post_folder.is_dir():
+                            # Extract the number from folder name (DD-NNN-slug)
+                            match = re.match(rf"^{day_prefix}-(\d+)", post_folder.name)
+                            if match:
+                                existing_numbers.add(int(match.group(1)))
+
+        # Find the next available number
+        post_num = 1
+        while post_num in existing_numbers:
+            post_num += 1
+
+        return f"{day_prefix}-{post_num:03d}"
 
     def _create_slug(self, topic: str) -> str:
         """Create URL-friendly slug from topic."""
@@ -396,15 +420,17 @@ After searching, summarize the most relevant findings."""
             # Step 4: Generate caption
             await progress_manager.update(current_step="Generating caption")
 
-            content_summary = " | ".join([
-                s.heading for s in post.slides
+            # Pass full slides data for richer captions
+            slides_data = [
+                {"heading": s.heading, "body": s.body, "type": s.slide_type.value}
+                for s in post.slides
                 if s.slide_type == SlideType.CONTENT
-            ])
+            ]
 
             post.caption = await self.planner.generate_caption(
                 topic=topic,
                 hook_text=plan.hook_text,
-                content_summary=content_summary,
+                slides_data=slides_data,
                 hashtags=plan.keywords,
             )
 

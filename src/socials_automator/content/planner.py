@@ -176,6 +176,36 @@ class ContentPlanner:
             f"Do NOT mention {now.year - 1} or earlier years unless historically relevant."
         )
 
+    def _sanitize_slide_text(self, text: str) -> str:
+        """Remove hashtags, mentions, and other unwanted elements from slide text.
+
+        Args:
+            text: Raw text from AI.
+
+        Returns:
+            Cleaned text without hashtags, mentions, or emojis.
+        """
+        import re
+
+        # Remove hashtags (#word)
+        text = re.sub(r'#\w+', '', text)
+
+        # Remove @ mentions (@word)
+        text = re.sub(r'@\w+', '', text)
+
+        # Remove common emojis (basic pattern)
+        text = re.sub(r'[\U0001F600-\U0001F64F]', '', text)  # Emoticons
+        text = re.sub(r'[\U0001F300-\U0001F5FF]', '', text)  # Symbols & pictographs
+        text = re.sub(r'[\U0001F680-\U0001F6FF]', '', text)  # Transport & map
+        text = re.sub(r'[\U0001F1E0-\U0001F1FF]', '', text)  # Flags
+        text = re.sub(r'[\U00002702-\U000027B0]', '', text)  # Dingbats
+        text = re.sub(r'[\U0001F900-\U0001F9FF]', '', text)  # Supplemental symbols
+
+        # Clean up extra whitespace
+        text = re.sub(r'\s+', ' ', text).strip()
+
+        return text
+
     def _get_system_prompt(self) -> str:
         """Get the system prompt from profile config with current datetime context."""
         from datetime import datetime
@@ -400,6 +430,27 @@ Create:
 2. {content_count} slide titles - one for each {content_type}
 3. A description for the hook slide image
 
+FORBIDDEN IN ALL TEXT (hook, titles):
+- NO hashtags (#anything)
+- NO @ mentions
+- NO emojis
+- NO URLs
+
+IMAGE STYLE REQUIREMENTS:
+- Focus on ENVIRONMENT and LIFESTYLE scenes (coffee shops, cozy workspaces, nature, city views)
+- Include HUMAN elements (hands holding phone, person at desk, silhouettes, people in motion)
+- AVOID: close-ups of screens, computers, code, robots, circuit boards, tech gadgets
+- Think: "Instagram lifestyle aesthetic" not "tech stock photo"
+- Examples of GOOD descriptions:
+  * "Person working at a sunny cafe with a laptop, warm lighting, plants in background"
+  * "Hands holding a coffee cup at a cozy desk near a window with city view"
+  * "Silhouette of person at sunset with city skyline, warm orange tones"
+  * "Minimalist workspace with natural light, notebook and coffee, blurred background"
+- Examples of BAD descriptions (too techy):
+  * "Computer screen showing AI interface"
+  * "Futuristic circuit board with glowing nodes"
+  * "Robot hand typing on keyboard"
+
 IMPORTANT: Generate EXACTLY {content_count} slide titles.
 {self._get_date_context()}"""
 
@@ -420,10 +471,15 @@ IMPORTANT: Generate EXACTLY {content_count} slide titles.
                 titles.append(f"{content_type.title()} {len(titles) + 1}")
             titles = titles[:content_count]
 
+        # Sanitize all text - remove hashtags, mentions, emojis
+        hook_text = self._sanitize_slide_text(structure.hook_text or planning["refined_topic"])
+        hook_subtext = self._sanitize_slide_text(structure.hook_subtext) if structure.hook_subtext else None
+        titles = [self._sanitize_slide_text(t) for t in titles]
+
         result = {
-            "hook_text": structure.hook_text or planning["refined_topic"],
-            "hook_subtext": structure.hook_subtext,
-            "hook_image_description": structure.hook_image_description or f"Abstract background for {planning['refined_topic']}",
+            "hook_text": hook_text,
+            "hook_subtext": hook_subtext,
+            "hook_image_description": structure.hook_image_description or f"Person working at a cozy cafe with natural light, warm tones, lifestyle aesthetic",
             "slide_titles": titles,
         }
 
@@ -611,6 +667,12 @@ IMPORTANT LENGTH LIMITS:
 - Heading: MAX 50 characters (will be cut off if longer!)
 - Body: MAX 200 characters
 
+FORBIDDEN - DO NOT INCLUDE:
+- NO hashtags (#anything)
+- NO @ mentions
+- NO emojis
+- NO URLs or links
+
 The body MUST contain a real, usable {content_type} - not just a description of what the {content_type} is about.
 DELIVER what the hook promised! Give readers something they can actually USE.
 {self._get_date_context()}"""
@@ -639,9 +701,13 @@ Please generate BETTER content that addresses this issue."""
                 max_tokens=300,
             )
 
+            # Sanitize content - remove hashtags, mentions, emojis
+            heading = self._sanitize_slide_text(slide_content.heading or slide_title)
+            body = self._sanitize_slide_text(slide_content.body or "")
+
             result = {
-                "heading": slide_content.heading or slide_title,
-                "body": slide_content.body or "",
+                "heading": heading,
+                "body": body,
             }
 
             # Validate the content
@@ -934,7 +1000,7 @@ If there are problems, set is_valid=false and list the specific issues."""
             "heading": structure["hook_text"],
             "body": structure.get("hook_subtext"),
             "needs_image": True,
-            "image_description": structure.get("hook_image_description", f"Abstract background for {topic}"),
+            "image_description": structure.get("hook_image_description", f"Person in cozy workspace with natural light, warm lifestyle aesthetic"),
         }
 
         # Emit Phase 2 result
@@ -1119,7 +1185,7 @@ If there are problems, set is_valid=false and list the specific issues."""
             "heading": topic,
             "body": None,
             "needs_image": True,
-            "image_description": f"Abstract tech background for topic: {topic}",
+            "image_description": f"Person in a cozy workspace with natural light, warm lifestyle aesthetic",
         })
 
         # Content slides (default to 5 slides total if not specified)
@@ -1180,7 +1246,7 @@ If there are problems, set is_valid=false and list the specific issues."""
         self,
         topic: str,
         hook_text: str,
-        content_summary: str,
+        slides_data: list[dict[str, str]] | None = None,
         hashtags: list[str] | None = None,
         max_retries: int = 3,
     ) -> str:
@@ -1189,39 +1255,57 @@ If there are problems, set is_valid=false and list the specific issues."""
         Args:
             topic: Post topic.
             hook_text: The hook used.
-            content_summary: Summary of post content.
-            hashtags: Hashtags to include.
+            slides_data: List of slide dicts with heading, body, type.
+            hashtags: Hashtags to include (unused, for backwards compat).
             max_retries: Maximum retry attempts for bad captions.
 
         Returns:
-            Complete caption text.
+            Complete caption text (max ~1000 chars to stay under 1200 limit).
         """
-        hashtag_config = self.profile.get("hashtag_strategy", {})
-        hashtag_sets = hashtag_config.get("hashtag_sets", {})
+        # Format slides content for the prompt
+        slides_content = ""
+        if slides_data:
+            slides_lines = []
+            for i, slide in enumerate(slides_data, 1):
+                heading = slide.get("heading", "")
+                body = slide.get("body", "")
+                slides_lines.append(f"{i}. {heading}: {body}")
+            slides_content = "\n".join(slides_lines)
 
-        if hashtags is None:
-            # Select hashtags from config
-            hashtags = []
-            for category in ["primary", "secondary", "niche", "branded"]:
-                tags = hashtag_sets.get(category, [])
-                count = hashtag_config.get("distribution", {}).get(category.replace("_volume", ""), 5)
-                hashtags.extend(random.sample(tags, min(count, len(tags))))
+        prompt = f"""Write an Instagram caption for this carousel post.
 
-        hashtags_str = " ".join(hashtags[:20])  # Instagram limit
+TOPIC: {topic}
+HOOK: {hook_text}
 
-        prompt = f"""Write a SHORT Instagram caption for a carousel post.
+SLIDE CONTENT:
+{slides_content if slides_content else "General tips/content"}
 
-Topic: {topic}
-Hook: {hook_text}
+REQUIREMENTS:
+1. Start with an attention-grabbing hook line (can use emojis here)
+2. If the post has numbered items (tips, prompts, tools), LIST THEM briefly in the caption
+   - Example: "5 ChatGPT prompts..." -> list the 5 prompts in short form
+   - Example: "3 AI tools..." -> name the 3 tools
+3. Include the KEY VALUE from each slide (the actual prompt, tip, or tool name)
+4. End with a call-to-action (save/follow/share)
+5. Use emojis to separate sections and add visual appeal
+6. MAXIMUM 1000 characters (this is strict!)
+7. No hashtags (added separately)
 
-Requirements:
-- MUST be under 250 characters (very important for Threads compatibility)
-- 1-2 short sentences maximum
-- End with brief CTA (save/share/follow)
-- 1-2 emojis max
-- No hashtags (added separately)
+FORMAT EXAMPLE for a "5 prompts" post:
+```
+[Hook emoji] Ready to automate your workflow?
 
-Return ONLY the caption text, nothing else.
+Here are 5 ChatGPT prompts to try:
+1. [Emoji] Weekly planning: "Act as my productivity coach..."
+2. [Emoji] Email drafts: "Rewrite this email professionally..."
+3. [Emoji] Meeting summaries: "Extract action items from..."
+4. [Emoji] Research: "Summarize the key points of..."
+5. [Emoji] Content ideas: "Generate 10 post ideas about..."
+
+Save this for later! [Emoji]
+```
+
+Return ONLY the caption text.
 {self._get_date_context()}"""
 
         # Try to generate a valid caption with retries
@@ -1231,9 +1315,15 @@ Return ONLY the caption text, nothing else.
                 system=self._get_system_prompt(),
                 task="content_planning",
                 temperature=0.7 + (attempt * 0.1),  # Increase temp on retries
+                max_tokens=500,  # Allow longer response
             )
 
             caption = caption.strip()
+
+            # Remove markdown code blocks if present
+            if caption.startswith("```"):
+                caption = caption.split("```")[1] if "```" in caption[3:] else caption[3:]
+                caption = caption.strip()
 
             # Validate caption quality
             is_valid, error = self._validate_caption(caption, topic)
@@ -1248,11 +1338,21 @@ Return ONLY the caption text, nothing else.
                 _logger.error(f"All caption attempts failed, using default for topic: {topic}")
                 caption = f"Check out these {topic.lower()}! Save this for later."
 
-        # Truncate caption if too long (for Threads 500 char limit)
-        # Keep it under 450 chars to leave room for potential additions
-        if len(caption) > 450:
-            # Cut at last sentence boundary
-            caption = caption[:450].rsplit('.', 1)[0] + '.'
+        # Truncate caption if too long (stay under 1200 char limit, aim for 1000)
+        if len(caption) > 1000:
+            # Try to cut at last sentence/line boundary
+            truncated = caption[:1000]
+            # Find last complete line
+            last_newline = truncated.rfind('\n')
+            if last_newline > 500:
+                caption = truncated[:last_newline].strip()
+            else:
+                # Cut at sentence
+                last_period = truncated.rfind('.')
+                if last_period > 500:
+                    caption = truncated[:last_period + 1].strip()
+                else:
+                    caption = truncated.strip()
 
         # Return ONLY the caption text (without hashtags)
         # Hashtags are stored separately in post.hashtags and combined in caption+hashtags.txt
@@ -1282,11 +1382,13 @@ Return ONLY the caption text, nothing else.
             if re.search(pattern, caption, re.IGNORECASE):
                 return False, f"Caption appears incomplete (matched: {pattern})"
 
-        # Check for gibberish patterns
+        # Check for gibberish patterns (more lenient for longer captions)
         words = caption.split()
         if len(words) > 3:
             unique_ratio = len(set(words)) / len(words)
-            if unique_ratio < 0.4:  # Too many repeated words
+            # Longer captions (with numbered lists) naturally have more repeated words
+            min_ratio = 0.3 if len(words) > 50 else 0.4
+            if unique_ratio < min_ratio:
                 return False, f"Too many repeated words (ratio: {unique_ratio:.2f})"
 
         # Check for nonsensical phrases (common AI failure modes)

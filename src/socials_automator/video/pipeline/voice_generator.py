@@ -196,6 +196,13 @@ class VoiceGenerator(IVoiceGenerator):
             context.audio_path = audio_path
             context.srt_path = srt_path
 
+            # Update script segment times based on actual voice timing
+            # This is critical for syncing video transitions with speech
+            if timestamps:
+                self._update_segment_timing(context.script, timestamps)
+                total_duration = timestamps[-1]["end_ms"] / 1000 if timestamps else 60.0
+                self.log_progress(f"Actual audio duration: {total_duration:.1f}s")
+
             self.log_success(
                 f"Generated voiceover: {audio_path.name}, "
                 f"{len(timestamps)} word timestamps"
@@ -205,6 +212,70 @@ class VoiceGenerator(IVoiceGenerator):
         except Exception as e:
             self.log_error(f"Voice generation failed: {e}")
             raise VoiceGenerationError(f"Failed to generate voice: {e}") from e
+
+    def _update_segment_timing(
+        self,
+        script: "VideoScript",
+        timestamps: list[dict],
+    ) -> None:
+        """Update script segment times based on actual voice timing.
+
+        Maps word timestamps back to segments so video clips can be
+        properly synced with sentence/segment endings.
+
+        Args:
+            script: The video script with segments.
+            timestamps: Word timestamps from TTS (each has word, start_ms, end_ms).
+        """
+        if not timestamps or not script.segments:
+            return
+
+        # Build a list of all words from timestamps
+        all_words = [ts["word"].lower().strip(".,!?;:") for ts in timestamps]
+
+        # Track which timestamp index we're at
+        ts_index = 0
+
+        # Calculate hook timing
+        hook_words = script.hook.lower().split()
+        hook_end_ms = 0
+
+        for word in hook_words:
+            clean_word = word.strip(".,!?;:")
+            # Find this word in timestamps
+            while ts_index < len(timestamps):
+                ts_word = timestamps[ts_index]["word"].lower().strip(".,!?;:")
+                hook_end_ms = timestamps[ts_index]["end_ms"]
+                ts_index += 1
+                if ts_word == clean_word or clean_word in ts_word or ts_word in clean_word:
+                    break
+
+        # Now process each segment
+        for segment in script.segments:
+            segment_words = segment.text.lower().split()
+            segment_start_ms = timestamps[min(ts_index, len(timestamps) - 1)]["start_ms"]
+            segment_end_ms = segment_start_ms
+
+            for word in segment_words:
+                clean_word = word.strip(".,!?;:")
+                while ts_index < len(timestamps):
+                    ts_word = timestamps[ts_index]["word"].lower().strip(".,!?;:")
+                    segment_end_ms = timestamps[ts_index]["end_ms"]
+                    ts_index += 1
+                    if ts_word == clean_word or clean_word in ts_word or ts_word in clean_word:
+                        break
+
+            # Update segment timing
+            segment.start_time = segment_start_ms / 1000
+            segment.end_time = segment_end_ms / 1000
+            segment.duration_seconds = segment.end_time - segment.start_time
+
+        # Log the updated timing
+        for seg in script.segments:
+            self.log_progress(
+                f"Segment {seg.index}: {seg.start_time:.1f}s - {seg.end_time:.1f}s "
+                f"({seg.duration_seconds:.1f}s)"
+            )
 
     async def generate_voice(
         self,

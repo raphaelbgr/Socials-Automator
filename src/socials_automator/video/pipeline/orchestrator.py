@@ -75,14 +75,16 @@ class VideoPipeline:
             self.logger.info(f"Using text AI: {text_ai}")
 
         # Initialize pipeline steps
+        # Note: VoiceGenerator runs BEFORE VideoAssembler so we get actual speech timing
+        # to sync video clips with sentence endings
         self.steps: list[PipelineStep] = [
             TopicSelector(ai_client=ai_client),
             TopicResearcher(),
             ScriptPlanner(ai_client=ai_client),
+            VoiceGenerator(voice=voice),  # Generate voice first to get actual timing
             VideoSearcher(api_key=pexels_api_key),
             VideoDownloader(),
-            VideoAssembler(),
-            VoiceGenerator(voice=voice),
+            VideoAssembler(),  # Now uses actual voice timing for segment durations
             SubtitleRenderer(font_size=subtitle_size),
         ]
 

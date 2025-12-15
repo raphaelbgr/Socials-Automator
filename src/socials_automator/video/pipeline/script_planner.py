@@ -28,11 +28,17 @@ class ScriptPlanner(IScriptPlanner):
     # Target video duration
     TARGET_DURATION = 60.0
 
+    # Minimum acceptable narration duration (must use most of the video)
+    MIN_NARRATION_DURATION = 50.0  # At least 50 seconds of narration
+
     # Segment timing
     HOOK_DURATION = 3.0
     CTA_DURATION = 4.0
-    MIN_SEGMENT_DURATION = 6.0
+    MIN_SEGMENT_DURATION = 8.0  # Increased from 6 - segments need more content
     MAX_SEGMENT_DURATION = 12.0
+
+    # Retry settings for validation
+    MAX_REGENERATION_ATTEMPTS = 3
 
     def __init__(self, ai_client: Optional[object] = None):
         """Initialize script planner.
@@ -105,20 +111,69 @@ class ScriptPlanner(IScriptPlanner):
         """
         self.log_progress("Creating script structure...")
 
-        # Use AI if available for better script generation
-        if self.ai_client:
-            self.log_progress("Using AI to generate script...")
-            try:
-                return await self._plan_script_with_ai(
+        # Try generation with validation and regeneration
+        for attempt in range(self.MAX_REGENERATION_ATTEMPTS):
+            script = None
+
+            # Use AI if available for better script generation
+            if self.ai_client:
+                self.log_progress(f"Using AI to generate script (attempt {attempt + 1})...")
+                try:
+                    script = await self._plan_script_with_ai(
+                        topic, research, duration, profile_name, profile_handle,
+                        is_retry=attempt > 0,
+                    )
+                except Exception as e:
+                    self.log_progress(f"AI script generation failed: {e}, using templates")
+
+            # Fallback to template-based generation
+            if not script:
+                script = await self._plan_script_with_templates(
                     topic, research, duration, profile_name, profile_handle
                 )
-            except Exception as e:
-                self.log_progress(f"AI script generation failed: {e}, using templates")
 
-        # Fallback to template-based generation
-        return await self._plan_script_with_templates(
-            topic, research, duration, profile_name, profile_handle
-        )
+            # Validate script length
+            is_valid, estimated_duration, word_count = self._validate_script_length(script)
+
+            if is_valid:
+                self.log_progress(
+                    f"Script validated: {word_count} words, ~{estimated_duration:.1f}s estimated duration"
+                )
+                return script
+
+            # Script too short - log and retry
+            self.log_progress(
+                f"Script too short: {word_count} words (~{estimated_duration:.1f}s), "
+                f"need ~{int(self.MIN_NARRATION_DURATION * self.WORDS_PER_MINUTE / 60)} words "
+                f"for {self.MIN_NARRATION_DURATION}s minimum"
+            )
+
+            if attempt < self.MAX_REGENERATION_ATTEMPTS - 1:
+                self.log_progress("Regenerating with longer content requirement...")
+
+        # Return last attempt even if not perfect
+        self.log_progress("Warning: Script may be shorter than ideal")
+        return script
+
+    def _validate_script_length(self, script: VideoScript) -> tuple[bool, float, int]:
+        """Validate that script is long enough.
+
+        Args:
+            script: The video script to validate.
+
+        Returns:
+            Tuple of (is_valid, estimated_duration_seconds, word_count).
+        """
+        # Count total words in narration
+        word_count = len(script.full_narration.split())
+
+        # Estimate duration at speaking pace
+        estimated_duration = (word_count / self.WORDS_PER_MINUTE) * 60
+
+        # Check if meets minimum
+        is_valid = estimated_duration >= self.MIN_NARRATION_DURATION
+
+        return is_valid, estimated_duration, word_count
 
     async def _plan_script_with_templates(
         self,
@@ -173,6 +228,7 @@ class ScriptPlanner(IScriptPlanner):
         duration: float,
         profile_name: str = "us",
         profile_handle: str = "",
+        is_retry: bool = False,
     ) -> VideoScript:
         """Plan script using AI for better content."""
         import json
@@ -183,47 +239,69 @@ class ScriptPlanner(IScriptPlanner):
         # Build CTA instruction with profile name (no handle - sounds weird in narration)
         cta_instruction = f'Follow {profile_name} [context-specific ending like "for more AI tips!"]'
 
+        # Stronger requirements on retry
+        if is_retry:
+            word_requirement = "EXACTLY 150-160 words TOTAL (you were too short last time - count your words!)"
+            segment_requirement = "MUST be 25-35 words each (you need MORE content per segment!)"
+            emphasis = """
+***** CRITICAL: YOUR LAST ATTEMPT WAS TOO SHORT! *****
+The narration must fill 60 seconds. At 150 words per minute, you need at least 150 words.
+Count your words carefully. Each segment needs to be substantial with multiple sentences.
+DO NOT submit short segments. Include details, examples, and complete thoughts."""
+        else:
+            word_requirement = "approximately 150 words (for 60 seconds at natural speaking pace)"
+            segment_requirement = "MUST be 20-30 words with specific details and value"
+            emphasis = ""
+
         prompt = f"""Write a 60-second video narration script for Instagram Reels about: {topic.topic}
 
 Research findings:
 {key_points}
+{emphasis}
 
-IMPORTANT: The total narration must be approximately 150 words (for 60 seconds at natural speaking pace).
+IMPORTANT: The total narration must be {word_requirement}.
 
 Structure:
-- Hook (3 seconds, ~8 words): Attention-grabbing opener
-- 5 segments (10 seconds each, ~25 words each): Valuable content
-- CTA (4 seconds, ~10 words): Call to action mentioning the creator
+- Hook (3 seconds, ~10 words): Attention-grabbing opener that stops the scroll
+- 5 segments (10 seconds each, ~25 words each): Valuable content with specific tips
+- CTA (4 seconds, ~12 words): Call to action mentioning the creator
 
 Format your response as JSON:
 {{
-    "hook": "Your hook here - must be exactly 8-10 words, punchy and attention-grabbing",
+    "hook": "Your hook here - must be exactly 8-12 words, punchy and attention-grabbing",
     "segments": [
-        {{"text": "Segment 1 narration - MUST be 20-30 words with specific details and value", "keywords": ["visual1", "visual2"]}},
-        {{"text": "Segment 2 narration - MUST be 20-30 words with specific details and value", "keywords": ["visual1", "visual2"]}},
-        {{"text": "Segment 3 narration - MUST be 20-30 words with specific details and value", "keywords": ["visual1", "visual2"]}},
-        {{"text": "Segment 4 narration - MUST be 20-30 words with specific details and value", "keywords": ["visual1", "visual2"]}},
-        {{"text": "Segment 5 narration - MUST be 20-30 words with specific details and value", "keywords": ["visual1", "visual2"]}}
+        {{"text": "Segment 1 narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}},
+        {{"text": "Segment 2 narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}},
+        {{"text": "Segment 3 narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}},
+        {{"text": "Segment 4 narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}},
+        {{"text": "Segment 5 narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}}
     ],
     "cta": "{cta_instruction}",
     "cta_context": "A short phrase relevant to this video topic (e.g., 'for more productivity tips!')"
 }}
 
 CRITICAL Rules:
-- Each segment MUST be 20-30 words (NOT shorter!) - this is essential for timing
+- Each segment MUST be 25-35 words (NOT shorter!) - this is essential for timing
+- Total narration MUST be at least 150 words - COUNT YOUR WORDS!
 - Write in first person, conversational style ("I discovered...", "Here's what works...")
 - Include specific examples, numbers, or actionable tips in each segment
-- Keywords must be visual concepts for stock video (e.g., "laptop typing", "money cash", "phone screen")
 - NO repetition of the same phrases or ideas
 - Each segment should deliver UNIQUE value, not repeat the topic
 - Write complete sentences that flow naturally when spoken aloud
 - The CTA must mention "{profile_name}" and end with a context-relevant phrase
 
-Example of GOOD segment (25 words):
-"First, I use ChatGPT to write product descriptions for Etsy sellers. I charge fifty dollars each and complete five per day. That's real money."
+KEYWORD Rules (for stock video search):
+- Keywords must be VISUAL concepts that can be filmed (NOT abstract concepts)
+- Use 2-word phrases for better search results (e.g., "person laptop", "cash money", "phone screen")
+- Think: "What would I see in a stock video for this?"
+- GOOD keywords: "laptop typing", "cash dollars", "office meeting", "phone scrolling", "robot hand"
+- BAD keywords: "productivity", "success", "AI" (too abstract - use "person laptop", "celebration happy", "futuristic screen")
 
-Example of BAD segment (too short, 10 words):
-"Use AI to make money online easily today."
+Example of GOOD segment (28 words) with GOOD keywords:
+{{"text": "First, I use ChatGPT to write product descriptions for Etsy sellers. I charge fifty dollars each and complete about five per day. That's real, consistent money.", "keywords": ["laptop typing", "cash money", "ecommerce shopping"]}}
+
+Example of BAD segment (too short, 10 words) with BAD keywords:
+{{"text": "Use AI to make money online easily today.", "keywords": ["AI", "money", "online"]}}
 
 Respond with ONLY valid JSON, no other text."""
 
@@ -473,6 +551,8 @@ Respond with ONLY valid JSON, no other text."""
     def _extract_video_keywords(self, text: str, topic: TopicInfo) -> list[str]:
         """Extract keywords for video search.
 
+        Generates visual keywords suitable for stock video search (Pexels).
+
         Args:
             text: Segment text.
             topic: Topic information.
@@ -480,43 +560,99 @@ Respond with ONLY valid JSON, no other text."""
         Returns:
             List of keywords for Pexels search.
         """
-        # Base keywords from topic
-        keywords = list(topic.keywords[:3])
-
-        # Add contextual keywords based on text content
+        keywords = []
         text_lower = text.lower()
 
+        # Expanded keyword mappings for better video matching
+        # These are visual concepts that work well in stock video searches
         keyword_mappings = {
-            "computer": ["computer", "laptop", "technology"],
-            "phone": ["smartphone", "mobile", "device"],
-            "work": ["office", "business", "professional"],
-            "money": ["finance", "business", "success"],
-            "learn": ["education", "study", "learning"],
-            "create": ["creative", "design", "art"],
-            "code": ["programming", "coding", "developer"],
-            "write": ["writing", "typing", "content"],
-            "automate": ["automation", "robot", "technology"],
-            "ai": ["artificial intelligence", "technology", "futuristic"],
-            "chat": ["communication", "conversation", "technology"],
-            "fast": ["speed", "efficiency", "motion"],
-            "save": ["time", "efficiency", "productivity"],
+            # Tech-related
+            "computer": ["person laptop", "typing computer", "screen code"],
+            "laptop": ["laptop work", "laptop coffee", "laptop typing"],
+            "phone": ["smartphone hand", "phone scrolling", "mobile app"],
+            "code": ["coding screen", "programming", "developer laptop"],
+            "software": ["software interface", "computer screen", "digital"],
+            "app": ["mobile app", "phone screen", "digital interface"],
+            "website": ["web design", "browser screen", "website laptop"],
+            "automation": ["robot arm", "automation factory", "futuristic tech"],
+
+            # AI-related
+            "ai": ["artificial intelligence", "futuristic technology", "neural network"],
+            "chatgpt": ["ai chat", "robot assistant", "futuristic screen"],
+            "machine learning": ["data visualization", "neural network", "tech abstract"],
+            "robot": ["robot hand", "humanoid robot", "futuristic"],
+
+            # Work-related
+            "work": ["office professional", "business meeting", "desk work"],
+            "office": ["modern office", "workspace", "business professional"],
+            "meeting": ["business meeting", "conference room", "team discussion"],
+            "team": ["teamwork collaboration", "office team", "group work"],
+            "boss": ["executive office", "business leader", "professional meeting"],
+
+            # Money/Business
+            "money": ["cash dollars", "finance success", "wealth business"],
+            "dollar": ["dollar bills", "money cash", "finance"],
+            "income": ["money growth", "passive income", "financial success"],
+            "business": ["business success", "entrepreneur", "startup"],
+            "sell": ["ecommerce", "online shopping", "sales success"],
+            "client": ["client meeting", "handshake business", "customer service"],
+            "freelance": ["freelancer laptop", "remote work", "home office"],
+
+            # Learning/Education
+            "learn": ["studying books", "education learning", "online course"],
+            "course": ["online learning", "education screen", "e-learning"],
+            "study": ["student studying", "books library", "learning focus"],
+            "teach": ["teacher classroom", "education online", "learning"],
+
+            # Creative
+            "create": ["creative design", "artist work", "digital creation"],
+            "design": ["graphic design", "creative workspace", "designer work"],
+            "write": ["writing notebook", "typing keyboard", "content creation"],
+            "content": ["content creator", "social media", "video creation"],
+            "video": ["video editing", "camera recording", "content creation"],
+            "image": ["photography camera", "image editing", "creative visual"],
+
+            # Communication
+            "email": ["email inbox", "typing keyboard", "business communication"],
+            "message": ["messaging phone", "chat communication", "text message"],
+            "social media": ["social media phone", "instagram scroll", "online engagement"],
+
+            # Time/Productivity
+            "time": ["clock time", "hourglass", "productivity schedule"],
+            "fast": ["speed motion", "fast pace", "quick action"],
+            "save": ["time saving", "efficiency", "productivity hack"],
+            "productivity": ["productive workspace", "efficient work", "focus"],
+            "schedule": ["calendar planning", "time management", "organization"],
+
+            # General concepts
+            "idea": ["lightbulb idea", "creative thinking", "innovation"],
+            "success": ["success celebration", "achievement", "winning"],
+            "growth": ["growth chart", "upward arrow", "progress"],
+            "strategy": ["chess strategy", "planning board", "business plan"],
+            "tip": ["helpful advice", "tutorial screen", "how to"],
+            "hack": ["life hack", "productivity tips", "smart solution"],
         }
 
+        # Find matching keywords from text
         for word, video_keywords in keyword_mappings.items():
             if word in text_lower:
-                keywords.extend(video_keywords[:2])
-                break
+                keywords.extend(video_keywords)
 
-        # Ensure we have at least some keywords
-        if len(keywords) < 2:
-            keywords.extend(["technology", "abstract", "digital"])
+        # Add topic-based keywords as fallback
+        if not keywords:
+            keywords.extend(topic.keywords[:2])
+
+        # Add generic tech keywords if still empty
+        if not keywords:
+            keywords.extend(["technology business", "digital abstract", "modern office"])
 
         # Deduplicate and limit
         seen = set()
         unique = []
         for k in keywords:
-            if k not in seen:
-                seen.add(k)
+            k_lower = k.lower()
+            if k_lower not in seen:
+                seen.add(k_lower)
                 unique.append(k)
 
         return unique[:5]

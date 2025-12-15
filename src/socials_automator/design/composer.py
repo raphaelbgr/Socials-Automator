@@ -375,7 +375,10 @@ class SlideComposer:
         total_text_height = len(lines) * int(line_height * template.typography.line_height)
 
         if subtext:
-            subtext_height = subtext_font.getbbox(subtext)[3] - subtext_font.getbbox(subtext)[1]
+            # Wrap subtext too for proper height calculation
+            subtext_lines = self._wrap_text(subtext, subtext_font, text_area_width)
+            subtext_line_height = subtext_font.getbbox("Ay")[3] - subtext_font.getbbox("Ay")[1]
+            subtext_height = len(subtext_lines) * int(subtext_line_height * template.typography.line_height)
             total_text_height += subtext_height + 40  # 40px gap
 
         # Calculate starting Y position for vertical centering
@@ -390,13 +393,21 @@ class SlideComposer:
             draw.text((x, current_y), line, font=hook_font, fill=self._hex_to_rgb(template.colors.text_primary))
             current_y += int(line_height * template.typography.line_height)
 
-        # Draw subtext
+        # Draw subtext - with same horizontal padding as main text
+        # This is critical for hook slide since Instagram displays it in 4:3 container
         if subtext:
             current_y += 40  # Gap
-            bbox = subtext_font.getbbox(subtext)
-            subtext_width = bbox[2] - bbox[0]
-            x = (template.width - subtext_width) // 2
-            draw.text((x, current_y), subtext, font=subtext_font, fill=self._hex_to_rgb(template.subtext_color))
+            # Wrap subtext within the same text_area_width as main text
+            subtext_lines = self._wrap_text(subtext, subtext_font, text_area_width)
+            subtext_line_height = subtext_font.getbbox("Ay")[3] - subtext_font.getbbox("Ay")[1]
+
+            for line in subtext_lines:
+                bbox = subtext_font.getbbox(line)
+                line_width = bbox[2] - bbox[0]
+                # Center within the padded text area
+                x = template.padding_x + (text_area_width - line_width) // 2
+                draw.text((x, current_y), line, font=subtext_font, fill=self._hex_to_rgb(template.subtext_color))
+                current_y += int(subtext_line_height * template.typography.line_height)
 
         # Add logo
         if logo_path and template.show_logo:
