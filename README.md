@@ -1,11 +1,31 @@
 # Socials Automator
 
-AI-powered Instagram carousel content generator. Automatically creates professional carousel posts with AI-generated content and images.
+100% automated Instagram carousel content generator. Creates professional carousel posts with AI-generated text and images - from a single command.
+
+**Live Demo:** See it in action at [@ai.for.mortals](https://www.instagram.com/ai.for.mortals/) - every post on this page was generated 100% automatically.
+
+## Run 100% FREE with Local AI
+
+No API costs. No subscriptions. Run everything on your own computer:
+
+- **[LM Studio](https://lmstudio.ai/)** - Run powerful language models (Llama, Mistral, Qwen) locally. Your hardware, your data, zero cost.
+- **[ComfyUI](https://www.comfy.org/)** - Node-based Stable Diffusion interface. Generate high-quality images locally with full control.
+
+```bash
+# Generate and post with 100% local AI - completely FREE
+python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfyui --post
+
+# Run continuously every 5 minutes
+python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfyui --post --loop-each 5m
+
+# Enable AI web research for up-to-date content
+python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfyui --post --ai-tools
+```
 
 ## Features
 
-- **Multi-provider AI text generation** - Z.AI, OpenAI, Groq, Gemini, LM Studio with automatic fallback
-- **Multi-provider image generation** - DALL-E, fal.ai Flux, Replicate SDXL, ComfyUI
+- **100% Local AI Support** - LM Studio for text, ComfyUI for images - completely FREE
+- **Cloud AI Providers** - Z.AI, OpenAI, Groq, Gemini, fal.ai, DALL-E with automatic fallback
 - **Smart slide count** - AI decides optimal number of slides (3-10) based on topic
 - **Square format output** - 1080x1080 Instagram-optimized images
 - **Auto topic generation** - AI generates fresh topics based on your niche
@@ -715,6 +735,56 @@ The system tries providers in order of priority (cheapest first by default):
 
 If a provider fails (rate limit, API error), it automatically falls back to the next one.
 
+## Local AI Setup (100% FREE)
+
+Run completely FREE using local AI models on your own computer. No API keys needed, no costs, no data leaving your machine.
+
+### LM Studio (Text Generation)
+
+[LM Studio](https://lmstudio.ai/) lets you run powerful language models locally.
+
+1. Download and install LM Studio from [lmstudio.ai](https://lmstudio.ai/)
+2. Download a model (recommended: `Qwen2.5-7B-Instruct` or `Llama-3.1-8B-Instruct`)
+3. Start the local server in LM Studio (default: `http://localhost:1234`)
+4. Use with the `--text-ai lmstudio` flag
+
+**Requirements:**
+- 8GB+ RAM for 7B models
+- 16GB+ RAM for 13B+ models
+- GPU recommended but not required
+
+### ComfyUI (Image Generation)
+
+[ComfyUI](https://www.comfy.org/) is a node-based interface for Stable Diffusion.
+
+1. Download ComfyUI from [comfy.org](https://www.comfy.org/) or [GitHub](https://github.com/comfyanonymous/ComfyUI)
+2. Download SDXL model (recommended: `sd_xl_base_1.0.safetensors`)
+3. Place model in `ComfyUI/models/checkpoints/`
+4. Start ComfyUI (default: `http://127.0.0.1:8188`)
+5. Use with the `--image-ai comfyui` flag
+
+**Requirements:**
+- NVIDIA GPU with 8GB+ VRAM (for SDXL)
+- Or use SD 1.5 models with 4GB+ VRAM
+
+### Full Local Setup Example
+
+```bash
+# Start LM Studio server (in LM Studio app)
+# Start ComfyUI server: python main.py
+
+# Generate with 100% local AI
+python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfyui
+
+# Generate, post to Instagram, and loop every 5 minutes
+python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfyui --post --loop-each 5m
+
+# With AI-powered web research
+python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfyui --post --ai-tools
+```
+
+**Cost: $0.00** - Everything runs on your hardware.
+
 ## Instagram Posting Setup
 
 To use the `post` command to publish directly to Instagram, you need to set up both Instagram API access and Cloudinary for image hosting.
@@ -880,9 +950,10 @@ Socials-Automator/
 
 | Provider | Type | Cost per Post (6 slides) |
 |----------|------|--------------------------|
-| Z.AI + fal.ai | Text + Image | ~$0.02 |
-| Groq + fal.ai | Text + Image | ~$0.01 (Groq free) |
-| OpenAI (GPT-4o + DALL-E) | Text + Image | ~$0.15 |
+| **LM Studio + ComfyUI** | **Local AI** | **$0.00 (FREE)** |
+| Z.AI + fal.ai | Cloud API | ~$0.02 |
+| Groq + fal.ai | Cloud API | ~$0.01 (Groq free) |
+| OpenAI (GPT-4o + DALL-E) | Cloud API | ~$0.15 |
 
 ## Roadmap
 
@@ -893,6 +964,7 @@ Socials-Automator/
 - [x] Loop mode for continuous generation (`--loop-each`)
 - [x] Provider override flags (`--text-ai`, `--image-ai`)
 - [x] Auto-retry for robust generation (`--auto-retry`)
+- [x] 100% Local AI support - LM Studio + ComfyUI (FREE)
 - [ ] Scheduled posting (`--schedule "2025-12-11 10:00"`)
 - [ ] Multiple social platforms (Twitter/X, LinkedIn)
 - [ ] Video/Reels generation
