@@ -162,6 +162,20 @@ class ContentPlanner:
 
             await self.progress_callback(self._current_progress)
 
+    def _get_date_context(self) -> str:
+        """Get current date context to append to all prompts.
+
+        This ensures AI knows the current year and doesn't generate
+        outdated content like '2024' when we're in 2025.
+        """
+        from datetime import datetime
+        now = datetime.now()
+        return (
+            f"\n\nIMPORTANT - CURRENT DATE: {now.strftime('%B %d, %Y')} (Year {now.year}). "
+            f"All content must be relevant to {now.year}, NOT previous years. "
+            f"Do NOT mention {now.year - 1} or earlier years unless historically relevant."
+        )
+
     def _get_system_prompt(self) -> str:
         """Get the system prompt from profile config with current datetime context."""
         from datetime import datetime
@@ -342,7 +356,8 @@ Determine:
 Examples:
 - "5 ChatGPT prompts" -> content_count: 5, content_type: "prompt"
 - "Best AI tools for writers" -> content_count: 5, content_type: "tool" (default to 5 if not specified)
-- "3 ways to use Claude" -> content_count: 3, content_type: "way" """
+- "3 ways to use Claude" -> content_count: 3, content_type: "way"
+{self._get_date_context()}"""
 
         # Use Instructor extractor for structured extraction
         planning, history = await self.extractor.extract_with_history(
@@ -385,7 +400,8 @@ Create:
 2. {content_count} slide titles - one for each {content_type}
 3. A description for the hook slide image
 
-IMPORTANT: Generate EXACTLY {content_count} slide titles."""
+IMPORTANT: Generate EXACTLY {content_count} slide titles.
+{self._get_date_context()}"""
 
         # Use Instructor extractor for structured extraction
         structure, history = await self.extractor.extract_with_history(
@@ -596,7 +612,8 @@ IMPORTANT LENGTH LIMITS:
 - Body: MAX 200 characters
 
 The body MUST contain a real, usable {content_type} - not just a description of what the {content_type} is about.
-DELIVER what the hook promised! Give readers something they can actually USE."""
+DELIVER what the hook promised! Give readers something they can actually USE.
+{self._get_date_context()}"""
 
         prompt = base_prompt
         working_history = history.copy()
@@ -671,7 +688,7 @@ Please generate BETTER content that addresses this issue."""
         Returns:
             CTA slide dict
         """
-        prompt = """Generate a short call-to-action for the final slide.
+        prompt = f"""Generate a short call-to-action for the final slide.
 
 Good examples:
 - "Follow for more tips!"
@@ -680,7 +697,8 @@ Good examples:
 - "Don't miss the next one - Follow!"
 - "Like if this helped you!"
 
-Do NOT mention downloading, guides, ebooks, or any external content. Keep it simple - just encourage engagement (follow/save/share/like)."""
+Do NOT mention downloading, guides, ebooks, or any external content. Keep it simple - just encourage engagement (follow/save/share/like).
+{self._get_date_context()}"""
 
         try:
             # Use Instructor extractor for structured extraction
@@ -1203,7 +1221,8 @@ Requirements:
 - 1-2 emojis max
 - No hashtags (added separately)
 
-Return ONLY the caption text, nothing else."""
+Return ONLY the caption text, nothing else.
+{self._get_date_context()}"""
 
         # Try to generate a valid caption with retries
         for attempt in range(max_retries):

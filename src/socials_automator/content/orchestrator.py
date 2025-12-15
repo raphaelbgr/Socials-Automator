@@ -680,7 +680,17 @@ After searching, summarize the most relevant findings."""
         # Get recent posts context for variety
         recent_context = self.knowledge.get_recent_context(days=14)
 
+        # Get current date for context
+        from datetime import datetime
+        now = datetime.now()
+        date_context = (
+            f"IMPORTANT - CURRENT DATE: {now.strftime('%B %d, %Y')} (Year {now.year}). "
+            f"All topics must be relevant to {now.year}, NOT previous years like {now.year - 1}."
+        )
+
         prompt = f"""Generate {count} unique and engaging Instagram carousel post topic(s) for a {niche} account.
+
+{date_context}
 
 TARGET AUDIENCE:
 {json_module.dumps(target_audience, indent=2) if target_audience else "General audience interested in the niche"}
@@ -696,7 +706,7 @@ REQUIREMENTS:
 - Each topic should be specific and actionable (e.g., "5 ChatGPT prompts for writing emails" not "AI email tips")
 - Topics should be fresh and NOT similar to recently posted topics
 - Each topic should clearly fit one content pillar
-- Topics should be trendy and relevant to current interests
+- Topics should be trendy and relevant to {now.year} (current year!)
 - Mix different formats: tutorials, tips, comparisons, myths debunked, etc.
 
 Return as JSON array:
