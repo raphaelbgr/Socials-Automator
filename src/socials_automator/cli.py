@@ -213,30 +213,58 @@ def generate(
 
     # Run generation (with optional loop)
     if loop_seconds:
-        # Loop mode
+        # Loop mode - NEVER stops on errors, uses exponential backoff
         import time
         iteration = 0
+        consecutive_errors = 0
+        max_backoff = 3600  # Max 1 hour backoff
+
         try:
             while True:
                 iteration += 1
                 console.print(f"\n[bold cyan]--- Iteration {iteration} ---[/bold cyan]")
-                asyncio.run(_generate_posts(
-                    profile_path=profile_path,
-                    config=config,
-                    topic=None,  # Always auto-generate topic in loop mode
-                    pillar=pillar,
-                    count=1,  # One post per iteration in loop mode
-                    slides=slides,
-                    min_slides=min_slides,
-                    max_slides=max_slides,
-                    post_after=post_after,
-                    auto_retry=auto_retry,
-                    text_ai=text_ai,
-                    image_ai=image_ai,
-                    ai_tools=ai_tools,
-                ))
-                console.print(f"\n[dim]Waiting {loop_each} until next post... (Ctrl+C to stop)[/dim]")
-                time.sleep(loop_seconds)
+
+                try:
+                    asyncio.run(_generate_posts(
+                        profile_path=profile_path,
+                        config=config,
+                        topic=None,  # Always auto-generate topic in loop mode
+                        pillar=pillar,
+                        count=1,  # One post per iteration in loop mode
+                        slides=slides,
+                        min_slides=min_slides,
+                        max_slides=max_slides,
+                        post_after=post_after,
+                        auto_retry=auto_retry,
+                        text_ai=text_ai,
+                        image_ai=image_ai,
+                        ai_tools=ai_tools,
+                    ))
+                    # Success - reset error counter
+                    consecutive_errors = 0
+                    console.print(f"\n[dim]Waiting {loop_each} until next post... (Ctrl+C to stop)[/dim]")
+                    time.sleep(loop_seconds)
+
+                except KeyboardInterrupt:
+                    raise  # Re-raise to exit loop
+                except Exception as e:
+                    # NEVER stop on errors - use exponential backoff
+                    consecutive_errors += 1
+                    backoff_time = min(loop_seconds * (2 ** consecutive_errors), max_backoff)
+
+                    console.print(f"\n[red]Error in iteration {iteration}:[/red]")
+                    console.print(f"  {str(e)[:200]}")
+                    console.print(f"\n[yellow]Consecutive errors: {consecutive_errors}[/yellow]")
+                    console.print(f"[dim]Loop will continue - backing off for {backoff_time:.0f}s...[/dim]")
+                    console.print(f"[dim]Failed posts stay in pending-post/ and will be retried next iteration.[/dim]")
+
+                    # Log error for debugging
+                    import logging
+                    logging.getLogger("cli").error(f"Loop iteration {iteration} failed: {e}", exc_info=True)
+
+                    time.sleep(backoff_time)
+                    console.print(f"\n[cyan]Resuming loop after backoff...[/cyan]")
+
         except KeyboardInterrupt:
             console.print(f"\n[yellow]Loop stopped after {iteration} iteration(s)[/yellow]")
     else:
@@ -1013,6 +1041,87 @@ def token(
             raise typer.Exit(1)
 
 
+async def _cleanup_orphaned_cloudinary(posts_dir: Path, config) -> int:
+    """Clean up orphaned Cloudinary files from all posted folders.
+
+    Scans all posted folders for metadata with _upload_state containing
+    cloudinary_urls that were never cleaned up (e.g., after a failed post).
+
+    Returns:
+        Number of files cleaned up.
+    """
+    from .instagram import CloudinaryUploader
+
+    console.print(f"\n[dim]Checking for orphaned Cloudinary files...[/dim]")
+
+    orphaned_cleaned = 0
+    for year_dir in posts_dir.glob("*"):
+        if year_dir.is_dir() and year_dir.name.isdigit():
+            for month_dir in year_dir.glob("*"):
+                if month_dir.is_dir() and month_dir.name.isdigit():
+                    # Check both posted and pending-post folders
+                    for folder_name in ["posted", "pending-post"]:
+                        check_dir = month_dir / folder_name
+                        if check_dir.exists():
+                            for post_folder in check_dir.iterdir():
+                                if post_folder.is_dir():
+                                    meta_path = post_folder / "metadata.json"
+                                    if meta_path.exists():
+                                        try:
+                                            with open(meta_path, encoding="utf-8") as f:
+                                                meta = json.load(f)
+
+                                            # Check for orphaned upload state
+                                            upload_state = meta.get("_upload_state", {})
+                                            cloudinary_urls = upload_state.get("cloudinary_urls", [])
+
+                                            # Only cleanup if post is already published (has instagram.media_id)
+                                            # OR if the upload is old (more than 1 hour)
+                                            should_cleanup = False
+                                            if meta.get("instagram", {}).get("media_id"):
+                                                should_cleanup = True
+                                            elif upload_state.get("uploaded_at"):
+                                                from datetime import datetime
+                                                try:
+                                                    uploaded_at = datetime.fromisoformat(upload_state["uploaded_at"])
+                                                    age_hours = (datetime.now() - uploaded_at).total_seconds() / 3600
+                                                    if age_hours > 24:  # Orphaned for more than 24 hours
+                                                        should_cleanup = True
+                                                        console.print(f"  [yellow]Found stale upload ({age_hours:.1f}h old): {post_folder.name}[/yellow]")
+                                                except Exception:
+                                                    pass
+
+                                            if should_cleanup and cloudinary_urls:
+                                                cleanup_uploader = CloudinaryUploader(config=config)
+
+                                                for url in cloudinary_urls:
+                                                    if "cloudinary.com" in url:
+                                                        parts = url.split("/upload/")
+                                                        if len(parts) > 1:
+                                                            public_id = parts[1].rsplit(".", 1)[0]
+                                                            cleanup_uploader._uploaded_public_ids.append(public_id)
+
+                                                deleted = cleanup_uploader.cleanup()
+                                                orphaned_cleaned += deleted
+
+                                                # Remove upload state from metadata
+                                                del meta["_upload_state"]
+                                                with open(meta_path, "w", encoding="utf-8") as f:
+                                                    json.dump(meta, f, indent=2)
+
+                                                console.print(f"  [green]Cleaned {deleted} files from {post_folder.name}[/green]")
+
+                                        except Exception as e:
+                                            pass  # Ignore errors during cleanup scan
+
+    if orphaned_cleaned > 0:
+        console.print(f"  [green]Total: Cleaned {orphaned_cleaned} orphaned Cloudinary files[/green]")
+    else:
+        console.print(f"  [dim]No orphaned files found[/dim]")
+
+    return orphaned_cleaned
+
+
 async def _post_to_instagram(
     profile_path: Path,
     post_id: str | None,
@@ -1021,6 +1130,7 @@ async def _post_to_instagram(
     post_all: bool = False,
 ):
     """Async Instagram posting with progress display."""
+    from datetime import datetime
     from .instagram import InstagramClient, CloudinaryUploader, InstagramProgress
     import shutil
 
@@ -1065,11 +1175,13 @@ async def _post_to_instagram(
 
     if not pending_posts:
         console.print("[yellow]No posts ready to publish.[/yellow]")
-        console.print("\n[dim]Workflow:[/dim]")
-        console.print("  1. Generate posts: [cyan]python -m socials_automator.cli generate <profile> --topic '...'[/cyan]")
-        console.print("  2. Post to Instagram: [cyan]python -m socials_automator.cli post <profile>[/cyan]")
-        console.print("\n[dim]Posts are auto-moved: generated -> pending-post -> posted[/dim]")
-        raise typer.Exit(1)
+
+        # Still run cleanup for orphaned Cloudinary files even if no posts to publish
+        if not dry_run:
+            await _cleanup_orphaned_cloudinary(posts_dir, config)
+
+        # Return gracefully instead of raising - allows loop mode to continue
+        return
 
     # Sort by folder name (date-number-slug) to get oldest first
     pending_posts.sort(key=lambda p: p.name)
@@ -1125,6 +1237,7 @@ async def _post_to_instagram(
     # Publish each post
     published_count = 0
     failed_count = 0
+    skipped_count = 0
 
     for post_idx, post_path in enumerate(posts_to_publish, 1):
         if post_all:
@@ -1141,6 +1254,34 @@ async def _post_to_instagram(
 
         with open(metadata_path, encoding="utf-8") as f:
             post_metadata = json.load(f)
+
+        # Phase 0: Check for duplicates
+        print(f"\n  [Phase 0] Checking for duplicates...")
+        existing_instagram = post_metadata.get("instagram", {})
+        if existing_instagram.get("media_id"):
+            existing_permalink = existing_instagram.get("permalink", "N/A")
+            console.print(f"  [yellow][SKIP] Already posted to Instagram![/yellow]")
+            console.print(f"  [dim]Media ID: {existing_instagram['media_id']}[/dim]")
+            console.print(f"  [dim]URL: {existing_permalink}[/dim]")
+
+            # Move to posted folder if still in pending
+            if "pending-post" in str(post_path):
+                pending_parent = post_path.parent
+                posted_dir = pending_parent.parent / "posted"
+                posted_dir.mkdir(parents=True, exist_ok=True)
+                new_post_path = posted_dir / post_path.name
+                try:
+                    if new_post_path.exists():
+                        shutil.rmtree(str(new_post_path))
+                    shutil.move(str(post_path), str(new_post_path))
+                    console.print(f"  [green]Moved duplicate to posted folder[/green]")
+                except Exception as e:
+                    console.print(f"  [yellow]Could not move: {e}[/yellow]")
+
+            skipped_count += 1
+            continue
+
+        print(f"  [OK] No duplicate found")
 
         # Get slide images
         slide_paths = sorted(post_path.glob("slide_*.jpg"))
@@ -1231,14 +1372,48 @@ async def _post_to_instagram(
         )
 
         result = None
+        image_urls = []
         try:
-            # Simple print-based progress (no Live display)
-            print(f"\n  [Upload] Uploading {len(slide_paths)} images to Cloudinary...")
+            # Check for resume - if we already uploaded to Cloudinary
+            upload_state = post_metadata.get("_upload_state", {})
+            existing_urls = upload_state.get("cloudinary_urls", [])
 
-            folder = f"socials-automator/{profile_path.name}/{post_id_display}"
-            image_urls = await uploader.upload_batch(slide_paths, folder=folder)
+            if existing_urls and len(existing_urls) == len(slide_paths):
+                # Resume: use existing Cloudinary URLs
+                print(f"\n  [Resume] Found {len(existing_urls)} existing Cloudinary uploads")
 
-            print(f"  [OK] {len(image_urls)} images uploaded")
+                # NOTE: We previously had ghost detection here that checked for posts made
+                # after uploaded_at timestamp, but this caused false positives when a
+                # DIFFERENT post was made between retries. Ghost detection now only happens
+                # during the actual publish step (in the Instagram client).
+
+                image_urls = existing_urls
+                # Track these URLs for cleanup
+                for url in existing_urls:
+                    # Extract public_id from URL for cleanup tracking
+                    # URL format: https://res.cloudinary.com/<cloud>/image/upload/<path>/<public_id>.<ext>
+                    if "cloudinary.com" in url:
+                        parts = url.split("/upload/")
+                        if len(parts) > 1:
+                            public_id = parts[1].rsplit(".", 1)[0]  # Remove extension
+                            uploader._uploaded_public_ids.append(public_id)
+            else:
+                # Fresh upload to Cloudinary
+                print(f"\n  [Upload] Uploading {len(slide_paths)} images to Cloudinary...")
+
+                folder = f"socials-automator/{profile_path.name}/{post_id_display}"
+                image_urls = await uploader.upload_batch(slide_paths, folder=folder)
+
+                print(f"  [OK] {len(image_urls)} images uploaded")
+
+                # Save upload state for resume capability
+                post_metadata["_upload_state"] = {
+                    "cloudinary_urls": image_urls,
+                    "uploaded_at": datetime.now().isoformat(),
+                }
+                with open(metadata_path, "w", encoding="utf-8") as f:
+                    json.dump(post_metadata, f, indent=2)
+
             print(f"  [Container] Creating {len(image_urls)} Instagram containers...")
 
             # Publish to Instagram
@@ -1247,13 +1422,23 @@ async def _post_to_instagram(
                 caption=caption,
             )
 
-            # Cleanup Cloudinary uploads
+            # Cleanup Cloudinary uploads on success
             if result.success:
-                print(f"  [Cleanup] Removing temporary Cloudinary images...")
-                await uploader.cleanup_async()
+                deleted_count = await uploader.cleanup_async()
+                print(f"  [Cleanup] Removed {deleted_count} temporary Cloudinary images")
+
+                # Remove upload state from metadata (no longer needed)
+                if "_upload_state" in post_metadata:
+                    del post_metadata["_upload_state"]
+                    with open(metadata_path, "w", encoding="utf-8") as f:
+                        json.dump(post_metadata, f, indent=2)
 
         except Exception as e:
             console.print(f"[red]Error publishing: {e}[/red]")
+            # Inform user about resume capability
+            if image_urls:
+                console.print(f"\n[yellow]Cloudinary uploads saved - run the command again to resume.[/yellow]")
+                console.print(f"[dim]The script will skip re-uploading and retry Instagram posting.[/dim]")
             failed_count += 1
             if not post_all:
                 raise typer.Exit(1)
@@ -1292,9 +1477,40 @@ async def _post_to_instagram(
             published_count += 1
         else:
             error_msg = result.error_message if result else "Unknown error"
-            console.print(Panel(
+
+            # Check if error is retryable (from our error codes)
+            is_retryable = (
+                "[MEDIA_UPLOAD_FAILED]" in error_msg or
+                "[RATE_LIMIT]" in error_msg or
+                "[APP_RATE_LIMIT]" in error_msg or
+                "[USER_RATE_LIMIT]" in error_msg or
+                "ERROR_9" in error_msg or
+                "error code 9" in error_msg.lower()
+            )
+
+            error_panel = (
                 f"[bold red]Publishing failed[/bold red]\n\n"
-                f"[bold]Error:[/] {error_msg}",
+                f"[bold]Error:[/] {error_msg}"
+            )
+
+            if is_retryable:
+                error_panel += (
+                    f"\n\n[yellow]This error is usually temporary.[/yellow]\n"
+                    f"[dim]Run the command again to retry - Cloudinary uploads are saved.[/dim]"
+                )
+            else:
+                # Non-retryable error - cleanup Cloudinary to avoid orphaned files
+                if uploader._uploaded_public_ids:
+                    deleted_count = await uploader.cleanup_async()
+                    error_panel += f"\n\n[dim]Cleaned up {deleted_count} Cloudinary files.[/dim]"
+                    # Also remove upload state
+                    if "_upload_state" in post_metadata:
+                        del post_metadata["_upload_state"]
+                        with open(metadata_path, "w", encoding="utf-8") as f:
+                            json.dump(post_metadata, f, indent=2)
+
+            console.print(Panel(
+                error_panel,
                 title="Error",
                 border_style="red",
             ))
@@ -1308,12 +1524,18 @@ async def _post_to_instagram(
         console.print(f"[bold]Publishing Summary[/bold]")
         console.print(f"{'='*60}")
         console.print(f"  [green]Published:[/green] {published_count}")
+        if skipped_count > 0:
+            console.print(f"  [yellow]Skipped (duplicates):[/yellow] {skipped_count}")
         if failed_count > 0:
             console.print(f"  [red]Failed:[/red] {failed_count}")
         console.print(f"  [dim]Total:[/dim] {len(posts_to_publish)}")
 
-        if failed_count > 0:
-            raise typer.Exit(1)
+    # Final Phase: Clean up orphaned Cloudinary files from all posted folders
+    if not dry_run:
+        await _cleanup_orphaned_cloudinary(posts_dir, config)
+
+    if failed_count > 0:
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -1348,6 +1570,250 @@ REPLICATE_API_TOKEN=r8_...
     console.print("  1. Copy .env.example to .env and add your API keys")
     console.print("  2. Run: socials new-profile my-profile --handle @myhandle")
     console.print("  3. Run: socials generate my-profile --topic 'Your topic'")
+
+
+# Voice presets for reel command
+VOICE_CHOICES = [
+    "rvc_adam",  # THE viral TikTok voice - FREE, runs locally!
+    "tiktok-adam",  # Alias for rvc_adam
+    "adam",  # Short alias for rvc_adam
+    "professional_female",
+    "professional_male",
+    "friendly_female",
+    "friendly_male",
+    "energetic",
+    "british_female",
+    "british_male",
+]
+
+# Video matcher sources
+VIDEO_MATCHER_CHOICES = ["pexels"]
+
+
+@app.command()
+def reel(
+    profile: str = typer.Argument(..., help="Profile name to generate for"),
+    topic: str = typer.Option(None, "--topic", "-t", help="Topic for the video (auto-generated if not provided)"),
+    text_ai: str = typer.Option(None, "--text-ai", help="Text AI provider (zai, groq, gemini, openai, lmstudio, ollama)"),
+    video_matcher: str = typer.Option("pexels", "--video-matcher", "-m", help="Video source (pexels)"),
+    voice: str = typer.Option("rvc_adam", "--voice", "-v", help=f"Voice preset: {', '.join(VOICE_CHOICES)}"),
+    subtitle_size: int = typer.Option(80, "--subtitle-size", "-s", help="Subtitle font size in pixels (default: 80)"),
+    output_dir: str = typer.Option(None, "--output", "-o", help="Output directory (default: temp)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Only run first few steps without full video generation"),
+):
+    """Generate a 1-minute video reel for Instagram/TikTok.
+
+    This command matches stock footage to your content - it does NOT generate
+    video with AI. The AI is used for topic selection and script planning.
+
+    Pipeline:
+        1. [AI] Select topic from profile content pillars
+        2. Research topic via web search
+        3. [AI] Plan 1-minute video script
+        4. Search video matcher for stock footage
+        5. Download video clips
+        6. Assemble into 9:16 vertical video
+        7. Generate voiceover with edge-tts
+        8. Add karaoke-style subtitles
+        9. Output final.mp4
+
+    Examples:
+        socials reel ai.for.mortals
+        socials reel ai.for.mortals --text-ai lmstudio
+        socials reel ai.for.mortals --topic "5 AI productivity tips"
+        socials reel ai.for.mortals --voice british_female
+        socials reel ai.for.mortals --video-matcher pexels
+    """
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    profile_path = get_profile_path(profile)
+
+    if not profile_path.exists():
+        console.print(f"[red]Profile not found: {profile}[/red]")
+        raise typer.Exit(1)
+
+    # Validate voice choice
+    if voice not in VOICE_CHOICES:
+        console.print(f"[red]Invalid voice: {voice}[/red]")
+        console.print(f"[yellow]Available voices: {', '.join(VOICE_CHOICES)}[/yellow]")
+        raise typer.Exit(1)
+
+    # Validate video matcher choice
+    if video_matcher not in VIDEO_MATCHER_CHOICES:
+        console.print(f"[red]Invalid video matcher: {video_matcher}[/red]")
+        console.print(f"[yellow]Available matchers: {', '.join(VIDEO_MATCHER_CHOICES)}[/yellow]")
+        raise typer.Exit(1)
+
+    # Check for Pexels API key (only if using pexels matcher)
+    import os
+    if video_matcher == "pexels" and not os.environ.get("PEXELS_API_KEY"):
+        console.print("[red]PEXELS_API_KEY not found in environment[/red]")
+        console.print("[yellow]Add PEXELS_API_KEY to your .env file[/yellow]")
+        console.print("[dim]Get free API key at: https://www.pexels.com/api/[/dim]")
+        raise typer.Exit(1)
+
+    console.print(Panel(
+        f"Generating video reel for [cyan]{profile}[/cyan]\n"
+        f"Text AI: [yellow]{text_ai or 'default'}[/yellow]\n"
+        f"Video Matcher: [yellow]{video_matcher}[/yellow]\n"
+        f"Voice: [yellow]{voice}[/yellow]\n"
+        f"Subtitle Size: [yellow]{subtitle_size}px[/yellow]\n"
+        f"Topic: [green]{topic or 'Auto-generated'}[/green]",
+        title="Video Reel Generation",
+    ))
+
+    # Run video generation
+    asyncio.run(_generate_reel(
+        profile_path=profile_path,
+        topic=topic,
+        text_ai=text_ai,
+        video_matcher=video_matcher,
+        voice=voice,
+        subtitle_size=subtitle_size,
+        output_dir=Path(output_dir) if output_dir else None,
+        dry_run=dry_run,
+    ))
+
+
+async def _generate_reel(
+    profile_path: Path,
+    topic: str | None,
+    text_ai: str | None,
+    video_matcher: str,
+    voice: str,
+    subtitle_size: int,
+    output_dir: Path | None,
+    dry_run: bool,
+):
+    """Async video reel generation."""
+    from .video.pipeline import VideoPipeline, setup_logging
+
+    # Setup logging for video pipeline
+    setup_logging()
+
+    def progress_callback(stage: str, progress: float, message: str):
+        """Display progress updates."""
+        pct = int(progress * 100)
+        console.print(f"  [{pct:3d}%] {stage}: {message}")
+
+    # Create pipeline with options
+    pipeline = VideoPipeline(
+        voice=voice,
+        text_ai=text_ai,
+        video_matcher=video_matcher,
+        subtitle_size=subtitle_size,
+        progress_callback=progress_callback,
+    )
+
+    if dry_run:
+        # Dry run: just test the first few steps using the pipeline's configured steps
+        console.print("\n[yellow]DRY RUN - Testing pipeline steps...[/yellow]\n")
+
+        from .video.pipeline import (
+            ProfileMetadata,
+            PipelineContext,
+        )
+        import tempfile
+
+        profile = ProfileMetadata.from_file(profile_path / "metadata.json")
+        temp_dir = Path(tempfile.mkdtemp())
+
+        context = PipelineContext(
+            profile=profile,
+            post_id="dry-run-test",
+            output_dir=temp_dir / "output",
+            temp_dir=temp_dir,
+        )
+
+        # Use pipeline's configured steps (with AI client if specified)
+        # Step 1: Topic Selection
+        console.print("[bold]Step 1: Topic Selection[/bold]")
+        context = await pipeline.steps[0].execute(context)  # TopicSelector
+        console.print(f"  Topic: [green]{context.topic.topic}[/green]")
+        console.print(f"  Pillar: {context.topic.pillar_name}")
+
+        # Step 2: Research
+        console.print("\n[bold]Step 2: Topic Research[/bold]")
+        context = await pipeline.steps[1].execute(context)  # TopicResearcher
+        console.print(f"  Key points: {len(context.research.key_points)}")
+
+        # Step 3: Script Planning
+        console.print("\n[bold]Step 3: Script Planning[/bold]")
+        context = await pipeline.steps[2].execute(context)  # ScriptPlanner
+        console.print(f"  Title: {context.script.title}")
+        console.print(f"  Segments: {len(context.script.segments)}")
+        console.print(f"  Duration: {context.script.total_duration}s")
+
+        console.print("\n[green]Dry run complete! Pipeline is working.[/green]")
+        console.print("[dim]Run without --dry-run to generate full video[/dim]")
+        return
+
+    # Full generation
+    try:
+        console.print("\n[bold cyan]Starting video generation pipeline...[/bold cyan]\n")
+
+        # Generate output path in reels folder structure
+        # reels/YYYY/MM/generated/DD-NNN-slug/
+        from datetime import datetime
+        import re
+
+        now = datetime.now()
+
+        # Generate post ID: YYYYMMDD-HHMMSS
+        post_id = now.strftime("%Y%m%d-%H%M%S")
+
+        # Calculate reel number for today
+        reels_today_dir = profile_path / "reels" / now.strftime("%Y") / now.strftime("%m") / "generated"
+        reels_today_dir.mkdir(parents=True, exist_ok=True)
+
+        existing_reels = list(reels_today_dir.glob(f"{now.strftime('%d')}-*"))
+        reel_number = len(existing_reels) + 1
+
+        # Default slug will be updated after topic selection
+        reel_slug = "reel"
+
+        # Create output directory (will be updated after topic is selected)
+        reel_output_dir = reels_today_dir / f"{now.strftime('%d')}-{reel_number:03d}-{reel_slug}"
+
+        video_path = await pipeline.generate(
+            profile_path=profile_path,
+            output_dir=output_dir or reel_output_dir,
+            post_id=post_id,
+        )
+
+        # Rename folder with actual slug from topic
+        if output_dir is None and video_path and video_path.exists():
+            # Get topic from metadata to create slug
+            metadata_path = video_path.parent / "metadata.json"
+            if metadata_path.exists():
+                import json
+                with open(metadata_path) as f:
+                    metadata = json.load(f)
+                topic = metadata.get("topic", "reel")
+                # Create slug from topic
+                reel_slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:50].strip('-')
+
+                # Rename folder with proper slug
+                new_reel_dir = reels_today_dir / f"{now.strftime('%d')}-{reel_number:03d}-{reel_slug}"
+                if video_path.parent != new_reel_dir:
+                    import shutil
+                    shutil.move(str(video_path.parent), str(new_reel_dir))
+                    video_path = new_reel_dir / video_path.name
+
+        console.print(Panel(
+            f"[bold green]Video generated successfully![/bold green]\n\n"
+            f"[bold]Output:[/] {video_path}\n"
+            f"[bold]Duration:[/] 60 seconds\n"
+            f"[bold]Resolution:[/] 1080x1920 (9:16)",
+            title="Complete",
+            border_style="green",
+        ))
+
+    except Exception as e:
+        console.print(f"\n[red]Video generation failed: {e}[/red]")
+        console.print("[dim]Check logs for details[/dim]")
+        raise typer.Exit(1)
 
 
 def main():

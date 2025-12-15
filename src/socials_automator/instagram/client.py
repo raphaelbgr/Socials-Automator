@@ -29,9 +29,100 @@ _api_logger.addHandler(_file_handler)
 class InstagramAPIError(Exception):
     """Base exception for Instagram API errors."""
 
-    def __init__(self, message: str, error_code: int | None = None):
+    def __init__(self, message: str, error_code: int | None = None, is_retryable: bool = False):
         super().__init__(message)
         self.error_code = error_code
+        self.is_retryable = is_retryable
+
+
+# Known Instagram API error codes with explanations and retry guidance
+INSTAGRAM_ERROR_CODES = {
+    # Media processing errors (often retryable)
+    2207032: {
+        "name": "MEDIA_UPLOAD_FAILED",
+        "description": "Instagram failed to process the media upload",
+        "user_message": "Instagram's servers failed to process your images. This is usually temporary.",
+        "is_retryable": True,
+        "retry_delay": 30,  # seconds
+    },
+    2207026: {
+        "name": "MEDIA_NOT_READY",
+        "description": "Media container is not ready yet",
+        "user_message": "Instagram is still processing your images. Waiting...",
+        "is_retryable": True,
+        "retry_delay": 10,
+    },
+    2207001: {
+        "name": "MEDIA_TYPE_NOT_SUPPORTED",
+        "description": "Unsupported media type",
+        "user_message": "One of your images has an unsupported format. Instagram requires JPEG images.",
+        "is_retryable": False,
+    },
+    2207003: {
+        "name": "MEDIA_SIZE_ERROR",
+        "description": "Media exceeds size limits",
+        "user_message": "One of your images is too large. Instagram has a 8MB limit per image.",
+        "is_retryable": False,
+    },
+    2207050: {
+        "name": "CAROUSEL_MIN_CHILDREN",
+        "description": "Carousel needs at least 2 items",
+        "user_message": "Carousels require at least 2 images.",
+        "is_retryable": False,
+    },
+    2207051: {
+        "name": "CAROUSEL_MAX_CHILDREN",
+        "description": "Carousel exceeds 10 items",
+        "user_message": "Carousels cannot have more than 10 images.",
+        "is_retryable": False,
+    },
+    # Rate limiting
+    4: {
+        "name": "RATE_LIMIT",
+        "description": "Rate limit reached",
+        "user_message": "Instagram rate limit reached. The post may have still gone through - checking...",
+        "is_retryable": True,
+        "retry_delay": 60,
+    },
+    17: {
+        "name": "USER_RATE_LIMIT",
+        "description": "User request limit reached",
+        "user_message": "You've made too many requests. Please wait a few minutes.",
+        "is_retryable": True,
+        "retry_delay": 120,
+    },
+    # Auth errors (not retryable)
+    190: {
+        "name": "ACCESS_TOKEN_EXPIRED",
+        "description": "Access token expired",
+        "user_message": "Your Instagram access token has expired. Run: socials token <profile> --refresh",
+        "is_retryable": False,
+    },
+    10: {
+        "name": "PERMISSION_DENIED",
+        "description": "Permission denied",
+        "user_message": "Your app doesn't have permission to publish. Check your Instagram API setup.",
+        "is_retryable": False,
+    },
+}
+
+
+def get_error_info(error_code: int | None) -> dict:
+    """Get detailed error information for an Instagram error code."""
+    if error_code is None:
+        return {
+            "name": "UNKNOWN",
+            "description": "Unknown error",
+            "user_message": "An unknown error occurred with Instagram.",
+            "is_retryable": False,
+        }
+    return INSTAGRAM_ERROR_CODES.get(error_code, {
+        "name": f"ERROR_{error_code}",
+        "description": f"Unknown error code: {error_code}",
+        "user_message": f"Instagram returned error code {error_code}. This may be temporary - try again.",
+        "is_retryable": True,  # Unknown errors might be retryable
+        "retry_delay": 30,
+    })
 
 
 class InstagramClient:
@@ -133,9 +224,12 @@ class InstagramClient:
             # Check for API errors
             if "error" in result:
                 error = result["error"]
+                error_code = error.get("code")
+                error_info = get_error_info(error_code)
                 raise InstagramAPIError(
                     message=error.get("message", "Unknown API error"),
-                    error_code=error.get("code"),
+                    error_code=error_code,
+                    is_retryable=error_info.get("is_retryable", False),
                 )
 
             return result
@@ -220,6 +314,8 @@ class InstagramClient:
         Raises:
             InstagramAPIError: If container processing failed
         """
+        import re
+
         elapsed = 0.0
         while elapsed < max_wait_seconds:
             status = await self.check_container_status(container_id)
@@ -228,11 +324,26 @@ class InstagramClient:
             if status_code == "FINISHED":
                 return True
             elif status_code == "ERROR":
+                # Try to extract error code from status message
+                status_msg = status.get("status", "Unknown error")
+                error_code = None
+
+                # Look for error code pattern like "error code 2207032"
+                match = re.search(r"error code (\d+)", status_msg, re.IGNORECASE)
+                if match:
+                    error_code = int(match.group(1))
+
+                error_info = get_error_info(error_code)
                 raise InstagramAPIError(
-                    f"Container processing failed: {status.get('status', 'Unknown error')}"
+                    f"Container processing failed: {status_msg}",
+                    error_code=error_code,
+                    is_retryable=error_info.get("is_retryable", False),
                 )
             elif status_code == "EXPIRED":
-                raise InstagramAPIError("Container expired before publishing")
+                raise InstagramAPIError(
+                    "Container expired before publishing",
+                    is_retryable=True,  # Can retry with new containers
+                )
 
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
@@ -274,6 +385,7 @@ class InstagramClient:
         self,
         image_urls: list[str],
         caption: str,
+        max_retries: int = 3,
     ) -> InstagramPublishResult:
         """High-level method to publish a complete carousel post.
 
@@ -284,170 +396,230 @@ class InstagramClient:
         4. Wait for carousel container to be ready
         5. Publish
 
+        Includes automatic retry for transient errors (like 2207032).
+
         Args:
             image_urls: List of public image URLs
             caption: Post caption with hashtags
+            max_retries: Maximum retry attempts for transient errors
 
         Returns:
             InstagramPublishResult with success status and details
         """
-        self._progress = InstagramProgress(
-            total_images=len(image_urls),
-            image_urls=image_urls,
-        )
+        last_error = None
+        container_ids = []
 
-        try:
-            # Step 1: Create image containers
-            await self._report_progress(
-                InstagramPostStatus.CREATING_CONTAINERS,
-                "Creating image containers...",
-                10.0,
+        for attempt in range(max_retries + 1):
+            self._progress = InstagramProgress(
+                total_images=len(image_urls),
+                image_urls=image_urls,
             )
 
-            container_ids = []
-            for i, url in enumerate(image_urls):
-                container_id = await self.create_image_container(url)
-                container_ids.append(container_id)
-                self._progress.containers_created = i + 1
-                self._progress.container_ids = container_ids
-
-                await self._report_progress(
-                    InstagramPostStatus.CREATING_CONTAINERS,
-                    f"Created container {i + 1}/{len(image_urls)}",
-                    10.0 + (30.0 * (i + 1) / len(image_urls)),
-                )
-
-            # Step 2: Wait for containers to be ready
-            await self._report_progress(
-                InstagramPostStatus.CREATING_CONTAINERS,
-                "Waiting for containers to process...",
-                45.0,
-            )
-
-            for i, container_id in enumerate(container_ids):
-                ready = await self.wait_for_container(container_id)
-                if not ready:
-                    raise InstagramAPIError(
-                        f"Container {i + 1} timed out waiting to be ready"
+            try:
+                # Step 1: Create image containers
+                if attempt > 0:
+                    await self._report_progress(
+                        InstagramPostStatus.CREATING_CONTAINERS,
+                        f"Retry {attempt}/{max_retries}: Creating containers...",
+                        5.0,
+                    )
+                else:
+                    await self._report_progress(
+                        InstagramPostStatus.CREATING_CONTAINERS,
+                        "Creating image containers...",
+                        10.0,
                     )
 
-            # Step 3: Create carousel container
-            await self._report_progress(
-                InstagramPostStatus.CREATING_CONTAINERS,
-                "Creating carousel container...",
-                60.0,
-            )
+                container_ids = []
+                for i, url in enumerate(image_urls):
+                    container_id = await self.create_image_container(url)
+                    container_ids.append(container_id)
+                    self._progress.containers_created = i + 1
+                    self._progress.container_ids = container_ids
 
-            carousel_id = await self.create_carousel_container(container_ids, caption)
-            self._progress.carousel_container_id = carousel_id
+                    await self._report_progress(
+                        InstagramPostStatus.CREATING_CONTAINERS,
+                        f"Created container {i + 1}/{len(image_urls)}",
+                        10.0 + (30.0 * (i + 1) / len(image_urls)),
+                    )
 
-            # Step 4: Wait for carousel to be ready
-            await self._report_progress(
-                InstagramPostStatus.CREATING_CONTAINERS,
-                "Waiting for carousel to process...",
-                70.0,
-            )
+                # Step 2: Wait for containers to be ready
+                await self._report_progress(
+                    InstagramPostStatus.CREATING_CONTAINERS,
+                    "Waiting for containers to process...",
+                    45.0,
+                )
 
-            ready = await self.wait_for_container(carousel_id)
-            if not ready:
-                raise InstagramAPIError("Carousel container timed out waiting to be ready")
+                for i, container_id in enumerate(container_ids):
+                    ready = await self.wait_for_container(container_id)
+                    if not ready:
+                        raise InstagramAPIError(
+                            f"Container {i + 1} timed out waiting to be ready",
+                            is_retryable=True,
+                        )
 
-            # Step 5: Publish
-            await self._report_progress(
-                InstagramPostStatus.PUBLISHING,
-                "Publishing to Instagram...",
-                85.0,
-            )
+                # Step 3: Create carousel container
+                await self._report_progress(
+                    InstagramPostStatus.CREATING_CONTAINERS,
+                    "Creating carousel container...",
+                    60.0,
+                )
 
-            media_id = await self.publish_container(carousel_id)
+                carousel_id = await self.create_carousel_container(container_ids, caption)
+                self._progress.carousel_container_id = carousel_id
 
-            # Get permalink
-            permalink = await self.get_media_permalink(media_id)
+                # Step 4: Wait for carousel to be ready
+                await self._report_progress(
+                    InstagramPostStatus.CREATING_CONTAINERS,
+                    "Waiting for carousel to process...",
+                    70.0,
+                )
 
-            # Success
-            await self._report_progress(
-                InstagramPostStatus.PUBLISHED,
-                "Published successfully!",
-                100.0,
-            )
+                ready = await self.wait_for_container(carousel_id)
+                if not ready:
+                    raise InstagramAPIError(
+                        "Carousel container timed out waiting to be ready",
+                        is_retryable=True,
+                    )
 
-            _api_logger.info(f"=== SESSION COMPLETE === Total API calls: {self._api_call_count}")
+                # Step 5: Publish
+                await self._report_progress(
+                    InstagramPostStatus.PUBLISHING,
+                    "Publishing to Instagram...",
+                    85.0,
+                )
 
-            return InstagramPublishResult(
-                success=True,
-                media_id=media_id,
-                permalink=permalink,
-                container_ids=container_ids,
-                image_urls=image_urls,
-                published_at=datetime.now(),
-            )
+                media_id = await self.publish_container(carousel_id)
 
-        except InstagramAPIError as e:
-            # Check for "ghost publish" - post went through despite error
-            ghost_media_id = None
-            ghost_permalink = None
+                # Get permalink
+                permalink = await self.get_media_permalink(media_id)
 
-            if "rate limit" in str(e).lower() or e.error_code == 4:
-                _api_logger.warning("Rate limit error - checking if post was actually published...")
-                await asyncio.sleep(2)  # Brief wait before checking
-                recent = await self.get_recent_media(limit=1)
-                if recent:
-                    recent_post = recent[0]
-                    # Check if this was posted in the last 60 seconds
-                    from datetime import timezone
-                    recent_time = datetime.fromisoformat(recent_post.get("timestamp", "").replace("Z", "+00:00"))
-                    if (datetime.now(timezone.utc) - recent_time).total_seconds() < 60:
-                        ghost_media_id = recent_post.get("id")
-                        ghost_permalink = recent_post.get("permalink")
-                        _api_logger.warning(f"GHOST PUBLISH DETECTED! Post went through: {ghost_permalink}")
-
-            if ghost_media_id:
-                # Post actually succeeded!
+                # Success
                 await self._report_progress(
                     InstagramPostStatus.PUBLISHED,
-                    "Published (detected after rate limit error)",
+                    "Published successfully!",
                     100.0,
                 )
-                _api_logger.info(f"=== SESSION COMPLETE (GHOST) === Total API calls: {self._api_call_count}")
+
+                _api_logger.info(f"=== SESSION COMPLETE === Total API calls: {self._api_call_count}")
+
                 return InstagramPublishResult(
                     success=True,
-                    media_id=ghost_media_id,
-                    permalink=ghost_permalink,
+                    media_id=media_id,
+                    permalink=permalink,
                     container_ids=container_ids,
                     image_urls=image_urls,
                     published_at=datetime.now(),
                 )
 
-            self._progress.error = str(e)
+            except InstagramAPIError as e:
+                last_error = e
+                error_info = get_error_info(e.error_code)
+
+                # Log the error with details
+                _api_logger.warning(
+                    f"Attempt {attempt + 1}/{max_retries + 1} failed: "
+                    f"[{error_info['name']}] {e}"
+                )
+
+                # Check if we should retry
+                if e.is_retryable and attempt < max_retries:
+                    retry_delay = error_info.get("retry_delay", 30)
+                    user_msg = error_info.get("user_message", str(e))
+
+                    await self._report_progress(
+                        InstagramPostStatus.CREATING_CONTAINERS,
+                        f"{user_msg} Retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})",
+                        self._progress.progress_percent,
+                    )
+
+                    _api_logger.info(f"Waiting {retry_delay}s before retry...")
+                    await asyncio.sleep(retry_delay)
+                    continue  # Retry from the beginning
+
+                # Not retryable or out of retries - fall through to error handling
+                break
+
+            except Exception as e:
+                # Non-Instagram errors (network, etc) - don't retry
+                last_error = InstagramAPIError(f"Unexpected error: {e}")
+                break
+
+        # All retries exhausted or non-retryable error
+        # Check for "ghost publish" - post went through despite error
+        if last_error and (
+            "rate limit" in str(last_error).lower() or
+            (hasattr(last_error, 'error_code') and last_error.error_code == 4)
+        ):
+            _api_logger.warning("Rate limit error - checking if post was actually published...")
+            await asyncio.sleep(2)  # Brief wait before checking
+            try:
+                recent = await self.get_recent_media(limit=1)
+                if recent:
+                    recent_post = recent[0]
+                    # Check if this was posted in the last 60 seconds
+                    from datetime import timezone
+                    recent_time = datetime.fromisoformat(
+                        recent_post.get("timestamp", "").replace("Z", "+00:00")
+                    )
+                    if (datetime.now(timezone.utc) - recent_time).total_seconds() < 60:
+                        ghost_media_id = recent_post.get("id")
+                        ghost_permalink = recent_post.get("permalink")
+                        _api_logger.warning(f"GHOST PUBLISH DETECTED! Post went through: {ghost_permalink}")
+
+                        await self._report_progress(
+                            InstagramPostStatus.PUBLISHED,
+                            "Published (detected after rate limit error)",
+                            100.0,
+                        )
+                        _api_logger.info(
+                            f"=== SESSION COMPLETE (GHOST) === Total API calls: {self._api_call_count}"
+                        )
+                        return InstagramPublishResult(
+                            success=True,
+                            media_id=ghost_media_id,
+                            permalink=ghost_permalink,
+                            container_ids=container_ids,
+                            image_urls=image_urls,
+                            published_at=datetime.now(),
+                        )
+            except Exception:
+                pass  # Ghost check failed, continue with error handling
+
+        # Build user-friendly error message
+        if last_error:
+            error_info = get_error_info(
+                last_error.error_code if hasattr(last_error, 'error_code') else None
+            )
+            user_message = error_info.get("user_message", str(last_error))
+            error_name = error_info.get("name", "UNKNOWN")
+
+            self._progress.error = str(last_error)
             await self._report_progress(
                 InstagramPostStatus.FAILED,
-                f"Failed: {e}",
+                f"[{error_name}] {user_message}",
                 self._progress.progress_percent,
             )
 
-            _api_logger.error(f"=== SESSION FAILED === Total API calls: {self._api_call_count} | Error: {e}")
-
-            return InstagramPublishResult(
-                success=False,
-                error_message=str(e),
-                container_ids=self._progress.container_ids,
-                image_urls=image_urls,
-            )
-
-        except Exception as e:
-            self._progress.error = str(e)
-            await self._report_progress(
-                InstagramPostStatus.FAILED,
-                f"Unexpected error: {e}",
-                self._progress.progress_percent,
+            _api_logger.error(
+                f"=== SESSION FAILED === Total API calls: {self._api_call_count} | "
+                f"Error: [{error_name}] {last_error}"
             )
 
             return InstagramPublishResult(
                 success=False,
-                error_message=f"Unexpected error: {e}",
-                container_ids=self._progress.container_ids,
+                error_message=f"[{error_name}] {user_message}",
+                container_ids=container_ids,
                 image_urls=image_urls,
             )
+
+        # Should never reach here, but just in case
+        return InstagramPublishResult(
+            success=False,
+            error_message="Unknown error occurred",
+            container_ids=container_ids,
+            image_urls=image_urls,
+        )
 
     async def get_recent_media(self, limit: int = 1) -> list[dict]:
         """Get recent media posts from the account.

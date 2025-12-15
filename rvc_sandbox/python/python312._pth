@@ -1,0 +1,6 @@
+python312.zip
+.
+Lib\site-packages
+
+# Enable pip and site-packages
+import site
