@@ -432,17 +432,171 @@ IMPORTANT: Generate EXACTLY {content_count} slide titles."""
         Returns:
             Tuple of (slide_content, updated_history)
         """
+        # Determine if this content type requires concrete examples
+        # Each entry has specific instructions AND a practical example of good output
+        example_types = {
+            "prompt": '''Include an ACTUAL, COPY-PASTE READY prompt.
+GOOD EXAMPLE:
+- Heading: "Weekly Planning Prompt"
+- Body: Try: "Act as my productivity coach. Review my goals: [paste goals]. Create a prioritized weekly plan with 3 daily focuses."
+
+BAD EXAMPLE (too vague):
+- Body: "Use ChatGPT to help plan your week by asking it questions."''',
+
+            "prompts": '''Include an ACTUAL, COPY-PASTE READY prompt.
+GOOD EXAMPLE:
+- Heading: "Email Response Prompt"
+- Body: Use this: "Rewrite this email to be professional but friendly. Keep it under 100 words: [paste email]"
+
+BAD EXAMPLE (too vague):
+- Body: "ChatGPT can help you write better emails quickly."''',
+
+            "tip": '''Include a SPECIFIC, ACTIONABLE tip with example.
+GOOD EXAMPLE:
+- Heading: "Use Voice Input"
+- Body: Open ChatGPT on mobile, tap the mic icon, and speak your prompt. 3x faster than typing!
+
+BAD EXAMPLE (too vague):
+- Body: "Using voice features can help you be more productive with AI."''',
+
+            "tips": '''Include a SPECIFIC, ACTIONABLE tip with example.
+GOOD EXAMPLE:
+- Heading: "Chain Your Prompts"
+- Body: Start with "You are an expert in X" then follow up with "Now apply that to Y". Builds better context!
+
+BAD EXAMPLE (too vague):
+- Body: "Learning to write good prompts will improve your results."''',
+
+            "tool": '''Include the ACTUAL TOOL NAME and what it does.
+GOOD EXAMPLE:
+- Heading: "Perplexity AI"
+- Body: Real-time web search + AI answers. Ask "latest iPhone specs" and get sourced, up-to-date info instantly.
+
+BAD EXAMPLE (too vague):
+- Body: "There are many AI search tools that can help find information."''',
+
+            "tools": '''Include the ACTUAL TOOL NAME and what it does.
+GOOD EXAMPLE:
+- Heading: "Claude for Long Docs"
+- Body: Upload PDFs up to 100k tokens. Ask "summarize key points" or "find contradictions in this contract."
+
+BAD EXAMPLE (too vague):
+- Body: "AI tools can help you analyze documents faster."''',
+
+            "step": '''Include the SPECIFIC ACTION for this step.
+GOOD EXAMPLE:
+- Heading: "Step 2: Set Your Role"
+- Body: Start your prompt with "You are a [specific expert]." Example: "You are a senior Python developer specializing in APIs."
+
+BAD EXAMPLE (too vague):
+- Body: "Define what you want the AI to do in this step."''',
+
+            "steps": '''Include the SPECIFIC ACTION for this step.
+GOOD EXAMPLE:
+- Heading: "Step 3: Add Context"
+- Body: Paste relevant background. Example: "Here's my current code: [code]. I need to add error handling for API timeouts."
+
+BAD EXAMPLE (too vague):
+- Body: "Provide the AI with the information it needs."''',
+
+            "trick": '''Include the ACTUAL TRICK with a concrete example.
+GOOD EXAMPLE:
+- Heading: "The Persona Trick"
+- Body: Add "Explain like I'm 5" or "Explain like I'm a CEO" to any prompt. Same question, perfect detail level!
+
+BAD EXAMPLE (too vague):
+- Body: "Adjusting your prompts can give you better results."''',
+
+            "tricks": '''Include the ACTUAL TRICK with a concrete example.
+GOOD EXAMPLE:
+- Heading: "The Format Trick"
+- Body: End prompts with "Format as: bullet points / table / numbered list". AI follows formatting instructions perfectly.
+
+BAD EXAMPLE (too vague):
+- Body: "You can ask AI to format responses differently."''',
+
+            "hack": '''Include the SPECIFIC HACK and how to use it.
+GOOD EXAMPLE:
+- Heading: "Free GPT-4 Hack"
+- Body: Use Bing Chat (copilot.microsoft.com) - it's GPT-4 powered and 100% free. No subscription needed!
+
+BAD EXAMPLE (too vague):
+- Body: "There are ways to access AI tools without paying."''',
+
+            "hacks": '''Include the SPECIFIC HACK and how to use it.
+GOOD EXAMPLE:
+- Heading: "Context Window Hack"
+- Body: Hit the limit? Say "Continue from [last sentence]" in a new chat. Paste key context to keep going.
+
+BAD EXAMPLE (too vague):
+- Body: "Managing conversation length is important for AI tools."''',
+
+            "way": '''Explain the SPECIFIC METHOD with example.
+GOOD EXAMPLE:
+- Heading: "Automate Email Replies"
+- Body: Connect ChatGPT to Zapier. When emails arrive, auto-draft responses. Review and send in 1 click!
+
+BAD EXAMPLE (too vague):
+- Body: "AI can help automate your email workflow."''',
+
+            "ways": '''Explain the SPECIFIC METHOD with example.
+GOOD EXAMPLE:
+- Heading: "Generate Social Posts"
+- Body: Prompt: "Create 5 Twitter posts about [topic]. Include hooks, keep under 280 chars, add relevant hashtags."
+
+BAD EXAMPLE (too vague):
+- Body: "You can use AI to create content for social media."''',
+
+            "example": '''Include a REAL, CONCRETE example.
+GOOD EXAMPLE:
+- Heading: "Meeting Summary"
+- Body: Paste transcript + "Extract: 1) Key decisions 2) Action items with owners 3) Follow-up dates"
+
+BAD EXAMPLE (too vague):
+- Body: "AI can help summarize your meetings."''',
+
+            "examples": '''Include a REAL, CONCRETE example.
+GOOD EXAMPLE:
+- Heading: "Code Review Prompt"
+- Body: "Review this code for: security issues, performance problems, and style. Suggest fixes: [paste code]"
+
+BAD EXAMPLE (too vague):
+- Body: "You can use AI to help review your code."''',
+
+            "template": '''Include an ACTUAL TEMPLATE to copy.
+GOOD EXAMPLE:
+- Heading: "Blog Post Template"
+- Body: "Write a [word count] blog about [topic] for [audience]. Include: intro hook, 3 main points, actionable conclusion."
+
+BAD EXAMPLE (too vague):
+- Body: "Templates can help you write better content."''',
+
+            "templates": '''Include an ACTUAL TEMPLATE to copy.
+GOOD EXAMPLE:
+- Heading: "Product Description"
+- Body: "Write a compelling product description for [product]. Highlight: key features, benefits, target user, call-to-action."
+
+BAD EXAMPLE (too vague):
+- Body: "Using templates makes AI outputs more consistent."''',
+        }
+
+        example_instruction = example_types.get(content_type.lower(), "")
+
         base_prompt = f"""Generate content for slide {slide_number}: "{slide_title}"
 
 This is a {content_type} slide. Provide:
 - A SHORT heading (max 50 characters / 6-8 words) - be concise!
 - Body text (max 200 characters) - 1-2 SHORT sentences
 
+CRITICAL: The hook promised "{content_type}s" - YOU MUST DELIVER!
+{example_instruction}
+
 IMPORTANT LENGTH LIMITS:
 - Heading: MAX 50 characters (will be cut off if longer!)
 - Body: MAX 200 characters
 
-Make it SPECIFIC and VALUABLE - not generic filler. Keep it SHORT for mobile readability."""
+The body MUST contain a real, usable {content_type} - not just a description of what the {content_type} is about.
+DELIVER what the hook promised! Give readers something they can actually USE."""
 
         prompt = base_prompt
         working_history = history.copy()
@@ -566,6 +720,7 @@ Do NOT mention downloading, guides, ebooks, or any external content. Keep it sim
         - Content that doesn't match the topic
         - Too short or incomplete content
         - Missing actionable information
+        - Missing concrete examples when content type requires them
 
         Args:
             heading: Slide heading text.
@@ -601,6 +756,25 @@ Do NOT mention downloading, guides, ebooks, or any external content. Keep it sim
             if re.search(pattern, body):
                 return False, f"Detected potential gibberish pattern: {pattern}"
 
+        # Check for content types that require concrete examples
+        example_required_types = ["prompt", "prompts", "template", "templates"]
+        if content_type.lower() in example_required_types:
+            # Check if body contains quote marks (indicates actual prompt/template)
+            if '"' not in body and "'" not in body and ":" not in body:
+                return False, f"Content type '{content_type}' requires an actual example with quotes or format like 'Try: ...'"
+
+        # Check for vague/generic content patterns
+        vague_patterns = [
+            r"^(This|It|The) (is|can|will|helps)",  # Starts with generic description
+            r"(you can|you should|you need to) (use|try|do)",  # Generic advice without specifics
+        ]
+        body_lower = body.lower()
+        for pattern in vague_patterns:
+            if re.search(pattern, body_lower) and '"' not in body and ":" not in body:
+                # Only flag if there's no actual example
+                if content_type.lower() in ["prompt", "prompts", "tip", "tips", "trick", "tricks", "hack", "hacks"]:
+                    return False, f"Content is too vague - needs a concrete example, not just description"
+
         # AI validation for semantic quality
         validation_prompt = f"""Validate this Instagram carousel slide content for quality.
 
@@ -617,6 +791,9 @@ Check for these issues:
 3. Is it specific and actionable (not generic filler)?
 4. Is the grammar acceptable?
 5. Does it provide real value?
+6. CRITICAL: If content_type is "prompt", "template", "tip", "trick", or "hack" - does the body contain an ACTUAL EXAMPLE that readers can use? (not just a description of what to do)
+
+IMPORTANT: For content types like "prompt" or "template", the body MUST contain an actual usable example (usually in quotes or with a format like "Try: ..."). Generic descriptions like "Use AI to help with X" are NOT acceptable - we need the ACTUAL prompt/template/tip.
 
 If the content passes ALL checks, set is_valid=true and issues=[]
 If there are problems, set is_valid=false and list the specific issues."""
