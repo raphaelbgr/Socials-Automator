@@ -124,7 +124,7 @@ class ScriptPlanner(IScriptPlanner):
 
             # Use AI if available for better script generation
             if self.ai_client:
-                self.log_progress(f"[Attempt {attempt + 1}/{self.MAX_REGENERATION_ATTEMPTS}] Generating script...")
+                self.log_detail(f"[Attempt {attempt + 1}/{self.MAX_REGENERATION_ATTEMPTS}] Generating script...")
                 try:
                     script = await self._plan_script_with_ai(
                         topic, research, duration, profile_name, profile_handle,
@@ -133,7 +133,7 @@ class ScriptPlanner(IScriptPlanner):
                         last_script_text=last_script_text,
                     )
                 except Exception as e:
-                    self.log_progress(f"  -> AI error: {e}, retrying...")
+                    self.log_detail(f"  -> AI error: {e}, retrying...")
                     continue
 
             if not script:
@@ -151,7 +151,7 @@ class ScriptPlanner(IScriptPlanner):
                 return script
 
             # Script too short - log and retry
-            self.log_progress(
+            self.log_detail(
                 f"  -> REJECTED: {word_count} words (~{estimated_duration:.1f}s) - need {self.min_words_required}+ words"
             )
 
@@ -196,7 +196,7 @@ class ScriptPlanner(IScriptPlanner):
 
         # Generate hook
         hook = self._generate_hook(topic, research)
-        self.log_progress(f"Hook: {hook[:50]}...")
+        self.log_detail(f"Hook: {hook[:50]}...")
 
         # Generate segments from key points
         segments = self._generate_segments(
@@ -204,11 +204,11 @@ class ScriptPlanner(IScriptPlanner):
             research,
             content_duration,
         )
-        self.log_progress(f"Generated {len(segments)} segments")
+        self.log_detail(f"Generated {len(segments)} segments")
 
         # Generate CTA with profile name
         cta = self._generate_cta(topic, profile_name, profile_handle)
-        self.log_progress(f"CTA: {cta[:50]}...")
+        self.log_detail(f"CTA: {cta[:50]}...")
 
         # Build full narration
         full_narration = self._build_full_narration(hook, segments, cta)
@@ -383,7 +383,7 @@ Respond with ONLY valid JSON, no other text."""
 
             data = json.loads(clean_response)
         except json.JSONDecodeError as e:
-            self.log_progress(f"Failed to parse AI response as JSON: {e}")
+            self.log_detail(f"Failed to parse AI response as JSON: {e}")
             raise ValueError(f"Invalid JSON response: {e}")
 
         # Build segments from AI response
@@ -407,7 +407,7 @@ Respond with ONLY valid JSON, no other text."""
 
         # Ensure we have at least 3 segments
         if len(segments) < 3:
-            self.log_progress("AI returned too few segments, using templates")
+            self.log_detail("AI returned too few segments, using templates")
             raise ValueError("Too few segments returned")
 
         hook = data.get("hook", self._generate_hook(topic, research))
@@ -419,9 +419,9 @@ Respond with ONLY valid JSON, no other text."""
             cta_ending = "for more tips like this!"
         cta = f"Follow {profile_name} {cta_ending}"
 
-        self.log_progress(f"AI Hook: {hook[:50]}...")
-        self.log_progress(f"AI generated {len(segments)} segments")
-        self.log_progress(f"AI CTA: {cta[:50]}...")
+        self.log_detail(f"AI Hook: {hook[:50]}...")
+        self.log_detail(f"AI generated {len(segments)} segments")
+        self.log_detail(f"AI CTA: {cta[:50]}...")
 
         # Build full narration
         full_narration = self._build_full_narration(hook, segments, cta)

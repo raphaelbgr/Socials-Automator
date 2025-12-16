@@ -270,9 +270,9 @@ class VoiceGenerator(IVoiceGenerator):
             segment.end_time = segment_end_ms / 1000
             segment.duration_seconds = segment.end_time - segment.start_time
 
-        # Log the updated timing
+        # Log the updated timing (file only - too verbose for console)
         for seg in script.segments:
-            self.log_progress(
+            self.log_detail(
                 f"Segment {seg.index}: {seg.start_time:.1f}s - {seg.end_time:.1f}s "
                 f"({seg.duration_seconds:.1f}s)"
             )

@@ -177,7 +177,6 @@ class PipelineStep(ABC):
 
     def __init__(self, name: str):
         self.name = name
-        self.logger = logging.getLogger(f"video.pipeline.{name}")
         self._display = None  # Set by orchestrator
 
     def set_display(self, display) -> None:
@@ -185,38 +184,37 @@ class PipelineStep(ABC):
         self._display = display
 
     def log_start(self, message: str) -> None:
-        """Log step start."""
-        self.logger.info(f"[START] {self.name}: {message}")
+        """Log step start (shown on console)."""
         if self._display:
             self._display.step(message, self.name)
 
     def log_progress(self, message: str) -> None:
-        """Log step progress."""
-        self.logger.info(f"[PROGRESS] {self.name}: {message}")
+        """Log important progress (shown on console)."""
         if self._display:
             self._display.info(message, self.name)
 
+    def log_detail(self, message: str) -> None:
+        """Log detailed progress (file only, unless verbose)."""
+        if self._display:
+            self._display.detail(message, self.name)
+
     def log_success(self, message: str) -> None:
-        """Log step success."""
-        self.logger.info(f"[OK] {self.name}: {message}")
+        """Log step success (shown on console)."""
         if self._display:
             self._display.success(message, self.name)
 
     def log_error(self, message: str) -> None:
-        """Log step error."""
-        self.logger.error(f"[ERROR] {self.name}: {message}")
+        """Log step error (shown on console)."""
         if self._display:
             self._display.error(message, self.name)
 
     def log_warning(self, message: str) -> None:
-        """Log step warning."""
-        self.logger.warning(f"[WARN] {self.name}: {message}")
+        """Log step warning (shown on console)."""
         if self._display:
             self._display.warning(message, self.name)
 
     def log_debug(self, message: str) -> None:
-        """Log debug message."""
-        self.logger.debug(f"[DEBUG] {self.name}: {message}")
+        """Log debug message (file only)."""
         if self._display:
             self._display.debug(message, self.name)
 

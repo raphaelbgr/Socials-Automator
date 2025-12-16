@@ -4,9 +4,21 @@ Combines video, audio, and subtitles into final output
 with word-by-word highlighting synchronized to the voiceover.
 """
 
+import os
 from pathlib import Path
 from typing import Optional
 
+from socials_automator.constants import (
+    VIDEO_FPS,
+    SUBTITLE_FONT_SIZE_DEFAULT,
+    SUBTITLE_FONT_NAME,
+    SUBTITLE_FONT_COLOR,
+    SUBTITLE_HIGHLIGHT_COLOR,
+    SUBTITLE_STROKE_COLOR,
+    SUBTITLE_STROKE_WIDTH,
+    SUBTITLE_MAX_WORDS_PER_LINE,
+    get_temp_dir,
+)
 from .base import (
     ISubtitleRenderer,
     PipelineContext,
@@ -19,16 +31,16 @@ class SubtitleRenderer(ISubtitleRenderer):
 
     def __init__(
         self,
-        font: str = "C:/Windows/Fonts/arialbd.ttf",  # Arial Bold
-        font_size: int = 80,  # Default bigger for better visibility
-        color: str = "white",
-        highlight_color: str = "#FFD700",
-        stroke_color: str = "black",
-        stroke_width: int = 4,  # Slightly thicker stroke for bigger text
+        font: str = SUBTITLE_FONT_NAME,
+        font_size: int = SUBTITLE_FONT_SIZE_DEFAULT,
+        color: str = SUBTITLE_FONT_COLOR,
+        highlight_color: str = SUBTITLE_HIGHLIGHT_COLOR,
+        stroke_color: str = SUBTITLE_STROKE_COLOR,
+        stroke_width: int = SUBTITLE_STROKE_WIDTH,
         position: str = "bottom",
         profile_handle: Optional[str] = None,
         horizontal_margin: float = 0.10,  # 10% margin on each side
-        max_words_per_line: int = 4,  # Max words before wrapping to 2 lines
+        max_words_per_line: int = SUBTITLE_MAX_WORDS_PER_LINE,
     ):
         """Initialize subtitle renderer.
 
@@ -55,6 +67,27 @@ class SubtitleRenderer(ISubtitleRenderer):
         self.profile_handle = profile_handle
         self.horizontal_margin = horizontal_margin
         self.max_words_per_line = max_words_per_line
+        # Set MoviePy temp directory to avoid files in project root
+        self._setup_moviepy_temp()
+
+    def _setup_moviepy_temp(self) -> None:
+        """Configure MoviePy to use project temp directory."""
+        temp_dir = get_temp_dir()
+        os.environ["TEMP"] = str(temp_dir)
+        os.environ["TMP"] = str(temp_dir)
+
+    def _get_temp_audiofile_path(self, output_path: Path) -> str:
+        """Get temp audio file path for MoviePy write operation.
+
+        Args:
+            output_path: The output video path.
+
+        Returns:
+            Path string for temp audio file.
+        """
+        temp_dir = get_temp_dir()
+        temp_audio = temp_dir / f"{output_path.stem}_TEMP_audio.mp3"
+        return str(temp_audio)
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """Execute subtitle rendering step.
@@ -121,7 +154,7 @@ class SubtitleRenderer(ISubtitleRenderer):
                 video_path, audio_path, srt_path, output_path
             )
         except Exception as e:
-            self.log_progress(f"pycaps not available: {e}, using MoviePy")
+            self.log_detail(f"pycaps not available: {e}, using MoviePy")
             return await self._render_with_moviepy(
                 video_path, audio_path, srt_path, output_path
             )
@@ -149,7 +182,7 @@ class SubtitleRenderer(ISubtitleRenderer):
         except ImportError as e:
             raise ImportError("pycaps not available") from e
 
-        self.log_progress("Using pycaps for karaoke subtitles...")
+        self.log_detail("Using pycaps for karaoke subtitles...")
 
         # First combine video with audio using MoviePy
         video_with_audio = await self._add_audio_to_video(video_path, audio_path)
@@ -220,7 +253,7 @@ class SubtitleRenderer(ISubtitleRenderer):
                     "moviepy is not installed. Run: pip install moviepy"
                 ) from e
 
-        self.log_progress("Using MoviePy for karaoke subtitles...")
+        self.log_detail("Using MoviePy for karaoke subtitles...")
 
         # Load video and audio
         video = VideoFileClip(str(video_path))
@@ -233,18 +266,19 @@ class SubtitleRenderer(ISubtitleRenderer):
             video = video.set_audio(audio)
 
         # Parse SRT and create text clips
-        self.log_progress("Parsing SRT file...")
+        self.log_detail("Parsing SRT file...")
         entries = self._parse_srt(srt_path)
 
         if not entries:
-            self.log_progress("No subtitle entries, exporting without subtitles")
+            self.log_detail("No subtitle entries, exporting without subtitles")
             output_path.parent.mkdir(parents=True, exist_ok=True)
             video.write_videofile(
                 str(output_path),
-                fps=30,
+                fps=VIDEO_FPS,
                 codec="libx264",
                 audio_codec="aac",
                 logger=None,
+                temp_audiofile=self._get_temp_audiofile_path(output_path),
             )
             video.close()
             audio.close()
@@ -266,25 +300,25 @@ class SubtitleRenderer(ISubtitleRenderer):
             # Safe bottom = 65% of height, minus text height for safety
             pos_y = int(video_height * 0.58) - (max_text_height // 2)
 
-        self.log_progress(f"Creating karaoke clips for {len(entries)} words...")
+        self.log_detail(f"Creating karaoke clips for {len(entries)} words...")
 
         # Create karaoke-style subtitle clips with word highlighting
         text_clips = self._create_karaoke_clips_with_highlight(
             entries, video_width, video_height, pos_y
         )
 
-        self.log_progress(f"Created {len(text_clips)} subtitle clips")
+        self.log_detail(f"Created {len(text_clips)} subtitle clips")
 
         # Create watermark clips if profile handle is set
         watermark_clips = []
         if self.profile_handle:
-            self.log_progress(f"Adding watermark: {self.profile_handle}")
+            self.log_detail(f"Adding watermark: {self.profile_handle}")
             watermark_clips = self._create_watermark_clips(
                 video_width, video_height, video.duration
             )
-            self.log_progress(f"Created {len(watermark_clips)} watermark clips")
+            self.log_detail(f"Created {len(watermark_clips)} watermark clips")
 
-        self.log_progress("Compositing video with subtitles...")
+        self.log_progress("Rendering subtitles...")
 
         # Composite all layers
         all_clips = [video] + text_clips + watermark_clips
@@ -297,10 +331,11 @@ class SubtitleRenderer(ISubtitleRenderer):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         final.write_videofile(
             str(output_path),
-            fps=30,
+            fps=VIDEO_FPS,
             codec="libx264",
             audio_codec="aac",
             logger=None,
+            temp_audiofile=self._get_temp_audiofile_path(output_path),
         )
 
         # Cleanup
@@ -401,7 +436,7 @@ class SubtitleRenderer(ISubtitleRenderer):
                         text_clips.append(clip)
 
                 except Exception as e:
-                    self.log_progress(f"Skipping word '{word_text}': {e}")
+                    self.log_detail(f"Skipping word '{word_text}': {e}")
                     continue
 
         return text_clips
@@ -623,7 +658,7 @@ class SubtitleRenderer(ISubtitleRenderer):
                 watermark_clips.append(wm_clip)
 
             except Exception as e:
-                self.log_progress(f"Skipping watermark at {current_time}s: {e}")
+                self.log_detail(f"Skipping watermark at {current_time}s: {e}")
 
             current_time += interval
             pos_index += 1
@@ -674,10 +709,11 @@ class SubtitleRenderer(ISubtitleRenderer):
 
         video.write_videofile(
             str(output_path),
-            fps=30,
+            fps=VIDEO_FPS,
             codec="libx264",
             audio_codec="aac",
             logger=None,
+            temp_audiofile=self._get_temp_audiofile_path(output_path),
         )
 
         video.close()

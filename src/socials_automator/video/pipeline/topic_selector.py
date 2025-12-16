@@ -147,13 +147,13 @@ Example good responses:
 
             # Validate response
             if len(topic) < 10 or len(topic) > 100:
-                self.log_progress("AI response too short/long, using template")
+                self.log_detail("AI response too short/long, using template")
                 return self._generate_topic(pillar, profile.trending_keywords)
 
             return topic
 
         except Exception as e:
-            self.log_progress(f"AI generation failed: {e}, using template")
+            self.log_detail(f"AI generation failed: {e}, using template")
             return self._generate_topic(pillar, profile.trending_keywords)
 
     def _select_pillar(self, pillars: list[dict]) -> dict:

@@ -104,17 +104,17 @@ class CaptionGenerator(PipelineStep):
                 is_valid, feedback = await self._validate_caption(caption, context)
 
                 if is_valid:
-                    self.log_progress(f"Caption validated successfully on attempt {attempt}")
+                    self.log_detail(f"Caption validated successfully on attempt {attempt}")
                     return caption, hashtags
 
                 # Caption not good enough - store feedback for next attempt
-                self.log_progress(f"Caption validation failed: {feedback}")
+                self.log_detail(f"Caption validation failed: {feedback}")
                 last_caption = caption
                 last_feedback = feedback
 
             except Exception as e:
                 last_error = e
-                self.log_progress(f"Attempt {attempt} failed: {e}")
+                self.log_detail(f"Attempt {attempt} failed: {e}")
 
         # All retries exhausted
         raise CaptionGenerationError(
@@ -222,7 +222,7 @@ Return ONLY the JSON, no markdown or explanation."""
             return caption, hashtags
 
         except json.JSONDecodeError as e:
-            self.log_progress(f"Failed to parse AI response: {e}")
+            self.log_detail(f"Failed to parse AI response: {e}")
             raise ValueError(f"Invalid JSON response: {e}")
 
     async def _validate_caption(
@@ -297,7 +297,7 @@ A caption is valid if score >= 7. Be strict - generic captions like "Check out t
 
         except Exception as e:
             # If validation fails, do basic programmatic checks
-            self.log_progress(f"AI validation failed: {e}, using basic checks")
+            self.log_detail(f"AI validation failed: {e}, using basic checks")
             return self._basic_validation(caption, narration)
 
     def _basic_validation(self, caption: str, narration: str) -> tuple[bool, str]:

@@ -78,7 +78,7 @@ class TopicResearcher(ITopicResearcher):
 
         # Search for each query
         for query in topic.search_queries[:3]:
-            self.log_progress(f"Searching: {query}")
+            self.log_detail(f"Searching: {query}")
             results = await self._web_search(query)
             all_results.extend(results)
 
@@ -124,11 +124,11 @@ class TopicResearcher(ITopicResearcher):
                 return results
 
         except ImportError:
-            self.log_progress("DuckDuckGo not available, using fallback")
+            self.log_detail("DuckDuckGo not available, using fallback")
             return self._fallback_search(query)
 
         except Exception as e:
-            self.log_progress(f"Search error: {e}, using fallback")
+            self.log_detail(f"Search error: {e}, using fallback")
             return self._fallback_search(query)
 
     def _fallback_search(self, query: str) -> list[dict]:

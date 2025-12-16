@@ -114,7 +114,7 @@ class VideoSearcher(IVideoSearcher):
             # Use enhanced keywords if available, otherwise use segment keywords
             keywords = enhanced_keywords.get(segment.index, segment.keywords)
 
-            self.log_progress(
+            self.log_detail(
                 f"Searching segment {segment.index}: {keywords[:3]}"
             )
 
@@ -134,7 +134,7 @@ class VideoSearcher(IVideoSearcher):
                     "duration_needed": segment.duration_seconds,
                 })
             else:
-                self.log_progress(f"No video found for segment {segment.index}, using fallback")
+                self.log_detail(f"No video found for segment {segment.index}, using fallback")
                 fallback = await self._search_fallback()
                 if fallback:
                     video_id = fallback.get("id")
@@ -215,7 +215,7 @@ Respond with ONLY valid JSON."""
             return result
 
         except Exception as e:
-            self.log_progress(f"AI keyword enhancement failed: {e}, using defaults")
+            self.log_detail(f"AI keyword enhancement failed: {e}, using defaults")
             return {}
 
     async def _search_for_segment(
@@ -296,7 +296,7 @@ Respond with ONLY valid JSON."""
             return video
 
         except httpx.HTTPError as e:
-            self.log_progress(f"Search error for '{query}': {e}")
+            self.log_detail(f"Search error for '{query}': {e}")
             return None
 
     async def _search_with_orientation(
@@ -415,7 +415,7 @@ Respond with ONLY valid JSON."""
         ]
 
         if not available_videos:
-            self.log_progress("All videos already used, allowing reuse as last resort")
+            self.log_detail("All videos already used, allowing reuse as last resort")
             available_videos = videos
 
         # Prefer videos LONGER than target (can be trimmed cleanly)

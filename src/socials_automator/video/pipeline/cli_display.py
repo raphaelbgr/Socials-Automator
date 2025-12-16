@@ -1,56 +1,54 @@
 """Clean CLI display system for video pipeline.
 
-Provides timestamped, formatted logging for all pipeline steps.
-Uses Rich for beautiful terminal output with full transparency.
+Provides:
+- Clean console output with only important milestones
+- Detailed file logging for debugging
+- No duplicate messages
 """
 
 import logging
-import sys
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
-from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.text import Text
 
 
 class LogLevel(Enum):
     """Log levels for CLI display."""
-    DEBUG = "debug"
-    INFO = "info"
-    STEP = "step"
-    SUCCESS = "success"
-    WARNING = "warning"
-    ERROR = "error"
+    DEBUG = "debug"      # Only to file
+    DETAIL = "detail"    # Only to file (verbose progress)
+    INFO = "info"        # Console + file
+    STEP = "step"        # Console + file (step headers)
+    SUCCESS = "success"  # Console + file
+    WARNING = "warning"  # Console + file
+    ERROR = "error"      # Console + file
 
 
 class PipelineDisplay:
     """Handles all CLI display for video pipeline.
 
-    Provides:
-    - Timestamped logging for every action
-    - Step-by-step progress tracking
-    - Clean, formatted output
-    - Full transparency of what the program is doing
+    Console output: Clean, milestone-focused
+    File output: Detailed for debugging
     """
 
-    # Step icons (ASCII-compatible)
     ICONS = {
         LogLevel.DEBUG: "[.]",
-        LogLevel.INFO: "[i]",
+        LogLevel.DETAIL: "[.]",
+        LogLevel.INFO: " ",
         LogLevel.STEP: "[>]",
         LogLevel.SUCCESS: "[OK]",
         LogLevel.WARNING: "[!]",
         LogLevel.ERROR: "[X]",
     }
 
-    # Colors for each level
     COLORS = {
         LogLevel.DEBUG: "dim",
+        LogLevel.DETAIL: "dim",
         LogLevel.INFO: "white",
         LogLevel.STEP: "cyan",
         LogLevel.SUCCESS: "green",
@@ -67,9 +65,9 @@ class PipelineDisplay:
         """Initialize pipeline display.
 
         Args:
-            console: Rich console instance (creates new if not provided).
-            show_timestamps: Whether to show timestamps on each line.
-            verbose: Whether to show debug messages.
+            console: Rich console instance.
+            show_timestamps: Show timestamps on each line.
+            verbose: Show detailed progress (usually only in file).
         """
         self.console = console or Console()
         self.show_timestamps = show_timestamps
@@ -78,71 +76,71 @@ class PipelineDisplay:
         self._step_number: int = 0
         self._total_steps: int = 0
         self._start_time: Optional[datetime] = None
+        self._file_logger = self._setup_file_logging()
 
-        # Setup file logging
-        self._setup_file_logging()
-
-    def _setup_file_logging(self) -> None:
-        """Setup file logging for detailed logs."""
+    def _setup_file_logging(self) -> logging.Logger:
+        """Setup file-only logging for detailed logs."""
         log_dir = Path("logs")
         log_dir.mkdir(exist_ok=True)
 
-        # Create file handler
-        log_file = log_dir / "video_pipeline.log"
-        file_handler = logging.FileHandler(log_file, encoding="utf-8")
-        file_handler.setLevel(logging.DEBUG)
-
-        # Format with timestamps
-        formatter = logging.Formatter(
-            "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
-        file_handler.setFormatter(formatter)
-
-        # Add to root logger for video pipeline
-        logger = logging.getLogger("video.pipeline")
-        logger.addHandler(file_handler)
+        logger = logging.getLogger("video.pipeline.file")
         logger.setLevel(logging.DEBUG)
+        logger.handlers.clear()  # Remove any existing handlers
+        logger.propagate = False  # Don't propagate to parent loggers
+
+        file_handler = logging.FileHandler(
+            log_dir / "video_pipeline.log",
+            encoding="utf-8"
+        )
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter(
+            "%(asctime)s | %(levelname)-8s | %(message)s",
+            datefmt="%H:%M:%S"
+        ))
+        logger.addHandler(file_handler)
+
+        return logger
 
     def _timestamp(self) -> str:
         """Get current timestamp string."""
         return datetime.now().strftime("%H:%M:%S")
 
-    def _format_line(
+    def _log_to_file(self, level: LogLevel, message: str, step_name: Optional[str] = None) -> None:
+        """Log message to file only."""
+        msg = f"{step_name}: {message}" if step_name else message
+        if level == LogLevel.ERROR:
+            self._file_logger.error(msg)
+        elif level == LogLevel.WARNING:
+            self._file_logger.warning(msg)
+        elif level == LogLevel.DEBUG or level == LogLevel.DETAIL:
+            self._file_logger.debug(msg)
+        else:
+            self._file_logger.info(msg)
+
+    def _print_to_console(
         self,
         level: LogLevel,
         message: str,
         step_name: Optional[str] = None,
-    ) -> Text:
-        """Format a log line with timestamp and styling.
-
-        Args:
-            level: Log level.
-            message: Message to display.
-            step_name: Optional step name prefix.
-
-        Returns:
-            Formatted Rich Text object.
-        """
+    ) -> None:
+        """Print formatted message to console."""
         parts = []
 
-        # Timestamp
         if self.show_timestamps:
             parts.append(f"[dim]{self._timestamp()}[/dim] ")
 
-        # Icon
-        icon = self.ICONS.get(level, "[?]")
+        icon = self.ICONS.get(level, " ")
         color = self.COLORS.get(level, "white")
-        parts.append(f"[{color}]{icon}[/{color}] ")
 
-        # Step name
+        if icon.strip():
+            parts.append(f"[{color}]{icon}[/{color}] ")
+
         if step_name:
-            parts.append(f"[bold cyan]{step_name}[/bold cyan]: ")
+            parts.append(f"[bold cyan]{step_name}:[/bold cyan] ")
 
-        # Message
         parts.append(f"[{color}]{message}[/{color}]")
 
-        return Text.from_markup("".join(parts))
+        self.console.print(Text.from_markup("".join(parts)))
 
     def log(
         self,
@@ -150,63 +148,51 @@ class PipelineDisplay:
         message: str,
         step_name: Optional[str] = None,
     ) -> None:
-        """Log a message with formatting.
+        """Log a message.
 
-        Args:
-            level: Log level.
-            message: Message to display.
-            step_name: Optional step name prefix.
+        DEBUG/DETAIL: File only (unless verbose)
+        Others: Console + File
         """
-        if level == LogLevel.DEBUG and not self.verbose:
-            return
+        # Always log to file
+        self._log_to_file(level, message, step_name)
 
-        line = self._format_line(level, message, step_name)
-        self.console.print(line)
-
-        # Also log to file
-        logger = logging.getLogger("video.pipeline")
-        log_msg = f"{step_name}: {message}" if step_name else message
-
-        if level == LogLevel.ERROR:
-            logger.error(log_msg)
-        elif level == LogLevel.WARNING:
-            logger.warning(log_msg)
-        elif level == LogLevel.DEBUG:
-            logger.debug(log_msg)
+        # Console output based on level
+        if level in (LogLevel.DEBUG, LogLevel.DETAIL):
+            if self.verbose:
+                self._print_to_console(level, message, step_name)
         else:
-            logger.info(log_msg)
+            self._print_to_console(level, message, step_name)
 
     def debug(self, message: str, step_name: Optional[str] = None) -> None:
-        """Log debug message."""
+        """Log debug message (file only unless verbose)."""
         self.log(LogLevel.DEBUG, message, step_name)
 
+    def detail(self, message: str, step_name: Optional[str] = None) -> None:
+        """Log detailed progress (file only unless verbose)."""
+        self.log(LogLevel.DETAIL, message, step_name)
+
     def info(self, message: str, step_name: Optional[str] = None) -> None:
-        """Log info message."""
+        """Log info message (console + file)."""
         self.log(LogLevel.INFO, message, step_name)
 
     def step(self, message: str, step_name: Optional[str] = None) -> None:
-        """Log step progress message."""
+        """Log step progress (console + file)."""
         self.log(LogLevel.STEP, message, step_name)
 
     def success(self, message: str, step_name: Optional[str] = None) -> None:
-        """Log success message."""
+        """Log success message (console + file)."""
         self.log(LogLevel.SUCCESS, message, step_name)
 
     def warning(self, message: str, step_name: Optional[str] = None) -> None:
-        """Log warning message."""
+        """Log warning message (console + file)."""
         self.log(LogLevel.WARNING, message, step_name)
 
     def error(self, message: str, step_name: Optional[str] = None) -> None:
-        """Log error message."""
+        """Log error message (console + file)."""
         self.log(LogLevel.ERROR, message, step_name)
 
-    def start_pipeline(self, profile_name: str, total_steps: int = 10) -> None:
-        """Display pipeline start banner.
-
-        Args:
-            profile_name: Name of the profile.
-            total_steps: Total number of pipeline steps.
-        """
+    def start_pipeline(self, profile_name: str, total_steps: int = 9) -> None:
+        """Display pipeline start banner."""
         self._start_time = datetime.now()
         self._step_number = 0
         self._total_steps = total_steps
@@ -218,43 +204,25 @@ class PipelineDisplay:
             f"Started: [dim]{self._start_time.strftime('%Y-%m-%d %H:%M:%S')}[/dim]",
             border_style="cyan",
         ))
-        self.console.print()
 
     def start_step(self, step_name: str, description: str) -> None:
-        """Mark the start of a pipeline step.
-
-        Args:
-            step_name: Name of the step.
-            description: Description of what the step does.
-        """
+        """Mark start of a pipeline step."""
         self._step_number += 1
         self._current_step = step_name
 
-        header = f"Step {self._step_number}/{self._total_steps}: {step_name}"
         self.console.print()
-        self.console.print(f"[bold white]{'-' * 60}[/bold white]")
-        self.console.print(f"[bold cyan]{header}[/bold cyan]")
+        self.console.print(f"[dim]{'─' * 60}[/dim]")
+        self.console.print(
+            f"[bold white]Step {self._step_number}/{self._total_steps}:[/bold white] "
+            f"[bold cyan]{step_name}[/bold cyan]"
+        )
         self.console.print(f"[dim]{description}[/dim]")
-        self.console.print(f"[bold white]{'-' * 60}[/bold white]")
+        self.console.print(f"[dim]{'─' * 60}[/dim]")
 
-        self.log(LogLevel.STEP, f"Starting: {description}", step_name)
-
-    def end_step(self, step_name: str, summary: str) -> None:
-        """Mark the end of a pipeline step.
-
-        Args:
-            step_name: Name of the step.
-            summary: Summary of what was accomplished.
-        """
-        self.log(LogLevel.SUCCESS, summary, step_name)
+        self._log_to_file(LogLevel.INFO, f"=== Step {self._step_number}: {step_name} - {description} ===")
 
     def end_pipeline(self, output_path: Optional[Path] = None, success: bool = True) -> None:
-        """Display pipeline completion banner.
-
-        Args:
-            output_path: Path to the output file.
-            success: Whether the pipeline completed successfully.
-        """
+        """Display pipeline completion banner."""
         end_time = datetime.now()
         duration = end_time - self._start_time if self._start_time else None
         duration_str = str(duration).split(".")[0] if duration else "unknown"
@@ -262,132 +230,54 @@ class PipelineDisplay:
         self.console.print()
 
         if success:
-            content = (
-                f"[bold green]Video Generated Successfully![/bold green]\n\n"
-                f"[bold]Duration:[/bold] {duration_str}\n"
-            )
+            content = f"[bold green]Video Generated Successfully![/bold green]\n\n"
+            content += f"Duration: {duration_str}\n"
             if output_path:
-                content += f"[bold]Output:[/bold] {output_path}\n"
+                content += f"Output: [cyan]{output_path}[/cyan]"
 
-            self.console.print(Panel(content, border_style="green", title="Complete"))
+            self.console.print(Panel(content, border_style="green", title="[green]Complete[/green]"))
         else:
             self.console.print(Panel(
                 f"[bold red]Pipeline Failed[/bold red]\n\n"
-                f"[bold]Duration:[/bold] {duration_str}\n"
+                f"Duration: {duration_str}\n"
                 f"[dim]Check logs/video_pipeline.log for details[/dim]",
                 border_style="red",
-                title="Error",
+                title="[red]Error[/red]",
             ))
 
     def show_topic(self, topic: str, pillar: str) -> None:
-        """Display selected topic.
-
-        Args:
-            topic: The selected topic.
-            pillar: Content pillar name.
-        """
+        """Display selected topic."""
         self.console.print()
         self.console.print(Panel(
             f"[bold]{topic}[/bold]\n"
             f"[dim]Pillar: {pillar}[/dim]",
-            title="[cyan]Selected Topic[/cyan]",
+            title="[cyan]Topic[/cyan]",
             border_style="cyan",
         ))
 
     def show_script(self, title: str, segments: int, duration: float) -> None:
-        """Display script summary.
-
-        Args:
-            title: Script title.
-            segments: Number of segments.
-            duration: Total duration in seconds.
-        """
+        """Display script summary."""
         self.console.print()
         self.console.print(Panel(
             f"[bold]{title}[/bold]\n"
-            f"Segments: {segments}\n"
-            f"Duration: {duration:.0f}s",
-            title="[cyan]Script Planned[/cyan]",
+            f"Segments: {segments} | Duration: {duration:.0f}s",
+            title="[cyan]Script[/cyan]",
             border_style="cyan",
         ))
 
-    def show_clips_table(self, clips: list[dict]) -> None:
-        """Display table of downloaded clips.
-
-        Args:
-            clips: List of clip info dicts.
-        """
-        table = Table(title="Downloaded Clips", show_header=True)
-        table.add_column("#", style="dim", width=3)
-        table.add_column("Pexels ID", style="cyan")
-        table.add_column("Duration", style="green")
-        table.add_column("Source", style="dim")
-
-        for i, clip in enumerate(clips, 1):
-            table.add_row(
-                str(i),
-                str(clip.get("pexels_id", "?")),
-                f"{clip.get('duration', 0):.1f}s",
-                clip.get("source", "pexels")[:30],
-            )
-
-        self.console.print()
-        self.console.print(table)
-
     def show_cache_stats(self, hits: int, misses: int) -> None:
-        """Display Pexels cache statistics.
-
-        Args:
-            hits: Number of cache hits.
-            misses: Number of cache misses.
-        """
+        """Display cache statistics."""
         total = hits + misses
         hit_rate = (hits / total * 100) if total > 0 else 0
-
-        self.info(
-            f"Cache: {hits} hits, {misses} misses ({hit_rate:.0f}% hit rate)",
-            "PexelsCache"
-        )
-
-    def show_validation_result(
-        self,
-        step_name: str,
-        is_valid: bool,
-        score: Optional[int] = None,
-        feedback: Optional[str] = None,
-    ) -> None:
-        """Display validation result.
-
-        Args:
-            step_name: Name of the validation step.
-            is_valid: Whether validation passed.
-            score: Optional score (e.g., 7/10).
-            feedback: Optional feedback message.
-        """
-        if is_valid:
-            score_str = f" (score: {score}/10)" if score else ""
-            self.success(f"Validation passed{score_str}", step_name)
-        else:
-            score_str = f" (score: {score}/10)" if score else ""
-            self.warning(f"Validation failed{score_str}: {feedback}", step_name)
-
-    def show_retry(self, step_name: str, attempt: int, max_attempts: int) -> None:
-        """Display retry attempt.
-
-        Args:
-            step_name: Name of the step being retried.
-            attempt: Current attempt number.
-            max_attempts: Maximum number of attempts.
-        """
-        self.warning(f"Retrying ({attempt}/{max_attempts})...", step_name)
+        self.info(f"Cache: {hits} hits, {misses} downloads ({hit_rate:.0f}% cached)")
 
 
-# Global display instance for easy access
+# Global display instance
 _display: Optional[PipelineDisplay] = None
 
 
 def get_display() -> PipelineDisplay:
-    """Get the global pipeline display instance."""
+    """Get global pipeline display instance."""
     global _display
     if _display is None:
         _display = PipelineDisplay()
@@ -395,7 +285,7 @@ def get_display() -> PipelineDisplay:
 
 
 def set_display(display: PipelineDisplay) -> None:
-    """Set the global pipeline display instance."""
+    """Set global pipeline display instance."""
     global _display
     _display = display
 
@@ -404,71 +294,10 @@ def setup_display(
     show_timestamps: bool = True,
     verbose: bool = False,
 ) -> PipelineDisplay:
-    """Setup and return a new pipeline display.
-
-    Args:
-        show_timestamps: Whether to show timestamps.
-        verbose: Whether to show debug messages.
-
-    Returns:
-        Configured PipelineDisplay instance.
-    """
+    """Setup and return a new pipeline display."""
     display = PipelineDisplay(
         show_timestamps=show_timestamps,
         verbose=verbose,
     )
     set_display(display)
     return display
-
-
-class StepLogger:
-    """Context manager for logging pipeline steps.
-
-    Provides a clean way to log step start/end with proper formatting.
-
-    Usage:
-        display = get_display()
-        with StepLogger(display, "TopicSelector", "Selecting topic from profile"):
-            # Do work
-            display.info("Found 5 content pillars")
-            # More work
-    """
-
-    def __init__(
-        self,
-        display: PipelineDisplay,
-        step_name: str,
-        description: str,
-    ):
-        self.display = display
-        self.step_name = step_name
-        self.description = description
-        self._success_message: Optional[str] = None
-
-    def __enter__(self) -> "StepLogger":
-        self.display.start_step(self.step_name, self.description)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
-        if exc_type is None:
-            if self._success_message:
-                self.display.end_step(self.step_name, self._success_message)
-        else:
-            self.display.error(f"Failed: {exc_val}", self.step_name)
-        return False  # Don't suppress exceptions
-
-    def set_success(self, message: str) -> None:
-        """Set the success message for when the step completes."""
-        self._success_message = message
-
-    def log(self, message: str) -> None:
-        """Log a message within this step."""
-        self.display.info(message, self.step_name)
-
-    def debug(self, message: str) -> None:
-        """Log a debug message within this step."""
-        self.display.debug(message, self.step_name)
-
-    def warning(self, message: str) -> None:
-        """Log a warning within this step."""
-        self.display.warning(message, self.step_name)

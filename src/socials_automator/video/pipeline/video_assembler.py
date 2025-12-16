@@ -8,10 +8,17 @@ Assembles downloaded clips into a video with:
 """
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from socials_automator.constants import (
+    VIDEO_WIDTH,
+    VIDEO_HEIGHT,
+    VIDEO_FPS,
+    get_temp_dir,
+)
 from .base import (
     IVideoAssembler,
     PipelineContext,
@@ -25,14 +32,36 @@ from .base import (
 class VideoAssembler(IVideoAssembler):
     """Assembles video clips into final video."""
 
-    # Target output settings
-    WIDTH = 1080
-    HEIGHT = 1920
-    FPS = 30
+    # Target output settings (from constants)
+    WIDTH = VIDEO_WIDTH
+    HEIGHT = VIDEO_HEIGHT
+    FPS = VIDEO_FPS
 
     def __init__(self):
         """Initialize video assembler."""
         super().__init__()
+        # Set MoviePy temp directory to avoid files in project root
+        self._setup_moviepy_temp()
+
+    def _setup_moviepy_temp(self) -> None:
+        """Configure MoviePy to use project temp directory."""
+        temp_dir = get_temp_dir()
+        # Set environment variables for temp files
+        os.environ["TEMP"] = str(temp_dir)
+        os.environ["TMP"] = str(temp_dir)
+
+    def _get_temp_audiofile_path(self, output_path: Path) -> str:
+        """Get temp audio file path for MoviePy write operation.
+
+        Args:
+            output_path: The output video path.
+
+        Returns:
+            Path string for temp audio file.
+        """
+        temp_dir = get_temp_dir()
+        temp_audio = temp_dir / f"{output_path.stem}_TEMP_audio.mp3"
+        return str(temp_audio)
 
     def _get_audio_duration(self, audio_path: Path) -> float:
         """Get duration of audio file in seconds."""
@@ -129,7 +158,7 @@ class VideoAssembler(IVideoAssembler):
                     "moviepy is not installed. Run: pip install moviepy"
                 ) from e
 
-        self.log_progress("Loading and processing clips...")
+        self.log_detail("Loading and processing clips...")
 
         # Sort clips by segment index
         sorted_clips = sorted(clips, key=lambda c: c.segment_index)
@@ -141,11 +170,11 @@ class VideoAssembler(IVideoAssembler):
         current_duration = 0.0
         clip_index = 0
 
-        self.log_progress(f"Need {target_duration:.1f}s of video to match narration")
+        self.log_detail(f"Need {target_duration:.1f}s of video to match narration")
 
         while current_duration < target_duration and clip_index < len(sorted_clips):
             clip_info = sorted_clips[clip_index]
-            self.log_progress(f"Processing clip {clip_index + 1}/{len(sorted_clips)}...")
+            self.log_detail(f"Processing clip {clip_index + 1}/{len(sorted_clips)}...")
 
             clip = VideoFileClip(str(clip_info.path))
             original_duration = clip.duration
@@ -164,7 +193,7 @@ class VideoAssembler(IVideoAssembler):
 
             if clip.duration > remaining_time:
                 # Clip is longer than needed - trim it to exactly fill remaining time
-                self.log_progress(f"  Trimming clip from {clip.duration:.1f}s to {remaining_time:.1f}s (fills remaining time)")
+                self.log_detail(f"  Trimming clip from {clip.duration:.1f}s to {remaining_time:.1f}s")
                 if hasattr(clip, 'subclipped'):
                     clip = clip.subclipped(0, remaining_time)
                 else:
@@ -173,7 +202,7 @@ class VideoAssembler(IVideoAssembler):
             else:
                 # Use full clip
                 clip_duration = clip.duration
-                self.log_progress(f"  Using full clip: {clip_duration:.1f}s")
+                self.log_detail(f"  Using full clip: {clip_duration:.1f}s")
 
             video_clips.append(clip)
 
@@ -190,12 +219,12 @@ class VideoAssembler(IVideoAssembler):
 
             current_duration += clip_duration
             clip_index += 1
-            self.log_progress(f"  Total video so far: {current_duration:.1f}s / {target_duration:.1f}s")
+            self.log_detail(f"  Total video so far: {current_duration:.1f}s / {target_duration:.1f}s")
 
         # Check if we have enough footage - KEEP LOOPING until we fill the audio duration
         if current_duration < target_duration:
             remaining_time = target_duration - current_duration
-            self.log_progress(f"Need {remaining_time:.1f}s more video - extending with additional clips...")
+            self.log_detail(f"Need {remaining_time:.1f}s more video - extending with additional clips...")
 
             # Keep adding clips until we reach the target duration
             extend_index = 0
@@ -243,10 +272,10 @@ class VideoAssembler(IVideoAssembler):
                 video_clips.append(clip)
                 current_duration += clip_duration
                 extend_index += 1
-                self.log_progress(f"  Added clip {clip_idx + 1} ({clip_duration:.1f}s) -> total: {current_duration:.1f}s / {target_duration:.1f}s")
+                self.log_detail(f"  Added clip {clip_idx + 1} ({clip_duration:.1f}s) -> total: {current_duration:.1f}s / {target_duration:.1f}s")
 
-        self.log_progress(f"Total video duration: {current_duration:.1f}s")
-        self.log_progress("Concatenating clips...")
+        self.log_progress(f"Processing {len(video_clips)} clips -> {current_duration:.1f}s total")
+        self.log_detail("Concatenating clips...")
 
         # Concatenate all clips
         final_video = concatenate_videoclips(video_clips, method="compose")
