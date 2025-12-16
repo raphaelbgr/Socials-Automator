@@ -86,7 +86,8 @@ class SubtitleRenderer(ISubtitleRenderer):
             Path string for temp audio file.
         """
         temp_dir = get_temp_dir()
-        temp_audio = temp_dir / f"{output_path.stem}_TEMP_audio.mp3"
+        # Use .m4a extension for AAC codec compatibility (not .mp3)
+        temp_audio = temp_dir / f"{output_path.stem}_TEMP_audio.m4a"
         return str(temp_audio)
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
@@ -277,8 +278,10 @@ class SubtitleRenderer(ISubtitleRenderer):
                 fps=VIDEO_FPS,
                 codec="libx264",
                 audio_codec="aac",
+                preset="fast",
                 logger=None,
                 temp_audiofile=self._get_temp_audiofile_path(output_path),
+                ffmpeg_params=["-crf", "26"],
             )
             video.close()
             audio.close()
@@ -327,15 +330,17 @@ class SubtitleRenderer(ISubtitleRenderer):
         else:
             final = video
 
-        # Export
+        # Export with optimized FFmpeg settings
         output_path.parent.mkdir(parents=True, exist_ok=True)
         final.write_videofile(
             str(output_path),
             fps=VIDEO_FPS,
             codec="libx264",
             audio_codec="aac",
+            preset="fast",
             logger=None,
             temp_audiofile=self._get_temp_audiofile_path(output_path),
+            ffmpeg_params=["-crf", "26"],
         )
 
         # Cleanup
@@ -378,10 +383,32 @@ class SubtitleRenderer(ISubtitleRenderer):
 
         text_clips = []
 
-        # Load font for PIL
-        try:
-            pil_font = ImageFont.truetype(self.font, self.font_size)
-        except Exception:
+        # Load font for PIL - try project fonts folder first, then system fonts
+        pil_font = None
+
+        # Find project root (where fonts/ folder is)
+        project_root = Path(__file__).parent.parent.parent.parent.parent  # Go up from pipeline/video/socials_automator/src
+        fonts_dir = project_root / "fonts"
+
+        # Build font paths to try - handle both with and without .ttf extension
+        font_base = self.font.replace('.ttf', '').replace('.TTF', '')
+        font_paths_to_try = [
+            fonts_dir / f"{font_base}.ttf",  # Project fonts folder (e.g., Montserrat-Bold.ttf)
+            fonts_dir / self.font,  # Try exact name in fonts folder
+            self.font,  # Try as-is (full path or system font)
+            f"C:/Windows/Fonts/{font_base.lower()}.ttf",  # Windows fonts folder
+        ]
+
+        for font_path in font_paths_to_try:
+            try:
+                pil_font = ImageFont.truetype(str(font_path), self.font_size)
+                self.log_detail(f"Loaded font: {font_path}")
+                break
+            except Exception:
+                continue
+
+        if pil_font is None:
+            self.log_detail(f"Warning: Could not load font '{self.font}', using default (subtitles may be small)")
             pil_font = ImageFont.load_default()
 
         # Group into 3-word phrases
@@ -712,8 +739,10 @@ class SubtitleRenderer(ISubtitleRenderer):
             fps=VIDEO_FPS,
             codec="libx264",
             audio_codec="aac",
+            preset="fast",
             logger=None,
             temp_audiofile=self._get_temp_audiofile_path(output_path),
+            ffmpeg_params=["-crf", "26"],
         )
 
         video.close()

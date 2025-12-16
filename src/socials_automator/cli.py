@@ -1633,6 +1633,7 @@ def reel(
     video_matcher: str = typer.Option("pexels", "--video-matcher", "-m", help="Video source (pexels)"),
     voice: str = typer.Option("rvc_adam", "--voice", "-v", help=f"Voice preset: {', '.join(VOICE_CHOICES)}"),
     subtitle_size: int = typer.Option(80, "--subtitle-size", "-s", help="Subtitle font size in pixels (default: 80)"),
+    font: str = typer.Option("Montserrat-Bold.ttf", "--font", help="Subtitle font from /fonts folder (default: Montserrat-Bold.ttf)"),
     length: str = typer.Option("1m", "--length", "-l", help="Target video length (e.g., 30s, 1m, 90s). Default: 1m"),
     output_dir: str = typer.Option(None, "--output", "-o", help="Output directory (default: temp)"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Only run first few steps without full video generation"),
@@ -1663,6 +1664,7 @@ def reel(
         socials reel ai.for.mortals --topic "5 AI productivity tips"
         socials reel ai.for.mortals --voice british_female --length 90s
         socials reel ai.for.mortals --video-matcher pexels
+        socials reel ai.for.mortals --subtitle-size 90 --font Poppins-Bold.ttf
         socials reel ai.for.mortals --loop  # Generate videos continuously
     """
     from dotenv import load_dotenv
@@ -1726,6 +1728,7 @@ def reel(
         f"Video Matcher: [yellow]{video_matcher}[/yellow]\n"
         f"Voice: [yellow]{voice}[/yellow]\n"
         f"Subtitle Size: [yellow]{subtitle_size}px[/yellow]\n"
+        f"Font: [yellow]{font}[/yellow]\n"
         f"Target Length: [yellow]{length_display}[/yellow]\n"
         f"Topic: [green]{topic or 'Auto-generated'}[/green]",
         title="Video Reel Generation",
@@ -1739,6 +1742,7 @@ def reel(
         video_matcher=video_matcher,
         voice=voice,
         subtitle_size=subtitle_size,
+        font=font,
         target_duration=target_duration,
         output_dir=Path(output_dir) if output_dir else None,
         dry_run=dry_run,
@@ -1753,6 +1757,7 @@ async def _generate_reel(
     video_matcher: str,
     voice: str,
     subtitle_size: int,
+    font: str,
     target_duration: float,
     output_dir: Path | None,
     dry_run: bool,
@@ -1775,6 +1780,7 @@ async def _generate_reel(
         text_ai=text_ai,
         video_matcher=video_matcher,
         subtitle_size=subtitle_size,
+        subtitle_font=font,
         target_duration=target_duration,
         progress_callback=progress_callback,
     )

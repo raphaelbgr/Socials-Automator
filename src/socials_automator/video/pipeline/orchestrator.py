@@ -4,15 +4,17 @@ Coordinates all pipeline steps to generate a complete video:
 1. Select topic from profile
 2. Research topic via web search
 3. Plan video script
-4. Generate voiceover (before video for timing sync)
-5. Search for stock videos
-6. Download video clips
-7. Assemble video
-8. Render subtitles
-9. Generate caption and hashtags
-10. Output final video
+4. [PARALLEL] Generate voiceover + Search/download stock videos
+5. Assemble video
+6. Render subtitles
+7. Generate caption and hashtags
+8. Output final video
+
+Parallelization: After script planning, VoiceGenerator and VideoSearcher+VideoDownloader
+run in parallel since both only depend on the script, not each other.
 """
 
+import asyncio
 import json
 import logging
 import shutil
@@ -67,6 +69,7 @@ class VideoPipeline:
         text_ai: Optional[str] = None,
         video_matcher: str = "pexels",
         subtitle_size: int = 80,
+        subtitle_font: str = "Montserrat-Bold.ttf",
         target_duration: float = 60.0,
         progress_callback: Optional[ProgressCallback] = None,
         show_timestamps: bool = True,
@@ -80,6 +83,7 @@ class VideoPipeline:
             text_ai: Text AI provider (lmstudio, openai, etc.). None uses templates.
             video_matcher: Video source ('pexels'). Reserved for future sources.
             subtitle_size: Subtitle font size in pixels (default 80).
+            subtitle_font: Subtitle font file from /fonts folder (default Montserrat-Bold.ttf).
             target_duration: Target video duration in seconds (default 60).
             progress_callback: Optional callback for progress updates.
                 Signature: (stage: str, progress: float, message: str)
@@ -93,6 +97,7 @@ class VideoPipeline:
         self.target_duration = target_duration
         self.voice = voice
         self.subtitle_size = subtitle_size
+        self.subtitle_font = subtitle_font
 
         # Initialize debug logger
         self.debug_logger = PipelineDebugLogger()
@@ -111,19 +116,35 @@ class VideoPipeline:
             self.display.info(f"Text AI provider: {text_ai}")
 
         # Initialize pipeline steps
-        # Note: VoiceGenerator runs BEFORE VideoAssembler so we get actual speech timing
-        # The narration audio is the source of truth for final video duration
-        self.steps: list[PipelineStep] = [
+        # Structured for parallel execution after script planning
+
+        # Sequential: Topic selection -> Research -> Script planning
+        self.sequential_steps: list[PipelineStep] = [
             TopicSelector(ai_client=ai_client),
             TopicResearcher(),
             ScriptPlanner(ai_client=ai_client, target_duration=target_duration),
-            VoiceGenerator(voice=voice),  # Generate voice - this determines actual duration
-            VideoSearcher(api_key=pexels_api_key, ai_client=ai_client),  # AI for unique keywords
-            VideoDownloader(),
-            VideoAssembler(),  # Uses audio duration as source of truth
-            SubtitleRenderer(font_size=subtitle_size),
-            CaptionGenerator(ai_client=ai_client),  # Generate caption and hashtags
         ]
+
+        # Parallel branch A: Voice generation (determines final duration)
+        self.voice_step = VoiceGenerator(voice=voice)
+
+        # Parallel branch B: Video search and download
+        self.video_search_step = VideoSearcher(api_key=pexels_api_key, ai_client=ai_client)
+        self.video_download_step = VideoDownloader()
+
+        # Sequential: Assembly -> Subtitles -> Caption (need results from both parallel branches)
+        self.final_steps: list[PipelineStep] = [
+            VideoAssembler(),  # Uses audio duration as source of truth
+            SubtitleRenderer(font=subtitle_font, font_size=subtitle_size),
+            CaptionGenerator(ai_client=ai_client),
+        ]
+
+        # Collect all steps for display setup and counting
+        self.steps: list[PipelineStep] = (
+            self.sequential_steps
+            + [self.voice_step, self.video_search_step, self.video_download_step]
+            + self.final_steps
+        )
 
         # Set display on all steps
         for step in self.steps:
@@ -232,22 +253,22 @@ class VideoPipeline:
 
         # Execute pipeline steps
         total_steps = len(self.steps)
+        step_counter = 0
 
         try:
-            for i, step in enumerate(self.steps):
+            # Phase 1: Sequential steps (Topic selection, Research, Script planning)
+            for step in self.sequential_steps:
                 step_name = step.name
-                progress = i / total_steps
+                progress = step_counter / total_steps
                 description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
 
-                # Start step with description
                 self.display.start_step(step_name, description)
                 self.debug_logger.start_step(step_name)
-
                 self._update_progress(step_name, progress, f"Starting {step_name}...")
 
                 context = await step.execute(context)
 
-                # Show specific info after certain steps and log to debug
+                # Log step-specific info
                 if step_name == "TopicSelector" and context.topic:
                     self.display.show_topic(context.topic.topic, context.topic.pillar_name)
                     self.debug_logger.log_topic(
@@ -255,8 +276,6 @@ class VideoPipeline:
                         context.topic.pillar_name,
                         context.topic.keywords,
                     )
-                    self.debug_logger.end_step(step_name)
-
                 elif step_name == "ScriptPlanner" and context.script:
                     self.display.show_script(
                         context.script.title,
@@ -273,41 +292,107 @@ class VideoPipeline:
                         "segments": len(context.script.segments),
                         "duration": f"{context.script.total_duration:.1f}s",
                     })
-
-                elif step_name == "VoiceGenerator":
-                    self.debug_logger.log_voice(
-                        getattr(step, 'backend', 'unknown'),
-                        getattr(step, 'voice', 'unknown'),
-                        len(getattr(context, '_word_timestamps', [])) if hasattr(context, '_word_timestamps') else 0,
-                    )
+                else:
                     self.debug_logger.end_step(step_name)
 
-                elif step_name == "VideoSearcher":
-                    search_results = getattr(context, '_search_results', [])
-                    if search_results:
-                        self.debug_logger.log_video_search(search_results)
-                    self.debug_logger.end_step(step_name, {
-                        "clips_found": len(search_results) if search_results else 0,
-                    })
+                step_counter += 1
+                self._update_progress(step_name, step_counter / total_steps, f"Completed {step_name}")
 
-                elif step_name == "VideoDownloader" and hasattr(step, '_cache_hits'):
-                    hits = getattr(step, '_cache_hits', 0)
-                    misses = getattr(step, '_cache_misses', 0)
+            # Phase 2: PARALLEL execution - Voice generation + Video search/download
+            self.display.info("Running voice generation and video search in parallel...")
+
+            async def voice_branch(ctx: PipelineContext) -> PipelineContext:
+                """Generate voiceover (determines final duration)."""
+                step = self.voice_step
+                step_name = step.name
+                description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
+
+                self.display.start_step(step_name, description)
+                self.debug_logger.start_step(step_name)
+
+                ctx = await step.execute(ctx)
+
+                self.debug_logger.log_voice(
+                    getattr(step, 'backend', 'unknown'),
+                    getattr(step, 'voice', 'unknown'),
+                    len(getattr(ctx, '_word_timestamps', [])) if hasattr(ctx, '_word_timestamps') else 0,
+                )
+                self.debug_logger.end_step(step_name)
+                return ctx
+
+            async def video_branch(ctx: PipelineContext) -> PipelineContext:
+                """Search and download video clips."""
+                # Video search
+                search_step = self.video_search_step
+                step_name = search_step.name
+                description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
+
+                self.display.start_step(step_name, description)
+                self.debug_logger.start_step(step_name)
+
+                ctx = await search_step.execute(ctx)
+
+                search_results = getattr(ctx, '_search_results', [])
+                if search_results:
+                    self.debug_logger.log_video_search(search_results)
+                self.debug_logger.end_step(step_name, {
+                    "clips_found": len(search_results) if search_results else 0,
+                })
+
+                # Video download
+                download_step = self.video_download_step
+                step_name = download_step.name
+                description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
+
+                self.display.start_step(step_name, description)
+                self.debug_logger.start_step(step_name)
+
+                ctx = await download_step.execute(ctx)
+
+                if hasattr(download_step, '_cache_hits'):
+                    hits = getattr(download_step, '_cache_hits', 0)
+                    misses = getattr(download_step, '_cache_misses', 0)
                     self.display.show_cache_stats(hits, misses)
                     self.debug_logger.log_cache_stats(hits, misses)
                     self.debug_logger.end_step(step_name, {
                         "cache_hits": hits,
                         "cache_misses": misses,
                     })
-
                 else:
                     self.debug_logger.end_step(step_name)
 
-                self._update_progress(
-                    step_name,
-                    (i + 1) / total_steps,
-                    f"Completed {step_name}",
-                )
+                return ctx
+
+            # Run both branches in parallel - they both modify context but on different fields
+            # Voice branch: audio_path, srt_path
+            # Video branch: clips
+            voice_ctx, video_ctx = await asyncio.gather(
+                voice_branch(context),
+                video_branch(context),
+            )
+
+            # Merge results from both branches into context
+            context.audio_path = voice_ctx.audio_path
+            context.srt_path = voice_ctx.srt_path
+            context.clips = video_ctx.clips
+
+            step_counter += 3  # voice + search + download
+
+            # Phase 3: Sequential final steps (Assembly, Subtitles, Caption)
+            for step in self.final_steps:
+                step_name = step.name
+                progress = step_counter / total_steps
+                description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
+
+                self.display.start_step(step_name, description)
+                self.debug_logger.start_step(step_name)
+                self._update_progress(step_name, progress, f"Starting {step_name}...")
+
+                context = await step.execute(context)
+
+                self.debug_logger.end_step(step_name)
+                step_counter += 1
+                self._update_progress(step_name, step_counter / total_steps, f"Completed {step_name}")
 
             # Pipeline complete
             if context.final_video_path:
@@ -380,26 +465,36 @@ class DdgsLogFilter(logging.Filter):
         if record.name == "ddgs.ddgs" and "Error in engine" in str(record.msg):
             try:
                 import re
-                msg = str(record.msg)
 
-                # Extract engine name and error type
-                engine_match = re.search(r"Error in engine (\w+):", msg)
-                engine = engine_match.group(1) if engine_match else "unknown"
+                # Get the full message including args if present
+                # ddgs logs with: logger.info("Error in engine %s: %r", engine.name, ex)
+                if record.args:
+                    # Extract engine from args (first arg is engine name)
+                    engine = str(record.args[0]) if record.args else "unknown"
+                    # Get the exception from args to determine error type
+                    ex_str = str(record.args[1]) if len(record.args) > 1 else ""
+                else:
+                    msg = str(record.msg)
+                    engine_match = re.search(r"Error in engine (\w+):", msg)
+                    engine = engine_match.group(1) if engine_match else "unknown"
+                    ex_str = msg
 
-                # Determine error type
-                if "timed out" in msg.lower():
+                # Determine error type from exception string
+                ex_lower = ex_str.lower()
+                if "timed out" in ex_lower or "timeout" in ex_lower:
                     error_type = "TIMEOUT"
-                elif "403" in msg or "forbidden" in msg.lower():
+                elif "403" in ex_str or "forbidden" in ex_lower:
                     error_type = "BLOCKED"
-                elif "404" in msg:
+                elif "404" in ex_str:
                     error_type = "NOT FOUND"
-                elif "connection" in msg.lower():
+                elif "connection" in ex_lower:
                     error_type = "CONNECTION"
                 else:
                     error_type = "ERROR"
 
-                # Create clean message
+                # Create clean message and clear args to prevent formatting error
                 record.msg = f"{engine:12} [{error_type}]"
+                record.args = ()  # Clear args to prevent %-style formatting
 
             except Exception:
                 pass  # Keep original message if parsing fails
@@ -466,17 +561,86 @@ class PrimpLogFilter(logging.Filter):
         return True
 
 
+class ColoredToolFormatter(logging.Formatter):
+    """Formatter that adds colors to tool/logger names."""
+
+    # ANSI color codes
+    COLORS = {
+        "primp": "\033[36m",       # Cyan - HTTP client
+        "ddgs": "\033[33m",        # Yellow - DuckDuckGo
+        "ddgs.ddgs": "\033[33m",   # Yellow - DuckDuckGo
+        "moviepy": "\033[35m",     # Magenta - MoviePy
+        "ffmpeg": "\033[32m",      # Green - FFmpeg
+        "edge_tts": "\033[34m",    # Blue - Edge TTS
+        "httpx": "\033[36m",       # Cyan - HTTP
+        "pexels": "\033[32m",      # Green - Pexels
+        "video.pipeline": "\033[37m",  # White - Pipeline
+    }
+    RESET = "\033[0m"
+
+    def __init__(self, fmt=None, datefmt=None):
+        super().__init__(fmt, datefmt)
+
+    def format(self, record: logging.LogRecord) -> str:
+        # Get color for this logger
+        color = self.RESET
+        for name_prefix, col in self.COLORS.items():
+            if record.name.startswith(name_prefix):
+                color = col
+                break
+
+        # Shorten logger name for display
+        short_name = record.name.split(".")[-1]
+        name_map = {
+            "primp": "http",
+            "ddgs": "search",
+            "moviepy": "moviepy",
+            "ffmpeg": "ffmpeg",
+            "edge_tts": "tts",
+            "httpx": "http",
+            "pipeline": "pipeline",
+        }
+        for key, short in name_map.items():
+            if key in record.name.lower():
+                short_name = short
+                break
+
+        # Format with color
+        original_name = record.name
+        record.name = f"{color}{short_name:8}{self.RESET}"
+
+        result = super().format(record)
+
+        # Restore original name
+        record.name = original_name
+        return result
+
+
 def setup_logging(level: int = logging.INFO) -> None:
     """Setup logging for video pipeline.
 
     Args:
         level: Logging level.
     """
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    # Create colored formatter
+    formatter = ColoredToolFormatter(
+        fmt="%(asctime)s [%(name)s] %(message)s",
         datefmt="%H:%M:%S",
     )
+
+    # Setup root logger with colored output
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+
+    # Remove existing handlers
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    # Add console handler with colored formatter
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(level)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
 
     # Set specific loggers
     logging.getLogger("video.pipeline").setLevel(level)

@@ -322,6 +322,7 @@ python -m socials_automator.cli reel <profile> [OPTIONS]
 | `--video-matcher` | `-m` | Video source (pexels) | pexels |
 | `--voice` | `-v` | Voice preset (rvc_adam, alloy, shimmer, etc.) | rvc_adam |
 | `--subtitle-size` | `-s` | Subtitle font size in pixels | 80 |
+| `--font` | | Subtitle font from /fonts folder | Montserrat-Bold.ttf |
 | `--length` | `-l` | Target video length (e.g., 30s, 1m, 90s) | 1m |
 | `--output` | `-o` | Output directory | Auto |
 | `--dry-run` | | Only run first few steps without full video generation | False |
@@ -346,6 +347,12 @@ python -m socials_automator.cli reel ai.for.mortals --voice alloy
 
 # Larger subtitles
 python -m socials_automator.cli reel ai.for.mortals --subtitle-size 100
+
+# Use a different font (from /fonts folder)
+python -m socials_automator.cli reel ai.for.mortals --font Poppins-Bold.ttf
+
+# Custom font and size
+python -m socials_automator.cli reel ai.for.mortals --font BebasNeue-Regular.ttf --subtitle-size 90
 
 # Test without full video generation
 python -m socials_automator.cli reel ai.for.mortals --dry-run
@@ -381,6 +388,15 @@ profiles/<profile>/reels/YYYY/MM/generated/<post-id>/
 **Requirements:**
 - `PEXELS_API_KEY` environment variable for stock footage
 - RVC models for custom voice (rvc_adam) or use built-in voices (alloy, shimmer)
+
+**Available Fonts** (in `/fonts` folder):
+| Font | Style | Best For |
+|------|-------|----------|
+| `Montserrat-Bold.ttf` | Bold sans-serif | Default - #1 for TikTok/Reels (61% of viral videos) |
+| `Montserrat-ExtraBold.ttf` | Extra bold | Maximum impact |
+| `Poppins-Bold.ttf` | Clean bold | Educational content |
+| `BebasNeue-Regular.ttf` | Condensed | Modern, stylish look |
+| `Impact.ttf` | Classic bold | Traditional style |
 
 ---
 

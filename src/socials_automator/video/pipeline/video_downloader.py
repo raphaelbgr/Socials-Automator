@@ -2,8 +2,10 @@
 
 Downloads video clips to a temporary folder for assembly.
 Uses a cache to avoid re-downloading videos.
+Supports parallel downloads for faster performance.
 """
 
+import asyncio
 from pathlib import Path
 from typing import Optional
 
@@ -95,38 +97,50 @@ class VideoDownloader(IVideoDownloader):
         self,
         search_results: list[dict],
         output_dir: Path,
+        max_concurrent: int = 4,
     ) -> list[VideoClipInfo]:
-        """Download videos from search results.
+        """Download videos from search results in parallel.
 
         Args:
             search_results: List of search results from VideoSearcher.
             output_dir: Directory to save videos.
+            max_concurrent: Max concurrent downloads (default 4).
 
         Returns:
             List of VideoClipInfo for downloaded clips.
         """
-        clips = []
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        for result in search_results:
-            segment_index = result["segment_index"]
-            video_data = result["video"]
-            keywords = result["keywords_used"]
+        # Use a semaphore to limit concurrent downloads
+        semaphore = asyncio.Semaphore(max_concurrent)
 
-            try:
-                clip = await self._download_video(
-                    video_data,
-                    segment_index,
-                    output_dir,
-                    keywords,
-                )
-                clips.append(clip)
+        async def download_with_limit(result: dict) -> VideoClipInfo:
+            """Download a single video with semaphore limit."""
+            async with semaphore:
+                segment_index = result["segment_index"]
+                video_data = result["video"]
+                keywords = result["keywords_used"]
 
-            except Exception as e:
-                self.log_error(f"Failed to download segment {segment_index}: {e}")
-                raise VideoDownloadError(
-                    f"Failed to download video for segment {segment_index}: {e}"
-                ) from e
+                try:
+                    return await self._download_video(
+                        video_data,
+                        segment_index,
+                        output_dir,
+                        keywords,
+                    )
+                except Exception as e:
+                    self.log_error(f"Failed to download segment {segment_index}: {e}")
+                    raise VideoDownloadError(
+                        f"Failed to download video for segment {segment_index}: {e}"
+                    ) from e
+
+        # Download all videos in parallel (with concurrency limit)
+        clips = await asyncio.gather(
+            *[download_with_limit(result) for result in search_results]
+        )
+
+        # Sort by segment index to ensure proper ordering
+        clips = sorted(clips, key=lambda c: c.segment_index)
 
         return clips
 

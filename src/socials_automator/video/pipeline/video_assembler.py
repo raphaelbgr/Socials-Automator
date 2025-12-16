@@ -64,7 +64,8 @@ class VideoAssembler(IVideoAssembler):
             Path string for temp audio file.
         """
         temp_dir = get_temp_dir()
-        temp_audio = temp_dir / f"{output_path.stem}_TEMP_audio.mp3"
+        # Use .m4a extension for AAC codec compatibility (not .mp3)
+        temp_audio = temp_dir / f"{output_path.stem}_TEMP_audio.m4a"
         return str(temp_audio)
 
     def _get_audio_duration(self, audio_path: Path) -> float:
@@ -295,13 +296,16 @@ class VideoAssembler(IVideoAssembler):
         self.log_progress(f"Exporting {target_duration:.1f}s video to {output_path}...")
 
         # Export without audio (audio will be added in subtitle renderer step)
+        # Optimized FFmpeg settings for faster encoding
         output_path.parent.mkdir(parents=True, exist_ok=True)
         final_video.write_videofile(
             str(output_path),
             fps=self.FPS,
             codec="libx264",
             audio=False,
+            preset="fast",  # ~2-3x faster than default 'medium'
             logger=None,
+            ffmpeg_params=["-crf", "26"],  # Slightly faster, imperceptible quality loss
         )
 
         # Cleanup

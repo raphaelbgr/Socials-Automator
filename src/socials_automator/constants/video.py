@@ -88,8 +88,15 @@ SUBTITLE_FONT_SIZE_MIN: Final[int] = 40
 SUBTITLE_FONT_SIZE_MAX: Final[int] = 120
 """Maximum subtitle font size."""
 
-SUBTITLE_FONT_NAME: Final[str] = "Impact"
-"""Default font for subtitles. Bold, highly readable."""
+SUBTITLE_FONT_NAME: Final[str] = "Montserrat-Bold.ttf"
+"""Default font for subtitles. Montserrat Bold is #1 for social media (61% of videos).
+Available fonts in /fonts folder:
+- Montserrat-Bold.ttf (RECOMMENDED - most popular for TikTok/Reels)
+- Montserrat-ExtraBold.ttf (even bolder)
+- Poppins-Bold.ttf (clean, highly readable)
+- BebasNeue-Regular.ttf (condensed, modern)
+- Impact.ttf (classic, bold)
+"""
 
 SUBTITLE_FONT_COLOR: Final[str] = "white"
 """Default text color for subtitles."""

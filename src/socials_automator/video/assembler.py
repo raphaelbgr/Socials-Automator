@@ -34,7 +34,8 @@ class VideoAssembler:
     def _get_temp_audiofile_path(self, output_path: Path) -> str:
         """Get temp audio file path for MoviePy write operation."""
         temp_dir = get_temp_dir()
-        temp_audio = temp_dir / f"{output_path.stem}_TEMP_audio.mp3"
+        # Use .m4a extension for AAC codec compatibility (not .mp3)
+        temp_audio = temp_dir / f"{output_path.stem}_TEMP_audio.m4a"
         return str(temp_audio)
 
     def assemble(
