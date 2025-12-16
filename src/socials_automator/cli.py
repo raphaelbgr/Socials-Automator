@@ -1610,6 +1610,8 @@ REPLICATE_API_TOKEN=r8_...
 # Voice presets for reel command
 VOICE_CHOICES = [
     "rvc_adam",  # THE viral TikTok voice - FREE, runs locally!
+    "rvc_adam_excited",  # Same voice with faster rate and higher pitch
+    "adam_excited",  # Alias for rvc_adam_excited
     "tiktok-adam",  # Alias for rvc_adam
     "adam",  # Short alias for rvc_adam
     "professional_female",
@@ -1632,6 +1634,8 @@ def reel(
     text_ai: str = typer.Option(None, "--text-ai", help="Text AI provider (zai, groq, gemini, openai, lmstudio, ollama)"),
     video_matcher: str = typer.Option("pexels", "--video-matcher", "-m", help="Video source (pexels)"),
     voice: str = typer.Option("rvc_adam", "--voice", "-v", help=f"Voice preset: {', '.join(VOICE_CHOICES)}"),
+    voice_rate: str = typer.Option("+0%", "--voice-rate", help="Speech rate adjustment (e.g., '+12%' for excited, '-10%' for calm)"),
+    voice_pitch: str = typer.Option("+0Hz", "--voice-pitch", help="Pitch adjustment (e.g., '+3Hz' for excited, '-2Hz' for calm)"),
     subtitle_size: int = typer.Option(80, "--subtitle-size", "-s", help="Subtitle font size in pixels (default: 80)"),
     font: str = typer.Option("Montserrat-Bold.ttf", "--font", help="Subtitle font from /fonts folder (default: Montserrat-Bold.ttf)"),
     length: str = typer.Option("1m", "--length", "-l", help="Target video length (e.g., 30s, 1m, 90s). Default: 1m"),
@@ -1666,6 +1670,8 @@ def reel(
         socials reel ai.for.mortals --video-matcher pexels
         socials reel ai.for.mortals --subtitle-size 90 --font Poppins-Bold.ttf
         socials reel ai.for.mortals --loop  # Generate videos continuously
+        socials reel ai.for.mortals --voice adam_excited  # Use excited preset
+        socials reel ai.for.mortals --voice-rate "+12%" --voice-pitch "+3Hz"  # Custom excitement
     """
     from dotenv import load_dotenv
     load_dotenv()
@@ -1722,11 +1728,16 @@ def reel(
     else:
         length_display = f"{int(target_duration)}s"
 
+    # Format voice info
+    voice_info = voice
+    if voice_rate != "+0%" or voice_pitch != "+0Hz":
+        voice_info += f" (rate={voice_rate}, pitch={voice_pitch})"
+
     console.print(Panel(
         f"Generating video reel for [cyan]{profile}[/cyan]\n"
         f"Text AI: [yellow]{text_ai or 'default'}[/yellow]\n"
         f"Video Matcher: [yellow]{video_matcher}[/yellow]\n"
-        f"Voice: [yellow]{voice}[/yellow]\n"
+        f"Voice: [yellow]{voice_info}[/yellow]\n"
         f"Subtitle Size: [yellow]{subtitle_size}px[/yellow]\n"
         f"Font: [yellow]{font}[/yellow]\n"
         f"Target Length: [yellow]{length_display}[/yellow]\n"
@@ -1741,6 +1752,8 @@ def reel(
         text_ai=text_ai,
         video_matcher=video_matcher,
         voice=voice,
+        voice_rate=voice_rate,
+        voice_pitch=voice_pitch,
         subtitle_size=subtitle_size,
         font=font,
         target_duration=target_duration,
@@ -1756,6 +1769,8 @@ async def _generate_reel(
     text_ai: str | None,
     video_matcher: str,
     voice: str,
+    voice_rate: str,
+    voice_pitch: str,
     subtitle_size: int,
     font: str,
     target_duration: float,
@@ -1777,6 +1792,8 @@ async def _generate_reel(
     # Create pipeline with options
     pipeline = VideoPipeline(
         voice=voice,
+        voice_rate=voice_rate,
+        voice_pitch=voice_pitch,
         text_ai=text_ai,
         video_matcher=video_matcher,
         subtitle_size=subtitle_size,

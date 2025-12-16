@@ -99,9 +99,17 @@ RVC_PYTHON = RVC_SANDBOX_DIR / "python" / "python.exe"
 RVC_SCRIPT = RVC_SANDBOX_DIR / "rvc_adam_tts.py"
 RVC_VOICES = {
     "rvc_adam": "adam_elevenlabs",  # THE viral TikTok voice - runs locally!
+    "rvc_adam_excited": "adam_elevenlabs",  # Excited version with faster rate/higher pitch
     "tiktok-adam": "adam_elevenlabs",  # Alias for --voice tiktok-adam
     "tiktok_adam": "adam_elevenlabs",  # Alias with underscore
     "adam": "adam_elevenlabs",  # Short alias
+    "adam_excited": "adam_elevenlabs",  # Excited alias
+}
+
+# RVC preset configurations for excitement/tone
+RVC_PRESET_CONFIGS = {
+    "rvc_adam_excited": {"rate": "+12%", "pitch": "+3Hz"},
+    "adam_excited": {"rate": "+12%", "pitch": "+3Hz"},
 }
 
 
@@ -152,8 +160,10 @@ class VoiceGenerator(IVoiceGenerator):
         # Configure voice based on backend
         if self.backend == "rvc":
             self.voice = RVC_VOICES.get(voice.lower(), voice)
-            self.rate = rate
-            self.pitch = pitch
+            # Apply excited preset if using an excited voice variant
+            preset_config = RVC_PRESET_CONFIGS.get(voice.lower(), {})
+            self.rate = preset_config.get("rate", rate)
+            self.pitch = preset_config.get("pitch", pitch)
         elif self.backend == "fish":
             self.voice = FISH_AUDIO_VOICES.get(voice.lower(), voice)
             self.rate = rate
@@ -327,6 +337,8 @@ class VoiceGenerator(IVoiceGenerator):
         srt_path = output_dir / "voiceover.srt"
 
         self.log_progress("Using RVC Adam voice (local, free, unlimited!)")
+        if self.rate != "+0%" or self.pitch != "+0Hz":
+            self.log_progress(f"Excitement: rate={self.rate}, pitch={self.pitch}")
         self.log_progress("Calling RVC sandbox...")
 
         # Call the sandboxed RVC script
@@ -336,6 +348,8 @@ class VoiceGenerator(IVoiceGenerator):
             "--text", text,
             "--output", str(audio_path),
             "--srt", str(srt_path),
+            "--rate", self.rate,
+            "--pitch", self.pitch,
         ]
 
         try:

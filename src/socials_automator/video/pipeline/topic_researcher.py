@@ -4,6 +4,7 @@ Searches the web for information about the selected topic
 and extracts key points for the video script.
 """
 
+from datetime import datetime
 from typing import Optional
 
 from .base import (
@@ -75,12 +76,20 @@ class TopicResearcher(ITopicResearcher):
         self.log_progress("Searching the web...")
 
         all_results = []
+        current_year = datetime.now().year
+        current_month = datetime.now().strftime("%B")
 
         # Search for each query
         for query in topic.search_queries[:3]:
             self.log_detail(f"Searching: {query}")
             results = await self._web_search(query)
             all_results.extend(results)
+
+        # Always add a general AI tool versions search for context
+        version_query = f"ChatGPT Claude Gemini latest version {current_month} {current_year}"
+        self.log_detail(f"Version context search: {version_query}")
+        results = await self._web_search(version_query)
+        all_results.extend(results)
 
         self.log_progress(f"Found {len(all_results)} results")
 

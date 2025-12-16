@@ -8,6 +8,7 @@ Plans a video script with:
 Duration is configurable via target_duration parameter.
 """
 
+from datetime import datetime
 from typing import Optional
 
 from .base import (
@@ -296,7 +297,18 @@ Each segment MUST have:
 - A closing sentence with actionable advice
 - TOTAL: 40+ words per segment"""
 
+        # Get current date for context
+        now = datetime.now()
+        current_date = now.strftime("%B %d, %Y")
+        current_year = now.year
+
         prompt = f"""Write a 60-second video narration script for Instagram Reels about: {topic.topic}
+
+TODAY'S DATE: {current_date}
+
+AI TOOL VERSIONS:
+When mentioning AI tools, use the version numbers found in the research findings below.
+If not found in research, use these fallbacks: ChatGPT=GPT-5.2, Claude=Opus 4.5, Gemini=3 Pro, Midjourney=V7
 
 Research findings:
 {key_points}

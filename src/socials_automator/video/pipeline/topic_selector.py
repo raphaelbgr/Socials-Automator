@@ -7,6 +7,7 @@ Selects a topic based on:
 """
 
 import random
+from datetime import datetime
 from typing import Optional
 
 from .base import (
@@ -111,7 +112,20 @@ class TopicSelector(ITopicSelector):
             examples_text = "\n".join(f"- {ex}" for ex in examples[:5]) if examples else "No examples"
             keywords = ", ".join(profile.trending_keywords[:10]) if profile.trending_keywords else "AI, productivity"
 
+            # Get current date for context
+            now = datetime.now()
+            current_date = now.strftime("%B %d, %Y")  # e.g., "December 16, 2025"
+            current_year = now.year
+
             prompt = f"""Generate ONE compelling video topic for a 60-second Instagram Reel.
+
+TODAY'S DATE: {current_date}
+
+AI TOOL VERSION FALLBACKS (use if you don't know the current version):
+- ChatGPT: GPT-5.2 | Claude: Opus 4.5 | Gemini: Gemini 3 Pro
+- Midjourney: V7 | DALL-E: 3 | Stable Diffusion: SD 3.5
+- Flux: 1.1 Pro | Cursor | v0 | Sora | Runway: Gen-3
+NOTE: These may be outdated. When in doubt, use generic names (e.g., "ChatGPT" instead of "GPT-5.2").
 
 Profile: {profile.display_name}
 Niche: {profile.niche_id}
@@ -131,13 +145,15 @@ Requirements:
 - Make it feel urgent or valuable
 - Focus on FREE tips, FREE tools, and sharing knowledge
 - NO selling, NO courses, NO paid products - just free value!
+- When mentioning AI tools, reference their CURRENT versions (listed above)
+- Content should feel fresh and up-to-date for {current_year}
 
 Respond with ONLY the topic text, nothing else. No quotes, no explanation.
 Example good responses:
-- 5 ChatGPT prompts that save 2 hours daily
-- The AI tool replacing Photoshop (free)
-- How I automated my emails with Claude
-- 3 free AI tools you need to try today"""
+- 5 GPT-5.2 prompts that save 2 hours daily
+- Claude Opus 4.5 just changed everything
+- Gemini 3 Pro vs GPT-5.2: which one wins?
+- 3 free AI tools you need to try in {current_year}"""
 
             # Use the TextProvider to generate
             response = await self.ai_client.generate(prompt)
@@ -310,8 +326,40 @@ Example good responses:
 
         return unique[:10]
 
+    # Known AI tools with their current versions for search queries
+    # Last updated: December 2025
+    AI_TOOL_VERSIONS = {
+        "chatgpt": "GPT-5.2",
+        "gpt-5": "GPT-5.2",
+        "gpt5": "GPT-5.2",
+        "gpt-4": "GPT-5.2",  # Redirect old references to current
+        "gpt4": "GPT-5.2",
+        "openai": "GPT-5.2",
+        "claude": "Claude Opus 4.5",
+        "anthropic": "Claude Opus 4.5",
+        "gemini": "Gemini 3 Pro",
+        "bard": "Gemini 3 Pro",
+        "google ai": "Gemini 3 Pro",
+        "midjourney": "Midjourney V7",
+        "dall-e": "DALL-E 3",
+        "dalle": "DALL-E 3",
+        "stable diffusion": "Stable Diffusion 3.5",
+        "sd3": "Stable Diffusion 3.5",
+        "sdxl": "Stable Diffusion 3.5",
+        "flux": "Flux 1.1 Pro",
+        "cursor": "Cursor AI",
+        "copilot": "GitHub Copilot",
+        "perplexity": "Perplexity AI",
+        "notion ai": "Notion AI",
+        "jasper": "Jasper AI",
+        "sora": "Sora",
+        "runway": "Runway Gen-3",
+    }
+
     def _build_search_queries(self, topic: str, pillar: dict) -> list[str]:
         """Build search queries for research phase.
+
+        Includes version-specific queries for AI tools and current date.
 
         Args:
             topic: Selected topic.
@@ -320,20 +368,47 @@ Example good responses:
         Returns:
             List of search queries.
         """
+        now = datetime.now()
+        current_year = now.year
+        current_month = now.strftime("%B")  # e.g., "December"
+
         queries = [topic]
 
-        # Add variations
-        queries.append(f"{topic} 2025")
+        # Add current year/month variations
+        queries.append(f"{topic} {current_year}")
+        queries.append(f"{topic} {current_month} {current_year}")
+
+        # Detect AI tools in topic and add version-specific queries
+        topic_lower = topic.lower()
+        for tool_name, version in self.AI_TOOL_VERSIONS.items():
+            if tool_name in topic_lower:
+                # Add version-specific search
+                queries.append(f"{version} features {current_year}")
+                queries.append(f"{version} latest updates {current_month} {current_year}")
+                break  # Only add for first matched tool
+
+        # Add general variations
         queries.append(f"{topic} tips")
-        queries.append(f"{topic} tutorial")
+        queries.append(f"{topic} tutorial {current_year}")
 
         # Add pillar-specific queries
         pillar_id = pillar.get("id", "")
         if pillar_id == "ai_money_making":
-            queries.append(f"{topic} income")
+            queries.append(f"{topic} income {current_year}")
             queries.append(f"{topic} monetize")
         elif pillar_id == "productivity_hacks":
             queries.append(f"{topic} save time")
-            queries.append(f"{topic} workflow")
+            queries.append(f"{topic} workflow {current_year}")
+        elif pillar_id == "ai_news_simplified":
+            queries.append(f"{topic} news {current_month} {current_year}")
+            queries.append(f"{topic} announcement {current_year}")
 
-        return queries[:5]
+        # Deduplicate while preserving order
+        seen = set()
+        unique_queries = []
+        for q in queries:
+            if q.lower() not in seen:
+                seen.add(q.lower())
+                unique_queries.append(q)
+
+        return unique_queries[:6]  # Return up to 6 queries

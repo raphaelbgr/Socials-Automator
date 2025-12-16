@@ -66,6 +66,8 @@ class VideoPipeline:
         self,
         pexels_api_key: Optional[str] = None,
         voice: str = "rvc_adam",
+        voice_rate: str = "+0%",
+        voice_pitch: str = "+0Hz",
         text_ai: Optional[str] = None,
         video_matcher: str = "pexels",
         subtitle_size: int = 80,
@@ -80,6 +82,8 @@ class VideoPipeline:
         Args:
             pexels_api_key: Pexels API key. Reads from env if not provided.
             voice: Voice preset or name for TTS.
+            voice_rate: Speech rate adjustment (e.g., '+12%' for excited).
+            voice_pitch: Pitch adjustment (e.g., '+3Hz' for excited).
             text_ai: Text AI provider (lmstudio, openai, etc.). None uses templates.
             video_matcher: Video source ('pexels'). Reserved for future sources.
             subtitle_size: Subtitle font size in pixels (default 80).
@@ -126,7 +130,7 @@ class VideoPipeline:
         ]
 
         # Parallel branch A: Voice generation (determines final duration)
-        self.voice_step = VoiceGenerator(voice=voice)
+        self.voice_step = VoiceGenerator(voice=voice, rate=voice_rate, pitch=voice_pitch)
 
         # Parallel branch B: Video search and download
         self.video_search_step = VideoSearcher(api_key=pexels_api_key, ai_client=ai_client)

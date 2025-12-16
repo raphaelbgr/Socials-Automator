@@ -64,19 +64,24 @@ MODEL_PATH, INDEX_PATH = find_model_files()
 
 # Edge-TTS voice to use as base (will be converted to Adam)
 BASE_VOICE = "en-US-ChristopherNeural"
-BASE_RATE = "+0%"
-BASE_PITCH = "+0Hz"
+
+# Default: Neutral tone
+# For excitement: use --rate "+12%" --pitch "+3Hz"
+DEFAULT_RATE = "+0%"
+DEFAULT_PITCH = "+0Hz"
 
 
-async def generate_base_audio(text: str, output_path: Path) -> list[dict]:
+async def generate_base_audio(
+    text: str, output_path: Path, rate: str = DEFAULT_RATE, pitch: str = DEFAULT_PITCH
+) -> list[dict]:
     """Generate base audio with edge-tts and return word timestamps."""
     import edge_tts
 
     communicate = edge_tts.Communicate(
         text,
         voice=BASE_VOICE,
-        rate=BASE_RATE,
-        pitch=BASE_PITCH,
+        rate=rate,
+        pitch=pitch,
         boundary="WordBoundary",  # Enable word-level timestamps
     )
 
@@ -166,6 +171,16 @@ async def main():
     parser.add_argument("--output", required=True, help="Output audio file path")
     parser.add_argument("--srt", help="Output SRT file path (optional)")
     parser.add_argument("--timestamps-json", help="Output timestamps JSON file (optional)")
+    parser.add_argument(
+        "--rate",
+        default=DEFAULT_RATE,
+        help="Speech rate adjustment (e.g., '+12%%' for excited, '-10%%' for calm)",
+    )
+    parser.add_argument(
+        "--pitch",
+        default=DEFAULT_PITCH,
+        help="Pitch adjustment (e.g., '+3Hz' for excited, '-2Hz' for calm)",
+    )
     args = parser.parse_args()
 
     output_path = Path(args.output)
@@ -175,7 +190,11 @@ async def main():
     temp_audio = output_path.parent / "temp_base_audio.mp3"
 
     print(f"[1/3] Generating base audio with edge-tts...", file=sys.stderr)
-    word_timestamps, submaker = await generate_base_audio(args.text, temp_audio)
+    if args.rate != DEFAULT_RATE or args.pitch != DEFAULT_PITCH:
+        print(f"      Rate: {args.rate}, Pitch: {args.pitch}", file=sys.stderr)
+    word_timestamps, submaker = await generate_base_audio(
+        args.text, temp_audio, rate=args.rate, pitch=args.pitch
+    )
     print(f"      Generated {len(word_timestamps)} word timestamps", file=sys.stderr)
 
     print(f"[2/3] Converting to Adam's voice with RVC...", file=sys.stderr)

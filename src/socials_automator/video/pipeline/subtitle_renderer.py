@@ -548,19 +548,22 @@ class SubtitleRenderer(ISubtitleRenderer):
             line_heights.append(bbox[3] - bbox[1])
 
         # Create image sized for all lines
-        padding = 20
+        # Use generous padding - especially bottom for descenders (g, p, y, etc.)
+        padding_horizontal = 20
+        padding_top = 20
+        padding_bottom = int(self.font_size * 0.35)  # 35% of font size for descenders
         line_spacing = 10
         total_height = sum(line_heights) + (len(lines) - 1) * line_spacing
         max_line_width = max(line_widths)
 
-        img_width = max_line_width + padding * 2
-        img_height = total_height + padding * 2
+        img_width = max_line_width + padding_horizontal * 2
+        img_height = total_height + padding_top + padding_bottom
 
         img = Image.new("RGBA", (img_width, img_height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
 
         # Draw each line centered
-        y_offset = padding
+        y_offset = padding_top
         word_global_index = 0
 
         for line_idx, line_words in enumerate(lines):
@@ -569,8 +572,8 @@ class SubtitleRenderer(ISubtitleRenderer):
             line_width = line_bbox[2] - line_bbox[0]
             line_height = line_bbox[3] - line_bbox[1]
 
-            # Center this line
-            x_offset = (img_width - line_width) // 2
+            # Center this line horizontally
+            x_offset = padding_horizontal + (max_line_width - line_width) // 2
 
             for word_idx, word_upper in enumerate(line_words):
                 # Add space before word (except first in line)
