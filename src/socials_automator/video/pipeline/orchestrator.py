@@ -84,7 +84,7 @@ class VideoPipeline:
             TopicResearcher(),
             ScriptPlanner(ai_client=ai_client),
             VoiceGenerator(voice=voice),  # Generate voice first to get actual timing
-            VideoSearcher(api_key=pexels_api_key),
+            VideoSearcher(api_key=pexels_api_key, ai_client=ai_client),  # AI for unique keywords
             VideoDownloader(),
             VideoAssembler(),  # Now uses actual voice timing for segment durations
             SubtitleRenderer(font_size=subtitle_size),

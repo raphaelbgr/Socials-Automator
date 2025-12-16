@@ -25,17 +25,22 @@ class VideoSearcher(IVideoSearcher):
         self,
         api_key: Optional[str] = None,
         prefer_portrait: bool = True,
+        ai_client: Optional[object] = None,
     ):
         """Initialize video searcher.
 
         Args:
             api_key: Pexels API key. If None, reads from PEXELS_API_KEY env var.
             prefer_portrait: Whether to prefer portrait (9:16) videos.
+            ai_client: Optional AI client for enhanced keyword generation.
         """
         super().__init__()
         self.api_key = api_key or os.environ.get("PEXELS_API_KEY")
         self.prefer_portrait = prefer_portrait
+        self.ai_client = ai_client
         self._client: Optional[httpx.AsyncClient] = None
+        # Track used video IDs to prevent duplicates
+        self._used_video_ids: set[int] = set()
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -70,6 +75,9 @@ class VideoSearcher(IVideoSearcher):
 
         self.log_start(f"Searching videos for {len(context.script.segments)} segments")
 
+        # Reset used video tracking for this run
+        self._used_video_ids.clear()
+
         try:
             search_results = await self.search_videos(context.script)
 
@@ -77,6 +85,8 @@ class VideoSearcher(IVideoSearcher):
             # We'll store them temporarily - the downloader will use them
             context._search_results = search_results
 
+            # Log deduplication stats
+            self.log_progress(f"Used {len(self._used_video_ids)} unique videos (no duplicates)")
             self.log_success(f"Found videos for {len(search_results)} segments")
             return context
 
@@ -97,24 +107,39 @@ class VideoSearcher(IVideoSearcher):
         """
         results = []
 
+        # Generate enhanced keywords using AI if available
+        enhanced_keywords = await self._get_enhanced_keywords(script)
+
         for segment in script.segments:
+            # Use enhanced keywords if available, otherwise use segment keywords
+            keywords = enhanced_keywords.get(segment.index, segment.keywords)
+
             self.log_progress(
-                f"Searching segment {segment.index}: {segment.keywords[:2]}"
+                f"Searching segment {segment.index}: {keywords[:3]}"
             )
 
-            # Search for this segment
-            video = await self._search_for_segment(segment)
+            # Search for this segment (will skip already-used videos)
+            video = await self._search_for_segment(segment, keywords)
 
             if video:
+                # Mark video as used
+                video_id = video.get("id")
+                if video_id:
+                    self._used_video_ids.add(video_id)
+
                 results.append({
                     "segment_index": segment.index,
                     "video": video,
-                    "keywords_used": segment.keywords,
+                    "keywords_used": keywords,
                     "duration_needed": segment.duration_seconds,
                 })
             else:
                 self.log_progress(f"No video found for segment {segment.index}, using fallback")
                 fallback = await self._search_fallback()
+                if fallback:
+                    video_id = fallback.get("id")
+                    if video_id:
+                        self._used_video_ids.add(video_id)
                 results.append({
                     "segment_index": segment.index,
                     "video": fallback,
@@ -124,21 +149,108 @@ class VideoSearcher(IVideoSearcher):
 
         return results
 
-    async def _search_for_segment(self, segment) -> Optional[dict]:
+    async def _get_enhanced_keywords(self, script: VideoScript) -> dict[int, list[str]]:
+        """Use AI to generate better video search keywords.
+
+        Args:
+            script: Video script with segments.
+
+        Returns:
+            Dict mapping segment index to enhanced keywords.
+        """
+        if not self.ai_client:
+            return {}
+
+        try:
+            import json
+
+            # Build segment info
+            segments_info = "\n".join(
+                f"Segment {s.index}: \"{s.text}\" (current keywords: {s.keywords[:3]})"
+                for s in script.segments
+            )
+
+            prompt = f"""Generate UNIQUE video search keywords for each segment of this video script.
+
+Segments:
+{segments_info}
+
+CRITICAL RULES:
+1. Each segment MUST have DIFFERENT keywords - no repeats across segments!
+2. Keywords must be VISUAL concepts that can be filmed (not abstract)
+3. Use 2-word search phrases that work on stock video sites
+4. Think: "What specific scene would I see in a video?"
+
+GOOD examples: "laptop typing", "woman smiling", "city night", "hand writing", "coffee shop"
+BAD examples: "productivity", "success", "AI", "concept" (too abstract)
+
+Format as JSON:
+{{
+    "1": ["keyword1", "keyword2", "keyword3"],
+    "2": ["keyword1", "keyword2", "keyword3"],
+    ...
+}}
+
+Each segment MUST have unique keywords. Check your output for duplicates!
+Respond with ONLY valid JSON."""
+
+            response = await self.ai_client.generate(prompt)
+
+            # Parse JSON
+            clean = response.strip()
+            if clean.startswith("```"):
+                clean = clean.split("```")[1]
+                if clean.startswith("json"):
+                    clean = clean[4:]
+            clean = clean.strip()
+
+            data = json.loads(clean)
+
+            # Convert to dict with int keys
+            result = {}
+            for key, value in data.items():
+                result[int(key)] = value
+
+            self.log_progress(f"AI enhanced keywords for {len(result)} segments")
+            return result
+
+        except Exception as e:
+            self.log_progress(f"AI keyword enhancement failed: {e}, using defaults")
+            return {}
+
+    async def _search_for_segment(
+        self,
+        segment,
+        keywords: Optional[list[str]] = None,
+    ) -> Optional[dict]:
         """Search for a video matching a segment.
 
         Args:
             segment: Video segment with keywords.
+            keywords: Optional enhanced keywords to use instead of segment keywords.
 
         Returns:
-            Best matching video or None.
+            Best matching video or None (excludes already-used videos).
         """
         client = await self._get_client()
 
-        # Try keywords in order of specificity
-        for i in range(len(segment.keywords)):
-            query = " ".join(segment.keywords[: len(segment.keywords) - i])
-            if not query:
+        # Use provided keywords or fall back to segment keywords
+        search_keywords = keywords if keywords else segment.keywords
+
+        # Try each keyword individually first (more likely to find unique videos)
+        for keyword in search_keywords:
+            video = await self._search_query(
+                client,
+                keyword,
+                segment.duration_seconds,
+            )
+            if video:
+                return video
+
+        # Then try combined keywords
+        for i in range(len(search_keywords)):
+            query = " ".join(search_keywords[: len(search_keywords) - i])
+            if not query or len(query.split()) < 2:
                 continue
 
             video = await self._search_query(
@@ -281,19 +393,29 @@ class VideoSearcher(IVideoSearcher):
         videos: list[dict],
         target_duration: float,
     ) -> Optional[dict]:
-        """Select video with duration closest to target.
+        """Select video with duration closest to target (excluding already-used).
 
         Args:
             videos: List of videos.
             target_duration: Target duration in seconds.
 
         Returns:
-            Best matching video.
+            Best matching video that hasn't been used yet.
         """
         if not videos:
             return None
 
+        # Filter out already-used videos
+        available_videos = [
+            v for v in videos
+            if v.get("id") not in self._used_video_ids
+        ]
+
+        if not available_videos:
+            self.log_progress("All videos already used, allowing reuse as last resort")
+            available_videos = videos
+
         return min(
-            videos,
+            available_videos,
             key=lambda v: abs(v.get("duration", 0) - target_duration),
         )
