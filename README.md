@@ -219,6 +219,7 @@ python -m socials_automator.cli generate --help
 | Command | Description |
 |---------|-------------|
 | `generate` | Generate carousel posts for a profile |
+| `reel` | Generate video reels for Instagram/TikTok |
 | `post` | Publish pending posts to Instagram (all by default) |
 | `queue` | List all posts in the publishing queue |
 | `schedule` | Move generated posts to pending queue |
@@ -295,6 +296,91 @@ python -m socials_automator.cli generate ai.for.mortals --loop-each 10m
 # Loop mode with posting
 python -m socials_automator.cli generate ai.for.mortals --loop-each 1h --post
 ```
+
+---
+
+### reel
+
+Generate video reels for Instagram/TikTok. Uses AI for topic selection and script planning, then matches stock footage from Pexels to create a complete video with voiceover and karaoke-style subtitles.
+
+The narration audio is the source of truth for video length - video clips are trimmed to match the narration duration.
+
+```bash
+python -m socials_automator.cli reel <profile> [OPTIONS]
+```
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `profile` | Profile name to generate for (required) |
+
+**Options:**
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--topic` | `-t` | Topic for the video (auto-generated if not provided) | Auto |
+| `--text-ai` | | Text AI provider (zai, groq, gemini, openai, lmstudio, ollama) | Config |
+| `--video-matcher` | `-m` | Video source (pexels) | pexels |
+| `--voice` | `-v` | Voice preset (rvc_adam, alloy, shimmer, etc.) | rvc_adam |
+| `--subtitle-size` | `-s` | Subtitle font size in pixels | 80 |
+| `--length` | `-l` | Target video length (e.g., 30s, 1m, 90s) | 1m |
+| `--output` | `-o` | Output directory | Auto |
+| `--dry-run` | | Only run first few steps without full video generation | False |
+| `--loop` | | Generate videos continuously until stopped (Ctrl+C) | False |
+
+**Examples:**
+```bash
+# Generate a 1-minute video reel with auto-generated topic
+python -m socials_automator.cli reel ai.for.mortals
+
+# Generate with specific topic and AI provider
+python -m socials_automator.cli reel ai.for.mortals --text-ai lmstudio --topic "5 AI productivity tips"
+
+# Generate a 30-second video
+python -m socials_automator.cli reel ai.for.mortals --length 30s
+
+# Generate a 90-second video
+python -m socials_automator.cli reel ai.for.mortals --length 90s
+
+# Use a different voice
+python -m socials_automator.cli reel ai.for.mortals --voice alloy
+
+# Larger subtitles
+python -m socials_automator.cli reel ai.for.mortals --subtitle-size 100
+
+# Test without full video generation
+python -m socials_automator.cli reel ai.for.mortals --dry-run
+
+# Generate videos continuously (loop mode)
+python -m socials_automator.cli reel ai.for.mortals --loop
+
+# Loop mode with custom length
+python -m socials_automator.cli reel ai.for.mortals --loop --length 30s
+```
+
+**Pipeline:**
+1. [AI] Select topic from profile content pillars
+2. Research topic via web search
+3. [AI] Plan video script (targeting --length duration)
+4. Generate voiceover (determines actual video duration)
+5. Search Pexels for stock footage (with local cache)
+6. Download video clips
+7. Assemble into 9:16 vertical video (matches narration length)
+8. Add karaoke-style subtitles with watermark
+9. [AI] Generate caption and hashtags (with AI validation and retry)
+10. Output final.mp4
+
+**Output:**
+```
+profiles/<profile>/reels/YYYY/MM/generated/<post-id>/
+  ├── final.mp4           # Final video with audio and subtitles
+  ├── caption.txt         # Instagram caption
+  ├── caption+hashtags.txt # Caption with hashtags
+  └── metadata.json       # Video metadata
+```
+
+**Requirements:**
+- `PEXELS_API_KEY` environment variable for stock footage
+- RVC models for custom voice (rvc_adam) or use built-in voices (alloy, shimmer)
 
 ---
 
@@ -972,7 +1058,7 @@ Features that are **NOT included** in this project:
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Video/Reels** | Not included | Only static carousel images |
+| **Video/Reels** | **Included!** | Use `reel` command to generate video reels |
 | **Stories** | Not included | Instagram Stories not supported |
 | **Scheduled posting** | Not included | No built-in scheduler (use cron/Task Scheduler with `--loop-each`) |
 | **Multiple platforms** | Not included | Instagram only (no Twitter/X, LinkedIn, TikTok) |
@@ -982,9 +1068,9 @@ Features that are **NOT included** in this project:
 | **User interactions** | Not included | No auto-follow/like/comment on other posts |
 
 **Content Limitations:**
-- Images only (no video generation)
+- Video reels use stock footage from Pexels (no AI video generation)
 - English content only (other languages not tested)
-- Carousel format only (no single-image posts)
+- Carousel format only for images (no single-image posts)
 - Text overlays use fixed templates (customization requires code changes)
 
 **Technical Limitations:**
@@ -1003,9 +1089,9 @@ Features that are **NOT included** in this project:
 - [x] Provider override flags (`--text-ai`, `--image-ai`)
 - [x] Auto-retry for robust generation (`--auto-retry`)
 - [x] 100% Local AI support - LM Studio + ComfyUI (FREE)
+- [x] Video/Reels generation (`reel` command with stock footage)
 - [ ] Scheduled posting (`--schedule "2025-12-11 10:00"`)
 - [ ] Multiple social platforms (Twitter/X, LinkedIn)
-- [ ] Video/Reels generation
 - [ ] A/B testing for hooks
 
 ## License

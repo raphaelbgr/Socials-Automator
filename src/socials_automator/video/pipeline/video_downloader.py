@@ -1,6 +1,7 @@
 """Video downloading from Pexels.
 
 Downloads video clips to a temporary folder for assembly.
+Uses a cache to avoid re-downloading videos.
 """
 
 from pathlib import Path
@@ -14,20 +15,25 @@ from .base import (
     VideoClipInfo,
     VideoDownloadError,
 )
+from .pexels_cache import PexelsCache
 
 
 class VideoDownloader(IVideoDownloader):
-    """Downloads videos from Pexels search results."""
+    """Downloads videos from Pexels search results with caching."""
 
-    def __init__(self, quality: str = "hd"):
+    def __init__(self, quality: str = "hd", cache_dir: Optional[Path] = None):
         """Initialize video downloader.
 
         Args:
             quality: Preferred video quality (hd, sd).
+            cache_dir: Optional cache directory path.
         """
         super().__init__()
         self.quality = quality
         self._client: Optional[httpx.AsyncClient] = None
+        self._cache = PexelsCache(cache_dir)
+        self._cache_hits = 0
+        self._cache_misses = 0
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -57,12 +63,24 @@ class VideoDownloader(IVideoDownloader):
 
         self.log_start(f"Downloading {len(search_results)} video clips")
 
+        # Reset cache stats for this run
+        self._cache_hits = 0
+        self._cache_misses = 0
+
         try:
             clips_dir = context.temp_dir / "clips"
             clips_dir.mkdir(parents=True, exist_ok=True)
 
             clips = await self.download_videos(search_results, clips_dir)
             context.clips = clips
+
+            # Log cache stats
+            total = self._cache_hits + self._cache_misses
+            if total > 0:
+                hit_rate = (self._cache_hits / total) * 100
+                self.log_progress(
+                    f"Cache: {self._cache_hits} hits, {self._cache_misses} misses ({hit_rate:.0f}% hit rate)"
+                )
 
             self.log_success(f"Downloaded {len(clips)} clips to {clips_dir}")
             return context
@@ -121,7 +139,7 @@ class VideoDownloader(IVideoDownloader):
         output_dir: Path,
         keywords: list[str],
     ) -> VideoClipInfo:
-        """Download a single video.
+        """Download a single video (or get from cache).
 
         Args:
             video_data: Pexels video data.
@@ -132,6 +150,35 @@ class VideoDownloader(IVideoDownloader):
         Returns:
             VideoClipInfo for the downloaded clip.
         """
+        pexels_id = video_data.get("id", 0)
+        output_path = output_dir / f"segment_{segment_index:02d}.mp4"
+
+        # Check cache first
+        if self._cache.has_video(pexels_id):
+            # Cache hit - copy from cache
+            if self._cache.copy_to_destination(pexels_id, output_path):
+                self._cache_hits += 1
+                cached_meta = self._cache.get_metadata(pexels_id)
+                self.log_progress(f"[CACHE HIT] {output_path.name} (pexels_id: {pexels_id})")
+
+                # Get video file info from cache or video_data
+                video_file = self._select_video_file(video_data)
+
+                return VideoClipInfo(
+                    segment_index=segment_index,
+                    path=output_path,
+                    source_url=video_data.get("url", ""),
+                    pexels_id=pexels_id,
+                    title=video_data.get("user", {}).get("name", "Unknown"),
+                    duration_seconds=cached_meta.get("duration_seconds", video_data.get("duration", 0)),
+                    width=cached_meta.get("width", video_file.get("width", 0) if video_file else 0),
+                    height=cached_meta.get("height", video_file.get("height", 0) if video_file else 0),
+                    keywords_used=keywords,
+                )
+
+        # Cache miss - download from Pexels
+        self._cache_misses += 1
+
         # Get best quality video file
         video_file = self._select_video_file(video_data)
 
@@ -143,8 +190,6 @@ class VideoDownloader(IVideoDownloader):
             raise VideoDownloadError("No download URL available")
 
         # Download the file
-        output_path = output_dir / f"segment_{segment_index:02d}.mp4"
-
         client = await self._get_client()
 
         async with client.stream("GET", url) as response:
@@ -153,13 +198,16 @@ class VideoDownloader(IVideoDownloader):
                 async for chunk in response.aiter_bytes(8192):
                     f.write(chunk)
 
-        self.log_progress(f"Downloaded: {output_path.name}")
+        self.log_progress(f"[DOWNLOADED] {output_path.name} (pexels_id: {pexels_id})")
+
+        # Add to cache
+        self._cache.add_video(pexels_id, output_path, video_data, keywords)
 
         return VideoClipInfo(
             segment_index=segment_index,
             path=output_path,
             source_url=video_data.get("url", ""),
-            pexels_id=video_data.get("id", 0),
+            pexels_id=pexels_id,
             title=video_data.get("user", {}).get("name", "Unknown"),
             duration_seconds=video_data.get("duration", 0),
             width=video_file.get("width", 0),

@@ -1633,31 +1633,37 @@ def reel(
     video_matcher: str = typer.Option("pexels", "--video-matcher", "-m", help="Video source (pexels)"),
     voice: str = typer.Option("rvc_adam", "--voice", "-v", help=f"Voice preset: {', '.join(VOICE_CHOICES)}"),
     subtitle_size: int = typer.Option(80, "--subtitle-size", "-s", help="Subtitle font size in pixels (default: 80)"),
+    length: str = typer.Option("1m", "--length", "-l", help="Target video length (e.g., 30s, 1m, 90s). Default: 1m"),
     output_dir: str = typer.Option(None, "--output", "-o", help="Output directory (default: temp)"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Only run first few steps without full video generation"),
+    loop: bool = typer.Option(False, "--loop", help="Loop continuously, generating new videos until stopped (Ctrl+C)"),
 ):
-    """Generate a 1-minute video reel for Instagram/TikTok.
+    """Generate a video reel for Instagram/TikTok.
 
     This command matches stock footage to your content - it does NOT generate
     video with AI. The AI is used for topic selection and script planning.
 
+    The narration audio is the source of truth for video length - video clips
+    are trimmed to match the narration duration.
+
     Pipeline:
         1. [AI] Select topic from profile content pillars
         2. Research topic via web search
-        3. [AI] Plan 1-minute video script
-        4. Search video matcher for stock footage
-        5. Download video clips
-        6. Assemble into 9:16 vertical video
-        7. Generate voiceover with edge-tts
+        3. [AI] Plan video script (targeting --length duration)
+        4. Generate voiceover (determines actual video duration)
+        5. Search video matcher for stock footage
+        6. Download video clips
+        7. Assemble into 9:16 vertical video (matches narration length)
         8. Add karaoke-style subtitles
         9. Output final.mp4
 
     Examples:
         socials reel ai.for.mortals
-        socials reel ai.for.mortals --text-ai lmstudio
+        socials reel ai.for.mortals --text-ai lmstudio --length 1m
         socials reel ai.for.mortals --topic "5 AI productivity tips"
-        socials reel ai.for.mortals --voice british_female
+        socials reel ai.for.mortals --voice british_female --length 90s
         socials reel ai.for.mortals --video-matcher pexels
+        socials reel ai.for.mortals --loop  # Generate videos continuously
     """
     from dotenv import load_dotenv
     load_dotenv()
@@ -1666,6 +1672,26 @@ def reel(
 
     if not profile_path.exists():
         console.print(f"[red]Profile not found: {profile}[/red]")
+        raise typer.Exit(1)
+
+    # Parse length string (e.g., "1m", "30s", "90s") to seconds
+    def parse_length(length_str: str) -> float:
+        length_str = length_str.strip().lower()
+        if length_str.endswith("m"):
+            return float(length_str[:-1]) * 60
+        elif length_str.endswith("s"):
+            return float(length_str[:-1])
+        else:
+            # Assume seconds if no suffix
+            return float(length_str)
+
+    try:
+        target_duration = parse_length(length)
+        if target_duration < 15 or target_duration > 180:
+            console.print(f"[red]Invalid length: {length}. Must be between 15s and 3m.[/red]")
+            raise typer.Exit(1)
+    except ValueError:
+        console.print(f"[red]Invalid length format: {length}. Use formats like 30s, 1m, 90s.[/red]")
         raise typer.Exit(1)
 
     # Validate voice choice
@@ -1688,12 +1714,19 @@ def reel(
         console.print("[dim]Get free API key at: https://www.pexels.com/api/[/dim]")
         raise typer.Exit(1)
 
+    # Format duration for display
+    if target_duration >= 60:
+        length_display = f"{int(target_duration // 60)}m{int(target_duration % 60)}s" if target_duration % 60 else f"{int(target_duration // 60)}m"
+    else:
+        length_display = f"{int(target_duration)}s"
+
     console.print(Panel(
         f"Generating video reel for [cyan]{profile}[/cyan]\n"
         f"Text AI: [yellow]{text_ai or 'default'}[/yellow]\n"
         f"Video Matcher: [yellow]{video_matcher}[/yellow]\n"
         f"Voice: [yellow]{voice}[/yellow]\n"
         f"Subtitle Size: [yellow]{subtitle_size}px[/yellow]\n"
+        f"Target Length: [yellow]{length_display}[/yellow]\n"
         f"Topic: [green]{topic or 'Auto-generated'}[/green]",
         title="Video Reel Generation",
     ))
@@ -1706,8 +1739,10 @@ def reel(
         video_matcher=video_matcher,
         voice=voice,
         subtitle_size=subtitle_size,
+        target_duration=target_duration,
         output_dir=Path(output_dir) if output_dir else None,
         dry_run=dry_run,
+        loop=loop,
     ))
 
 
@@ -1718,8 +1753,10 @@ async def _generate_reel(
     video_matcher: str,
     voice: str,
     subtitle_size: int,
+    target_duration: float,
     output_dir: Path | None,
     dry_run: bool,
+    loop: bool = False,
 ):
     """Async video reel generation."""
     from .video.pipeline import VideoPipeline, setup_logging
@@ -1738,6 +1775,7 @@ async def _generate_reel(
         text_ai=text_ai,
         video_matcher=video_matcher,
         subtitle_size=subtitle_size,
+        target_duration=target_duration,
         progress_callback=progress_callback,
     )
 
@@ -1785,70 +1823,106 @@ async def _generate_reel(
         return
 
     # Full generation
-    try:
-        console.print("\n[bold cyan]Starting video generation pipeline...[/bold cyan]\n")
+    from datetime import datetime
+    import re
+    import time
 
-        # Generate output path in reels folder structure
-        # reels/YYYY/MM/generated/DD-NNN-slug/
-        from datetime import datetime
-        import re
+    loop_count = 0
 
-        now = datetime.now()
+    if loop:
+        console.print("\n[bold yellow]LOOP MODE[/bold yellow] - Will generate videos continuously. Press Ctrl+C to stop.\n")
 
-        # Generate post ID: YYYYMMDD-HHMMSS
-        post_id = now.strftime("%Y%m%d-%H%M%S")
+    while True:
+        loop_count += 1
 
-        # Calculate reel number for today
-        reels_today_dir = profile_path / "reels" / now.strftime("%Y") / now.strftime("%m") / "generated"
-        reels_today_dir.mkdir(parents=True, exist_ok=True)
+        if loop and loop_count > 1:
+            console.print(f"\n[bold cyan]{'='*60}[/bold cyan]")
+            console.print(f"[bold cyan]Starting video #{loop_count}...[/bold cyan]")
+            console.print(f"[bold cyan]{'='*60}[/bold cyan]\n")
 
-        existing_reels = list(reels_today_dir.glob(f"{now.strftime('%d')}-*"))
-        reel_number = len(existing_reels) + 1
+        try:
+            console.print("\n[bold cyan]Starting video generation pipeline...[/bold cyan]\n")
 
-        # Default slug will be updated after topic selection
-        reel_slug = "reel"
+            # Generate output path in reels folder structure
+            # reels/YYYY/MM/generated/DD-NNN-slug/
+            now = datetime.now()
 
-        # Create output directory (will be updated after topic is selected)
-        reel_output_dir = reels_today_dir / f"{now.strftime('%d')}-{reel_number:03d}-{reel_slug}"
+            # Generate post ID: YYYYMMDD-HHMMSS
+            post_id = now.strftime("%Y%m%d-%H%M%S")
 
-        video_path = await pipeline.generate(
-            profile_path=profile_path,
-            output_dir=output_dir or reel_output_dir,
-            post_id=post_id,
-        )
+            # Calculate reel number for today
+            reels_today_dir = profile_path / "reels" / now.strftime("%Y") / now.strftime("%m") / "generated"
+            reels_today_dir.mkdir(parents=True, exist_ok=True)
 
-        # Rename folder with actual slug from topic
-        if output_dir is None and video_path and video_path.exists():
-            # Get topic from metadata to create slug
-            metadata_path = video_path.parent / "metadata.json"
-            if metadata_path.exists():
-                import json
-                with open(metadata_path) as f:
-                    metadata = json.load(f)
-                topic = metadata.get("topic", "reel")
-                # Create slug from topic
-                reel_slug = re.sub(r'[^a-z0-9]+', '-', topic.lower())[:50].strip('-')
+            existing_reels = list(reels_today_dir.glob(f"{now.strftime('%d')}-*"))
+            reel_number = len(existing_reels) + 1
 
-                # Rename folder with proper slug
-                new_reel_dir = reels_today_dir / f"{now.strftime('%d')}-{reel_number:03d}-{reel_slug}"
-                if video_path.parent != new_reel_dir:
-                    import shutil
-                    shutil.move(str(video_path.parent), str(new_reel_dir))
-                    video_path = new_reel_dir / video_path.name
+            # Default slug will be updated after topic selection
+            reel_slug = "reel"
 
-        console.print(Panel(
-            f"[bold green]Video generated successfully![/bold green]\n\n"
-            f"[bold]Output:[/] {video_path}\n"
-            f"[bold]Duration:[/] 60 seconds\n"
-            f"[bold]Resolution:[/] 1080x1920 (9:16)",
-            title="Complete",
-            border_style="green",
-        ))
+            # Create output directory (will be updated after topic is selected)
+            reel_output_dir = reels_today_dir / f"{now.strftime('%d')}-{reel_number:03d}-{reel_slug}"
 
-    except Exception as e:
-        console.print(f"\n[red]Video generation failed: {e}[/red]")
-        console.print("[dim]Check logs for details[/dim]")
-        raise typer.Exit(1)
+            video_path = await pipeline.generate(
+                profile_path=profile_path,
+                output_dir=output_dir or reel_output_dir,
+                post_id=post_id,
+            )
+
+            # Rename folder with actual slug from topic
+            if output_dir is None and video_path and video_path.exists():
+                # Get topic from metadata to create slug
+                metadata_path = video_path.parent / "metadata.json"
+                if metadata_path.exists():
+                    import json
+                    with open(metadata_path) as f:
+                        metadata = json.load(f)
+                    topic_from_meta = metadata.get("topic", "reel")
+                    # Create slug from topic
+                    reel_slug = re.sub(r'[^a-z0-9]+', '-', topic_from_meta.lower())[:50].strip('-')
+
+                    # Rename folder with proper slug
+                    new_reel_dir = reels_today_dir / f"{now.strftime('%d')}-{reel_number:03d}-{reel_slug}"
+                    if video_path.parent != new_reel_dir:
+                        import shutil
+                        shutil.move(str(video_path.parent), str(new_reel_dir))
+                        video_path = new_reel_dir / video_path.name
+
+            console.print(Panel(
+                f"[bold green]Video generated successfully![/bold green]\n\n"
+                f"[bold]Output:[/] {video_path}\n"
+                f"[bold]Duration:[/] 60 seconds\n"
+                f"[bold]Resolution:[/] 1080x1920 (9:16)",
+                title=f"Complete (Video #{loop_count})" if loop else "Complete",
+                border_style="green",
+            ))
+
+            # If not looping, exit after first successful generation
+            if not loop:
+                break
+
+            # Brief pause before next iteration
+            console.print("\n[dim]Starting next video in 3 seconds... (Ctrl+C to stop)[/dim]")
+            time.sleep(3)
+
+        except KeyboardInterrupt:
+            console.print(f"\n\n[yellow]Loop stopped by user after {loop_count} video(s).[/yellow]")
+            break
+
+        except Exception as e:
+            console.print(f"\n[red]Video generation failed: {e}[/red]")
+            console.print("[dim]Check logs for details[/dim]")
+
+            if not loop:
+                raise typer.Exit(1)
+
+            # In loop mode, ask if user wants to continue after error
+            console.print("\n[yellow]Error occurred. Retrying in 5 seconds... (Ctrl+C to stop)[/yellow]")
+            try:
+                time.sleep(5)
+            except KeyboardInterrupt:
+                console.print(f"\n[yellow]Loop stopped by user after {loop_count} attempt(s).[/yellow]")
+                break
 
 
 def main():

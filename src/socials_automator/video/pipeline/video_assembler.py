@@ -1,9 +1,9 @@
 """Video assembly using MoviePy.
 
-Assembles downloaded clips into a 1-minute video with:
+Assembles downloaded clips into a video with:
 - Proper 9:16 cropping
 - 1080x1920 resolution
-- Segment timing
+- Duration matching the narration audio (source of truth)
 - Metadata output (SRT-like structure)
 """
 
@@ -29,17 +29,28 @@ class VideoAssembler(IVideoAssembler):
     WIDTH = 1080
     HEIGHT = 1920
     FPS = 30
-    DURATION = 60.0  # Fixed 1-minute video duration - audio/subtitles adapt to this
 
     def __init__(self):
         """Initialize video assembler."""
         super().__init__()
 
+    def _get_audio_duration(self, audio_path: Path) -> float:
+        """Get duration of audio file in seconds."""
+        try:
+            from moviepy import AudioFileClip
+        except ImportError:
+            from moviepy.editor import AudioFileClip
+
+        audio = AudioFileClip(str(audio_path))
+        duration = audio.duration
+        audio.close()
+        return duration
+
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """Execute video assembly step.
 
         Args:
-            context: Pipeline context with clips and script.
+            context: Pipeline context with clips, script, and audio.
 
         Returns:
             Updated context with assembled video.
@@ -48,8 +59,14 @@ class VideoAssembler(IVideoAssembler):
             raise VideoAssemblyError("No clips available for assembly")
         if not context.script:
             raise VideoAssemblyError("No script available for assembly")
+        if not context.audio_path:
+            raise VideoAssemblyError("No audio available - narration is source of truth for duration")
 
-        self.log_start(f"Assembling {len(context.clips)} clips into 1-minute video")
+        # Get actual audio duration - this is the source of truth for video length
+        audio_duration = self._get_audio_duration(context.audio_path)
+        self.log_progress(f"Audio duration: {audio_duration:.1f}s (source of truth)")
+
+        self.log_start(f"Assembling {len(context.clips)} clips to match {audio_duration:.1f}s narration")
 
         try:
             output_path = context.temp_dir / "assembled.mp4"
@@ -58,6 +75,7 @@ class VideoAssembler(IVideoAssembler):
                 context.clips,
                 context.script,
                 output_path,
+                audio_duration,
             )
 
             context.assembled_video_path = assembled_path
@@ -68,7 +86,7 @@ class VideoAssembler(IVideoAssembler):
             with open(metadata_path, "w", encoding="utf-8") as f:
                 json.dump(metadata.model_dump(), f, indent=2, default=str)
 
-            self.log_success(f"Assembled video: {assembled_path}")
+            self.log_success(f"Assembled video: {assembled_path} ({audio_duration:.1f}s)")
             return context
 
         except Exception as e:
@@ -80,6 +98,7 @@ class VideoAssembler(IVideoAssembler):
         clips: list[VideoClipInfo],
         script: VideoScript,
         output_path: Path,
+        target_duration: float,
     ) -> tuple[Path, VideoMetadata]:
         """Assemble clips into final video with metadata.
 
@@ -87,6 +106,7 @@ class VideoAssembler(IVideoAssembler):
             clips: List of video clips.
             script: Video script with timing.
             output_path: Output video path.
+            target_duration: Target video duration (from audio).
 
         Returns:
             Tuple of (video_path, metadata).
@@ -114,69 +134,134 @@ class VideoAssembler(IVideoAssembler):
         # Sort clips by segment index
         sorted_clips = sorted(clips, key=lambda c: c.segment_index)
 
-        # Video is ALWAYS 60 seconds - narration must fill this time
-        # Use segment durations from script (validated to fill ~60s)
-        segment_durations = [s.duration_seconds for s in script.segments]
-
-        # Scale segment durations to exactly fill 60 seconds
-        total_segment_time = sum(segment_durations)
-        if total_segment_time > 0:
-            scale = self.DURATION / total_segment_time
-            segment_durations = [d * scale for d in segment_durations]
-            self.log_progress(f"Scaled {len(segment_durations)} segments to fill {self.DURATION}s")
-
-        # Process each clip
+        # Process clips and keep adding until we have enough footage
+        # to cover the entire audio duration
         video_clips = []
         segment_metadata = []
-        current_time = 0.0
+        current_duration = 0.0
+        clip_index = 0
 
-        for clip_info, duration in zip(sorted_clips, segment_durations):
-            self.log_progress(f"Processing segment {clip_info.segment_index}...")
+        self.log_progress(f"Need {target_duration:.1f}s of video to match narration")
+
+        while current_duration < target_duration and clip_index < len(sorted_clips):
+            clip_info = sorted_clips[clip_index]
+            self.log_progress(f"Processing clip {clip_index + 1}/{len(sorted_clips)}...")
 
             clip = VideoFileClip(str(clip_info.path))
+            original_duration = clip.duration
 
             # Crop to 9:16
             clip = self._crop_to_9_16(clip)
 
-            # Resize to target resolution (resized for MoviePy 2.x, resize for 1.x)
+            # Resize to target resolution
             if hasattr(clip, 'resized'):
                 clip = clip.resized((self.WIDTH, self.HEIGHT))
             else:
                 clip = clip.resize((self.WIDTH, self.HEIGHT))
 
-            # Adjust duration
-            clip = self._adjust_duration(clip, duration)
+            # Calculate how much time we still need
+            remaining_time = target_duration - current_duration
+
+            if clip.duration > remaining_time:
+                # Clip is longer than needed - trim it to exactly fill remaining time
+                self.log_progress(f"  Trimming clip from {clip.duration:.1f}s to {remaining_time:.1f}s (fills remaining time)")
+                if hasattr(clip, 'subclipped'):
+                    clip = clip.subclipped(0, remaining_time)
+                else:
+                    clip = clip.subclip(0, remaining_time)
+                clip_duration = remaining_time
+            else:
+                # Use full clip
+                clip_duration = clip.duration
+                self.log_progress(f"  Using full clip: {clip_duration:.1f}s")
 
             video_clips.append(clip)
 
             # Track segment timing for metadata
             segment_metadata.append({
                 "index": clip_info.segment_index,
-                "start_time": current_time,
-                "end_time": current_time + duration,
-                "duration": duration,
+                "start_time": current_duration,
+                "end_time": current_duration + clip_duration,
+                "duration": clip_duration,
                 "pexels_id": clip_info.pexels_id,
                 "source_url": clip_info.source_url,
                 "keywords": clip_info.keywords_used,
             })
 
-            current_time += duration
+            current_duration += clip_duration
+            clip_index += 1
+            self.log_progress(f"  Total video so far: {current_duration:.1f}s / {target_duration:.1f}s")
 
+        # Check if we have enough footage - KEEP LOOPING until we fill the audio duration
+        if current_duration < target_duration:
+            remaining_time = target_duration - current_duration
+            self.log_progress(f"Need {remaining_time:.1f}s more video - extending with additional clips...")
+
+            # Keep adding clips until we reach the target duration
+            extend_index = 0
+            max_iterations = 20  # Safety limit
+
+            while current_duration < target_duration and extend_index < max_iterations:
+                # Rotate through clips, starting from middle to avoid obvious repetition
+                # Skip first and last clips on first pass to reduce visible repetition
+                if len(sorted_clips) >= 3:
+                    # Start from middle, then rotate through all
+                    offset = len(sorted_clips) // 2
+                    clip_idx = (extend_index + offset) % len(sorted_clips)
+                else:
+                    clip_idx = extend_index % len(sorted_clips)
+
+                reuse_clip_info = sorted_clips[clip_idx]
+                clip = VideoFileClip(str(reuse_clip_info.path))
+
+                # Crop and resize
+                clip = self._crop_to_9_16(clip)
+                if hasattr(clip, 'resized'):
+                    clip = clip.resized((self.WIDTH, self.HEIGHT))
+                else:
+                    clip = clip.resize((self.WIDTH, self.HEIGHT))
+
+                remaining_time = target_duration - current_duration
+
+                # Use different sections of the clip on each reuse to reduce visual repetition
+                # First use: start from 0, second use: start from 1/3, third use: start from 2/3
+                section_offset = (extend_index % 3) * (clip.duration / 3)
+                section_offset = min(section_offset, max(0, clip.duration - remaining_time))
+
+                if clip.duration > remaining_time:
+                    # Clip is longer than needed - use section to fill remaining time
+                    end_time = min(section_offset + remaining_time, clip.duration)
+                    if hasattr(clip, 'subclipped'):
+                        clip = clip.subclipped(section_offset, end_time)
+                    else:
+                        clip = clip.subclip(section_offset, end_time)
+                    clip_duration = end_time - section_offset
+                else:
+                    # Use full clip
+                    clip_duration = clip.duration
+
+                video_clips.append(clip)
+                current_duration += clip_duration
+                extend_index += 1
+                self.log_progress(f"  Added clip {clip_idx + 1} ({clip_duration:.1f}s) -> total: {current_duration:.1f}s / {target_duration:.1f}s")
+
+        self.log_progress(f"Total video duration: {current_duration:.1f}s")
         self.log_progress("Concatenating clips...")
 
         # Concatenate all clips
         final_video = concatenate_videoclips(video_clips, method="compose")
 
-        # Ensure video is exactly 60 seconds
-        if final_video.duration > self.DURATION:
+        # Trim video to match audio duration exactly
+        if final_video.duration > target_duration:
+            self.log_progress(f"Trimming video from {final_video.duration:.1f}s to {target_duration:.1f}s")
             if hasattr(final_video, 'subclipped'):
-                final_video = final_video.subclipped(0, self.DURATION)
+                final_video = final_video.subclipped(0, target_duration)
             else:
-                final_video = final_video.subclip(0, self.DURATION)
+                final_video = final_video.subclip(0, target_duration)
 
-        self.log_progress(f"Exporting to {output_path}...")
+        self.log_progress(f"Exporting {target_duration:.1f}s video to {output_path}...")
 
-        # Export without audio (audio will be added in voice generation step)
+        # Export without audio (audio will be added in subtitle renderer step)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         final_video.write_videofile(
             str(output_path),
@@ -196,7 +281,7 @@ class VideoAssembler(IVideoAssembler):
             post_id=output_path.parent.name,
             title=script.title,
             topic=script.title,
-            duration_seconds=self.DURATION,
+            duration_seconds=target_duration,
             segments=segment_metadata,
             clips_used=[
                 {
@@ -251,35 +336,27 @@ class VideoAssembler(IVideoAssembler):
         return clip
 
     def _adjust_duration(self, clip, target_duration: float):
-        """Adjust clip duration to target.
+        """Adjust clip duration to target by trimming.
 
         Args:
             clip: MoviePy VideoFileClip.
             target_duration: Target duration in seconds.
 
         Returns:
-            Adjusted clip.
+            Adjusted clip with correct duration.
         """
         if clip.duration >= target_duration:
-            # Clip is longer, select middle segment
+            # Clip is longer - select middle segment for better visuals
             start_time = (clip.duration - target_duration) / 2
-            # Use subclipped for MoviePy 2.x, subclip for 1.x
             if hasattr(clip, 'subclipped'):
                 return clip.subclipped(start_time, start_time + target_duration)
             else:
                 return clip.subclip(start_time, start_time + target_duration)
         else:
-            # Clip is shorter, loop it to fill time
-            try:
-                # MoviePy 2.x uses vfx.Loop
-                from moviepy import vfx
-                n_loops = int(target_duration / clip.duration) + 1
-                looped = clip.with_effects([vfx.Loop(n_loops)])
-                # Trim to exact duration
-                if hasattr(looped, 'subclipped'):
-                    return looped.subclipped(0, target_duration)
-                else:
-                    return looped.subclip(0, target_duration)
-            except (ImportError, AttributeError):
-                # Fallback to MoviePy 1.x loop method
-                return clip.loop(duration=target_duration)
+            # Clip is shorter than needed - use the full clip
+            # The video searcher should find long enough clips, but if not,
+            # we just use what we have (no looping, no slow motion)
+            self.log_progress(
+                f"Clip is {clip.duration:.1f}s but need {target_duration:.1f}s - using full clip"
+            )
+            return clip

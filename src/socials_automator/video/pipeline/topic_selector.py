@@ -129,12 +129,15 @@ Requirements:
 - Must be completable in 60 seconds
 - Use simple, clear language
 - Make it feel urgent or valuable
+- Focus on FREE tips, FREE tools, and sharing knowledge
+- NO selling, NO courses, NO paid products - just free value!
 
 Respond with ONLY the topic text, nothing else. No quotes, no explanation.
 Example good responses:
 - 5 ChatGPT prompts that save 2 hours daily
 - The AI tool replacing Photoshop (free)
-- How I automated my emails with Claude"""
+- How I automated my emails with Claude
+- 3 free AI tools you need to try today"""
 
             # Use the TextProvider to generate
             response = await self.ai_client.generate(prompt)
