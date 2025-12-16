@@ -68,6 +68,7 @@ from .base import (
     PipelineStep,
 )
 from .caption_generator import CaptionGenerator
+from .cli_display import PipelineDisplay, StepLogger, get_display, set_display, setup_display
 from .orchestrator import ProgressCallback, VideoPipeline, setup_logging
 from .script_planner import ScriptPlanner
 from .subtitle_renderer import SubtitleRenderer
@@ -83,6 +84,12 @@ __all__ = [
     "VideoPipeline",
     "setup_logging",
     "ProgressCallback",
+    # CLI Display
+    "PipelineDisplay",
+    "StepLogger",
+    "get_display",
+    "set_display",
+    "setup_display",
     # Pipeline steps
     "TopicSelector",
     "TopicResearcher",
