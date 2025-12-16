@@ -67,6 +67,7 @@ from .base import (
     IVoiceGenerator,
     PipelineStep,
 )
+from .caption_generator import CaptionGenerator
 from .orchestrator import ProgressCallback, VideoPipeline, setup_logging
 from .script_planner import ScriptPlanner
 from .subtitle_renderer import SubtitleRenderer
@@ -91,6 +92,7 @@ __all__ = [
     "VideoAssembler",
     "VoiceGenerator",
     "SubtitleRenderer",
+    "CaptionGenerator",
     # Data models
     "PipelineContext",
     "ProfileMetadata",

@@ -29,7 +29,7 @@ class VideoAssembler(IVideoAssembler):
     WIDTH = 1080
     HEIGHT = 1920
     FPS = 30
-    MAX_DURATION = 60.0  # Maximum video duration (can be shorter based on audio)
+    DURATION = 60.0  # Fixed 1-minute video duration - audio/subtitles adapt to this
 
     def __init__(self):
         """Initialize video assembler."""
@@ -114,24 +114,16 @@ class VideoAssembler(IVideoAssembler):
         # Sort clips by segment index
         sorted_clips = sorted(clips, key=lambda c: c.segment_index)
 
-        # Use actual segment durations (updated by VoiceGenerator with real timing)
+        # Video is ALWAYS 60 seconds - narration must fill this time
+        # Use segment durations from script (validated to fill ~60s)
         segment_durations = [s.duration_seconds for s in script.segments]
 
-        # Calculate total duration from actual timing (not fixed 60s)
-        # If segments have been updated with real voice timing, use that
-        if script.segments and script.segments[-1].end_time > 0:
-            actual_duration = script.segments[-1].end_time
-            self.log_progress(f"Using actual audio duration: {actual_duration:.1f}s")
-        else:
-            actual_duration = self.MAX_DURATION
-            self.log_progress(f"Using max duration: {actual_duration:.1f}s")
-
-        # Adjust durations if needed to fit within max
-        total_needed = sum(segment_durations)
-        if total_needed > self.MAX_DURATION:
-            scale = self.MAX_DURATION / total_needed
+        # Scale segment durations to exactly fill 60 seconds
+        total_segment_time = sum(segment_durations)
+        if total_segment_time > 0:
+            scale = self.DURATION / total_segment_time
             segment_durations = [d * scale for d in segment_durations]
-            actual_duration = self.MAX_DURATION
+            self.log_progress(f"Scaled {len(segment_durations)} segments to fill {self.DURATION}s")
 
         # Process each clip
         video_clips = []
@@ -175,13 +167,12 @@ class VideoAssembler(IVideoAssembler):
         # Concatenate all clips
         final_video = concatenate_videoclips(video_clips, method="compose")
 
-        # Ensure we don't exceed actual duration (matches audio)
-        target_duration = min(actual_duration, self.MAX_DURATION)
-        if final_video.duration > target_duration:
+        # Ensure video is exactly 60 seconds
+        if final_video.duration > self.DURATION:
             if hasattr(final_video, 'subclipped'):
-                final_video = final_video.subclipped(0, target_duration)
+                final_video = final_video.subclipped(0, self.DURATION)
             else:
-                final_video = final_video.subclip(0, target_duration)
+                final_video = final_video.subclip(0, self.DURATION)
 
         self.log_progress(f"Exporting to {output_path}...")
 
@@ -205,7 +196,7 @@ class VideoAssembler(IVideoAssembler):
             post_id=output_path.parent.name,
             title=script.title,
             topic=script.title,
-            duration_seconds=min(final_video.duration, target_duration),
+            duration_seconds=self.DURATION,
             segments=segment_metadata,
             clips_used=[
                 {

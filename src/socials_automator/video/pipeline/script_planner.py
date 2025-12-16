@@ -29,16 +29,22 @@ class ScriptPlanner(IScriptPlanner):
     TARGET_DURATION = 60.0
 
     # Minimum acceptable narration duration (must use most of the video)
-    MIN_NARRATION_DURATION = 50.0  # At least 50 seconds of narration
+    MIN_NARRATION_DURATION = 55.0  # At least 55 seconds of narration for 60s video
 
     # Segment timing
     HOOK_DURATION = 3.0
     CTA_DURATION = 4.0
-    MIN_SEGMENT_DURATION = 8.0  # Increased from 6 - segments need more content
+    MIN_SEGMENT_DURATION = 10.0  # 10 seconds per segment = ~25 words each
     MAX_SEGMENT_DURATION = 12.0
 
-    # Retry settings for validation
-    MAX_REGENERATION_ATTEMPTS = 3
+    # Retry settings for validation - keep trying until we get it right
+    MAX_REGENERATION_ATTEMPTS = 10  # Will keep trying until success
+
+    # Minimum words required (55s at 150wpm = 137 words)
+    MIN_WORDS_REQUIRED = 140
+
+    # Target words for optimal narration (~58s at 150wpm)
+    TARGET_WORDS = 145
 
     def __init__(self, ai_client: Optional[object] = None):
         """Initialize script planner.
@@ -112,28 +118,38 @@ class ScriptPlanner(IScriptPlanner):
         self.log_progress("Creating script structure...")
 
         # Try generation with validation and regeneration
+        last_word_count = 0
+
         for attempt in range(self.MAX_REGENERATION_ATTEMPTS):
             script = None
 
             # Use AI if available for better script generation
             if self.ai_client:
-                self.log_progress(f"Using AI to generate script (attempt {attempt + 1})...")
+                self.log_progress(f"Using AI to generate script (attempt {attempt + 1}/{self.MAX_REGENERATION_ATTEMPTS})...")
                 try:
                     script = await self._plan_script_with_ai(
                         topic, research, duration, profile_name, profile_handle,
-                        is_retry=attempt > 0,
+                        attempt_number=attempt + 1,
+                        last_word_count=last_word_count,
                     )
                 except Exception as e:
-                    self.log_progress(f"AI script generation failed: {e}, using templates")
+                    self.log_progress(f"AI script generation failed: {e}")
+                    # Don't fall back to templates - retry with AI
+                    continue
 
-            # Fallback to template-based generation
-            if not script:
+            # If no AI or AI failed, use templates (only as last resort)
+            if not script and attempt == self.MAX_REGENERATION_ATTEMPTS - 1:
+                self.log_progress("Using template-based generation as final fallback...")
                 script = await self._plan_script_with_templates(
                     topic, research, duration, profile_name, profile_handle
                 )
 
+            if not script:
+                continue
+
             # Validate script length
             is_valid, estimated_duration, word_count = self._validate_script_length(script)
+            last_word_count = word_count
 
             if is_valid:
                 self.log_progress(
@@ -143,16 +159,12 @@ class ScriptPlanner(IScriptPlanner):
 
             # Script too short - log and retry
             self.log_progress(
-                f"Script too short: {word_count} words (~{estimated_duration:.1f}s), "
-                f"need ~{int(self.MIN_NARRATION_DURATION * self.WORDS_PER_MINUTE / 60)} words "
-                f"for {self.MIN_NARRATION_DURATION}s minimum"
+                f"REJECTED: Only {word_count} words (~{estimated_duration:.1f}s). "
+                f"Need {self.MIN_WORDS_REQUIRED}+ words for {self.MIN_NARRATION_DURATION}s minimum!"
             )
 
-            if attempt < self.MAX_REGENERATION_ATTEMPTS - 1:
-                self.log_progress("Regenerating with longer content requirement...")
-
-        # Return last attempt even if not perfect
-        self.log_progress("Warning: Script may be shorter than ideal")
+        # Should not reach here, but return last attempt if it does
+        self.log_progress("WARNING: Could not generate script with enough content after all attempts")
         return script
 
     def _validate_script_length(self, script: VideoScript) -> tuple[bool, float, int]:
@@ -228,7 +240,8 @@ class ScriptPlanner(IScriptPlanner):
         duration: float,
         profile_name: str = "us",
         profile_handle: str = "",
-        is_retry: bool = False,
+        attempt_number: int = 1,
+        last_word_count: int = 0,
     ) -> VideoScript:
         """Plan script using AI for better content."""
         import json
@@ -239,19 +252,48 @@ class ScriptPlanner(IScriptPlanner):
         # Build CTA instruction with profile name (no handle - sounds weird in narration)
         cta_instruction = f'Follow {profile_name} [context-specific ending like "for more AI tips!"]'
 
-        # Stronger requirements on retry
-        if is_retry:
-            word_requirement = "EXACTLY 150-160 words TOTAL (you were too short last time - count your words!)"
-            segment_requirement = "MUST be 25-35 words each (you need MORE content per segment!)"
-            emphasis = """
-***** CRITICAL: YOUR LAST ATTEMPT WAS TOO SHORT! *****
-The narration must fill 60 seconds. At 150 words per minute, you need at least 150 words.
-Count your words carefully. Each segment needs to be substantial with multiple sentences.
-DO NOT submit short segments. Include details, examples, and complete thoughts."""
+        # Progressive requirements - get stricter on each retry
+        if attempt_number == 1:
+            word_requirement = f"EXACTLY {self.TARGET_WORDS}-160 words TOTAL"
+            segment_requirement = "MUST be 25-30 words each"
+            emphasis = f"""
+CRITICAL: Total word count must be {self.MIN_WORDS_REQUIRED}+ words!
+Hook: ~10 words | Each of 5 segments: ~25 words | CTA: ~10 words = ~145 words total"""
+
+        elif attempt_number == 2:
+            word_requirement = f"MINIMUM {self.MIN_WORDS_REQUIRED} words, TARGET {self.TARGET_WORDS}+ words"
+            segment_requirement = "EXACTLY 28-32 words each - NO SHORTER"
+            emphasis = f"""
+***** WARNING: Your last attempt had only {last_word_count} words - REJECTED! *****
+YOU MUST WRITE MORE! At least {self.MIN_WORDS_REQUIRED} words total!
+Each segment needs 3-4 FULL sentences with specific details, not just one short sentence."""
+
+        elif attempt_number <= 4:
+            word_requirement = f"MINIMUM {self.MIN_WORDS_REQUIRED} words - LAST ATTEMPT HAD {last_word_count}"
+            segment_requirement = "30-35 words each - WRITE LONGER SEGMENTS"
+            emphasis = f"""
+!!!!! CRITICAL FAILURE: YOU WROTE {last_word_count} WORDS BUT NEED {self.MIN_WORDS_REQUIRED}+ !!!!!
+Your segments are TOO SHORT. Each segment needs MULTIPLE sentences.
+Write 4-5 sentences per segment with specific examples and actionable advice.
+DO NOT OUTPUT UNTIL YOU HAVE COUNTED YOUR WORDS AND REACHED {self.MIN_WORDS_REQUIRED}+!"""
+
         else:
-            word_requirement = "approximately 150 words (for 60 seconds at natural speaking pace)"
-            segment_requirement = "MUST be 20-30 words with specific details and value"
-            emphasis = ""
+            # Really aggressive after 4 attempts
+            words_short = self.MIN_WORDS_REQUIRED - last_word_count
+            word_requirement = f"YOU ARE {words_short} WORDS SHORT! WRITE {self.MIN_WORDS_REQUIRED + 20}+ WORDS!"
+            segment_requirement = "35-40 words each - LONGER IS BETTER"
+            emphasis = f"""
+###############################################################
+# STOP! YOU HAVE FAILED {attempt_number - 1} TIMES!           #
+# LAST OUTPUT: {last_word_count} words (NEED {self.MIN_WORDS_REQUIRED}+)              #
+# YOU ARE {words_short} WORDS SHORT!                          #
+###############################################################
+
+BEFORE YOU RESPOND:
+1. Write each segment with AT LEAST 35 words (5-6 sentences)
+2. Count your total words - must be {self.MIN_WORDS_REQUIRED}+
+3. If under {self.MIN_WORDS_REQUIRED} words, ADD MORE CONTENT
+4. Include specific numbers, examples, and detailed explanations"""
 
         prompt = f"""Write a 60-second video narration script for Instagram Reels about: {topic.topic}
 
@@ -282,7 +324,7 @@ Format your response as JSON:
 
 CRITICAL Rules:
 - Each segment MUST be 25-35 words (NOT shorter!) - this is essential for timing
-- Total narration MUST be at least 150 words - COUNT YOUR WORDS!
+- Total narration MUST be at least {self.MIN_WORDS_REQUIRED} words - COUNT YOUR WORDS!
 - Write in first person, conversational style ("I discovered...", "Here's what works...")
 - Include specific examples, numbers, or actionable tips in each segment
 - NO repetition of the same phrases or ideas

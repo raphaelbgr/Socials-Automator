@@ -4,12 +4,13 @@ Coordinates all pipeline steps to generate a complete video:
 1. Select topic from profile
 2. Research topic via web search
 3. Plan video script
-4. Search for stock videos
-5. Download video clips
-6. Assemble video
-7. Generate voiceover
+4. Generate voiceover (before video for timing sync)
+5. Search for stock videos
+6. Download video clips
+7. Assemble video
 8. Render subtitles
-9. Output final video
+9. Generate caption and hashtags
+10. Output final video
 """
 
 import json
@@ -26,6 +27,7 @@ from .base import (
     PipelineStep,
     ProfileMetadata,
 )
+from .caption_generator import CaptionGenerator
 from .script_planner import ScriptPlanner
 from .subtitle_renderer import SubtitleRenderer
 from .topic_researcher import TopicResearcher
@@ -86,6 +88,7 @@ class VideoPipeline:
             VideoDownloader(),
             VideoAssembler(),  # Now uses actual voice timing for segment durations
             SubtitleRenderer(font_size=subtitle_size),
+            CaptionGenerator(ai_client=ai_client),  # Generate caption and hashtags
         ]
 
     def _create_ai_client(self, provider: str) -> Optional[object]:
