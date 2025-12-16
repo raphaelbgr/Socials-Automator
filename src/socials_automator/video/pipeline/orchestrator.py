@@ -29,6 +29,7 @@ from .base import (
 )
 from .caption_generator import CaptionGenerator
 from .cli_display import PipelineDisplay, setup_display
+from .debug_logger import PipelineDebugLogger
 from .script_planner import ScriptPlanner
 from .subtitle_renderer import SubtitleRenderer
 from .topic_researcher import TopicResearcher
@@ -90,6 +91,11 @@ class VideoPipeline:
         self.text_ai = text_ai
         self.video_matcher = video_matcher
         self.target_duration = target_duration
+        self.voice = voice
+        self.subtitle_size = subtitle_size
+
+        # Initialize debug logger
+        self.debug_logger = PipelineDebugLogger()
 
         # Setup CLI display
         self.display = setup_display(
@@ -188,6 +194,18 @@ class VideoPipeline:
 
         profile = ProfileMetadata.from_file(metadata_path)
 
+        # Start debug logger with configuration
+        self.debug_logger.start(
+            profile=profile.display_name,
+            profile_path=str(profile_path),
+            post_id=post_id,
+            voice=self.voice,
+            text_ai=self.text_ai or "templates",
+            video_matcher=self.video_matcher,
+            subtitle_size=self.subtitle_size,
+            target_duration=self.target_duration,
+        )
+
         # Start pipeline display
         self.display.start_pipeline(profile.display_name, total_steps=len(self.steps))
         self.display.info(f"Post ID: {post_id}")
@@ -223,25 +241,67 @@ class VideoPipeline:
 
                 # Start step with description
                 self.display.start_step(step_name, description)
+                self.debug_logger.start_step(step_name)
 
                 self._update_progress(step_name, progress, f"Starting {step_name}...")
 
                 context = await step.execute(context)
 
-                # Show specific info after certain steps
+                # Show specific info after certain steps and log to debug
                 if step_name == "TopicSelector" and context.topic:
                     self.display.show_topic(context.topic.topic, context.topic.pillar_name)
+                    self.debug_logger.log_topic(
+                        context.topic.topic,
+                        context.topic.pillar_name,
+                        context.topic.keywords,
+                    )
+                    self.debug_logger.end_step(step_name)
+
                 elif step_name == "ScriptPlanner" and context.script:
                     self.display.show_script(
                         context.script.title,
                         len(context.script.segments),
                         context.script.total_duration,
                     )
-                elif step_name == "VideoDownloader" and hasattr(step, '_cache_hits'):
-                    self.display.show_cache_stats(
-                        getattr(step, '_cache_hits', 0),
-                        getattr(step, '_cache_misses', 0),
+                    self.debug_logger.log_script(
+                        context.script.title,
+                        len(context.script.segments),
+                        context.script.total_duration,
+                        context.script.full_narration,
                     )
+                    self.debug_logger.end_step(step_name, {
+                        "segments": len(context.script.segments),
+                        "duration": f"{context.script.total_duration:.1f}s",
+                    })
+
+                elif step_name == "VoiceGenerator":
+                    self.debug_logger.log_voice(
+                        getattr(step, 'backend', 'unknown'),
+                        getattr(step, 'voice', 'unknown'),
+                        len(getattr(context, '_word_timestamps', [])) if hasattr(context, '_word_timestamps') else 0,
+                    )
+                    self.debug_logger.end_step(step_name)
+
+                elif step_name == "VideoSearcher":
+                    search_results = getattr(context, '_search_results', [])
+                    if search_results:
+                        self.debug_logger.log_video_search(search_results)
+                    self.debug_logger.end_step(step_name, {
+                        "clips_found": len(search_results) if search_results else 0,
+                    })
+
+                elif step_name == "VideoDownloader" and hasattr(step, '_cache_hits'):
+                    hits = getattr(step, '_cache_hits', 0)
+                    misses = getattr(step, '_cache_misses', 0)
+                    self.display.show_cache_stats(hits, misses)
+                    self.debug_logger.log_cache_stats(hits, misses)
+                    self.debug_logger.end_step(step_name, {
+                        "cache_hits": hits,
+                        "cache_misses": misses,
+                    })
+
+                else:
+                    self.debug_logger.end_step(step_name)
 
                 self._update_progress(
                     step_name,
@@ -263,14 +323,27 @@ class VideoPipeline:
                         )
                     self.display.info(f"Metadata saved: {metadata_out.name}")
 
+                # Save debug log
+                self.debug_logger.end(success=True, output_path=context.final_video_path)
+                debug_log_path = self.debug_logger.save(output_dir)
+                self.display.info(f"Debug log saved: {debug_log_path.name}")
+
                 self.display.end_pipeline(context.final_video_path, success=True)
                 return context.final_video_path
             else:
+                self.debug_logger.end(success=False)
+                self.debug_logger.save(output_dir)
                 self.display.end_pipeline(success=False)
                 raise PipelineError("Pipeline completed but no output video")
 
         except Exception as e:
             self.display.error(f"Pipeline failed: {e}")
+            self.debug_logger.log_error(str(e))
+            self.debug_logger.end(success=False)
+            try:
+                self.debug_logger.save(output_dir)
+            except Exception:
+                pass  # Don't fail if we can't save debug log
             self.display.end_pipeline(success=False)
             raise PipelineError(f"Video generation failed: {e}") from e
 
@@ -299,6 +372,100 @@ class VideoPipeline:
         return asyncio.run(self.generate(profile_path, output_dir, post_id))
 
 
+class DdgsLogFilter(logging.Filter):
+    """Filter that reformats ddgs error logs into clean messages."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Reformat ddgs error logs to be more readable."""
+        if record.name == "ddgs.ddgs" and "Error in engine" in str(record.msg):
+            try:
+                import re
+                msg = str(record.msg)
+
+                # Extract engine name and error type
+                engine_match = re.search(r"Error in engine (\w+):", msg)
+                engine = engine_match.group(1) if engine_match else "unknown"
+
+                # Determine error type
+                if "timed out" in msg.lower():
+                    error_type = "TIMEOUT"
+                elif "403" in msg or "forbidden" in msg.lower():
+                    error_type = "BLOCKED"
+                elif "404" in msg:
+                    error_type = "NOT FOUND"
+                elif "connection" in msg.lower():
+                    error_type = "CONNECTION"
+                else:
+                    error_type = "ERROR"
+
+                # Create clean message
+                record.msg = f"{engine:12} [{error_type}]"
+
+            except Exception:
+                pass  # Keep original message if parsing fails
+
+        return True
+
+
+class PrimpLogFilter(logging.Filter):
+    """Filter that reformats primp HTTP response logs into clean search logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Reformat primp logs to show clean search info."""
+        if record.name == "primp" and "response:" in record.msg:
+            try:
+                # Parse: "response: https://... 200"
+                parts = record.msg.split()
+                if len(parts) >= 3:
+                    url = parts[1]
+                    status = parts[2]
+
+                    # Extract domain
+                    from urllib.parse import urlparse, parse_qs, unquote
+                    parsed = urlparse(url)
+                    domain = parsed.netloc.replace("www.", "").replace("en.", "")
+
+                    # Shorten common domains
+                    domain_map = {
+                        "wikipedia.org": "wikipedia",
+                        "search.yahoo.com": "yahoo",
+                        "mojeek.com": "mojeek",
+                        "duckduckgo.com": "duckduckgo",
+                        "google.com": "google",
+                        "bing.com": "bing",
+                    }
+                    for full, short in domain_map.items():
+                        if full in domain:
+                            domain = short
+                            break
+
+                    # Extract search query
+                    query_params = parse_qs(parsed.query)
+                    search_term = ""
+                    for param in ["q", "search", "p", "query"]:
+                        if param in query_params:
+                            search_term = unquote(query_params[param][0])
+                            break
+
+                    # Truncate long search terms
+                    if len(search_term) > 50:
+                        search_term = search_term[:47] + "..."
+
+                    # Format status
+                    status_icon = "[OK]" if status == "200" else f"[{status}]"
+
+                    # Create clean message
+                    if search_term:
+                        record.msg = f"{domain:12} {status_icon:6} {search_term}"
+                    else:
+                        record.msg = f"{domain:12} {status_icon:6} (api call)"
+
+            except Exception:
+                pass  # Keep original message if parsing fails
+
+        return True
+
+
 def setup_logging(level: int = logging.INFO) -> None:
     """Setup logging for video pipeline.
 
@@ -313,3 +480,11 @@ def setup_logging(level: int = logging.INFO) -> None:
 
     # Set specific loggers
     logging.getLogger("video.pipeline").setLevel(level)
+
+    # Add filter to reformat primp (HTTP client) logs
+    primp_logger = logging.getLogger("primp")
+    primp_logger.addFilter(PrimpLogFilter())
+
+    # Add filter to reformat ddgs (DuckDuckGo) error logs
+    ddgs_logger = logging.getLogger("ddgs.ddgs")
+    ddgs_logger.addFilter(DdgsLogFilter())

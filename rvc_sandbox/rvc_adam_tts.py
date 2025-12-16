@@ -15,10 +15,52 @@ from pathlib import Path
 
 
 # Model paths (relative to this script)
+# Priority: pt-files/ > models/adam_elevenlabs/
 SCRIPT_DIR = Path(__file__).parent
+
+# Check pt-files folder first (user's custom models)
+PT_FILES_DIR = SCRIPT_DIR / "pt-files"
+
+# Fallback to models folder
 MODEL_DIR = SCRIPT_DIR / "models" / "adam_elevenlabs"
-MODEL_PATH = MODEL_DIR / "Adam_Elevenlabs_160e_20800s.pth"
-INDEX_PATH = MODEL_DIR / "added_Adam_Elevenlabs_v2.index"
+
+
+def find_model_files() -> tuple[Path, Path | None]:
+    """Find the best available model and index files.
+
+    Priority:
+    1. pt-files/*.pth (user's custom models)
+    2. models/adam_elevenlabs/*.pth (default models)
+
+    Returns:
+        Tuple of (model_path, index_path or None)
+    """
+    # Check pt-files first
+    if PT_FILES_DIR.exists():
+        pth_files = list(PT_FILES_DIR.glob("*.pth"))
+        if pth_files:
+            model_path = pth_files[0]  # Use first .pth found
+            # Look for matching index file
+            index_files = list(PT_FILES_DIR.glob("*.index"))
+            index_path = index_files[0] if index_files else None
+            return model_path, index_path
+
+    # Fallback to default models folder
+    default_model = MODEL_DIR / "Adam_Elevenlabs_160e_20800s.pth"
+    default_index = MODEL_DIR / "added_Adam_Elevenlabs_v2.index"
+
+    if default_model.exists():
+        return default_model, default_index if default_index.exists() else None
+
+    raise FileNotFoundError(
+        f"No RVC models found. Place .pth files in:\n"
+        f"  - {PT_FILES_DIR} (preferred)\n"
+        f"  - {MODEL_DIR}"
+    )
+
+
+# Resolve model paths at import time
+MODEL_PATH, INDEX_PATH = find_model_files()
 
 # Edge-TTS voice to use as base (will be converted to Adam)
 BASE_VOICE = "en-US-ChristopherNeural"
@@ -137,6 +179,9 @@ async def main():
     print(f"      Generated {len(word_timestamps)} word timestamps", file=sys.stderr)
 
     print(f"[2/3] Converting to Adam's voice with RVC...", file=sys.stderr)
+    print(f"      Model: {MODEL_PATH.name}", file=sys.stderr)
+    if INDEX_PATH:
+        print(f"      Index: {INDEX_PATH.name}", file=sys.stderr)
     convert_to_adam(temp_audio, output_path)
     print(f"      Saved to {output_path}", file=sys.stderr)
 

@@ -9,9 +9,13 @@ Assembles downloaded clips into a video with:
 
 import json
 import os
+import warnings
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+# Suppress MoviePy frame read warnings (non-critical, uses last valid frame)
+warnings.filterwarnings("ignore", message=".*bytes wanted but 0 bytes read.*")
 
 from socials_automator.constants import (
     VIDEO_WIDTH,

@@ -236,6 +236,7 @@ class PipelineDisplay:
                 content += f"Output: [cyan]{output_path}[/cyan]"
 
             self.console.print(Panel(content, border_style="green", title="[green]Complete[/green]"))
+            self._log_to_file(LogLevel.SUCCESS, f"=== COMPLETE: Video generated in {duration_str} -> {output_path} ===")
         else:
             self.console.print(Panel(
                 f"[bold red]Pipeline Failed[/bold red]\n\n"
@@ -244,6 +245,7 @@ class PipelineDisplay:
                 border_style="red",
                 title="[red]Error[/red]",
             ))
+            self._log_to_file(LogLevel.ERROR, f"=== FAILED: Pipeline failed after {duration_str} ===")
 
     def show_topic(self, topic: str, pillar: str) -> None:
         """Display selected topic."""
