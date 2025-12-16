@@ -162,6 +162,16 @@ class TestVideoPipeline:
         pipeline = VideoPipeline(pexels_api_key="test_key")
         assert pipeline is not None
 
+    def test_init_with_text_ai(self):
+        """Test initialization with text AI provider."""
+        pipeline = VideoPipeline(text_ai="lmstudio")
+        assert pipeline.text_ai == "lmstudio"
+
+    def test_init_with_video_matcher(self):
+        """Test initialization with video matcher."""
+        pipeline = VideoPipeline(video_matcher="pexels")
+        assert pipeline.video_matcher == "pexels"
+
     def test_steps_order(self):
         """Test pipeline steps are in correct order."""
         pipeline = VideoPipeline()

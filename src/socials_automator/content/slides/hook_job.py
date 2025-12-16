@@ -75,7 +75,7 @@ class HookSlideJob(SlideJob):
         if slide.has_background_image:
             image_prompt = outline.get(
                 "image_description",
-                f"Abstract background for {context.topic}"
+                f"Person working at cozy cafe with natural light, warm lifestyle aesthetic"
             )
             image_bytes = await self._generate_image(
                 prompt=image_prompt,

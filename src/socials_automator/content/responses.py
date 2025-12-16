@@ -36,7 +36,7 @@ class StructureResponse(BaseModel):
         default=None, max_length=50, description="Optional 5-word subtext"
     )
     hook_image_description: str = Field(
-        description="Description for the hook slide background image"
+        description="Description for the hook slide background image. Focus on lifestyle/environmental scenes (cafes, cozy workspaces, nature, city views) with human elements (hands, silhouettes, people). Avoid techy imagery like screens, robots, circuit boards."
     )
     slide_titles: list[str] = Field(
         min_length=1, description="List of slide titles, one per content item"

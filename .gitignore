@@ -48,6 +48,7 @@ dmypy.json
 
 # Generated content
 profiles/*/posts/
+profiles/*/reels/
 profiles/*/knowledge/chromadb/
 
 # Debug files
@@ -65,3 +66,15 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+temp/
+
+# Stock media downloads
+pexels/
+
+# RVC (Voice Conversion) sandbox and models
+rvc_sandbox/
+*.pt
+
+# Corrupted/temp artifacts
+=0.9.4
+C*UsersrbgnrAppDataLocalTempknown_hosts

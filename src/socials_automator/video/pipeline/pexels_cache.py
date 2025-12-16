@@ -17,8 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-# Default cache location
-DEFAULT_CACHE_DIR = Path(__file__).parent.parent.parent.parent.parent / "pexels" / "cache"
+from socials_automator.constants import get_pexels_cache_dir
 
 
 class PexelsCache:
@@ -30,7 +29,7 @@ class PexelsCache:
         Args:
             cache_dir: Cache directory path. Uses default if not provided.
         """
-        self.cache_dir = Path(cache_dir) if cache_dir else DEFAULT_CACHE_DIR
+        self.cache_dir = Path(cache_dir) if cache_dir else get_pexels_cache_dir()
         self.index_path = self.cache_dir / "index.json"
         self._index: dict = {}
         self._load_index()

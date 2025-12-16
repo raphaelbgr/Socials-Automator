@@ -6,6 +6,17 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from socials_automator.constants import (
+    VIDEO_WIDTH,
+    VIDEO_HEIGHT,
+    VIDEO_DEFAULT_DURATION_SECONDS,
+    SUBTITLE_FONT_SIZE_DEFAULT,
+    SUBTITLE_FONT_COLOR,
+    SUBTITLE_HIGHLIGHT_COLOR,
+    SUBTITLE_STROKE_COLOR,
+    SUBTITLE_STROKE_WIDTH,
+)
+
 
 class SubtitleAnimation(str, Enum):
     """Subtitle animation styles."""
@@ -48,7 +59,7 @@ class VideoScript(BaseModel):
         ..., min_length=1, description="List of video scenes"
     )
     cta: str = Field(..., min_length=1, description="Call to action (last scene)")
-    total_duration: int = Field(default=60, ge=15, le=180, description="Target duration")
+    total_duration: int = Field(default=VIDEO_DEFAULT_DURATION_SECONDS, ge=15, le=180, description="Target duration")
 
     @property
     def full_narration(self) -> str:
@@ -132,11 +143,11 @@ class SubtitleStyle(BaseModel):
     """Subtitle styling configuration."""
 
     font: str = "Montserrat-Bold"
-    font_size: int = Field(default=60, ge=20, le=120)
-    color: str = "white"
-    highlight_color: str = "#FFD700"
-    stroke_color: str = "black"
-    stroke_width: int = Field(default=3, ge=0, le=10)
+    font_size: int = Field(default=SUBTITLE_FONT_SIZE_DEFAULT, ge=20, le=120)
+    color: str = SUBTITLE_FONT_COLOR
+    highlight_color: str = SUBTITLE_HIGHLIGHT_COLOR
+    stroke_color: str = SUBTITLE_STROKE_COLOR
+    stroke_width: int = Field(default=SUBTITLE_STROKE_WIDTH, ge=0, le=10)
     position: SubtitlePosition = SubtitlePosition.CENTER
     animation: SubtitleAnimation = SubtitleAnimation.POP
 
@@ -152,7 +163,7 @@ class VideoOutput(BaseModel):
     final_path: Path
     thumbnail_path: Optional[Path] = None
     duration_seconds: float
-    resolution: tuple[int, int] = (1080, 1920)
+    resolution: tuple[int, int] = (VIDEO_WIDTH, VIDEO_HEIGHT)
 
 
 class GenerationProgress(BaseModel):

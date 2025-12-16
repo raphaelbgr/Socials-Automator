@@ -76,7 +76,7 @@ class CTASlideJob(SlideJob):
         if slide.has_background_image:
             image_prompt = outline.get(
                 "image_description",
-                f"Abstract CTA background for {context.topic}, inspiring, motivational"
+                f"Silhouette of person at sunset with warm golden tones, inspiring, motivational"
             )
             image_bytes = await self._generate_image(
                 prompt=image_prompt,

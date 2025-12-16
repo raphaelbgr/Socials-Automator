@@ -1,9 +1,11 @@
 """Video assembly using MoviePy."""
 
 import logging
+import os
 from pathlib import Path
 from typing import Optional
 
+from socials_automator.constants import get_temp_dir
 from .config import OutputConfig
 from .models import VideoAssemblyError, VideoClip
 
@@ -20,6 +22,20 @@ class VideoAssembler:
             config: Output configuration. Uses defaults if not provided.
         """
         self.config = config or OutputConfig()
+        # Set MoviePy temp directory to avoid files in project root
+        self._setup_moviepy_temp()
+
+    def _setup_moviepy_temp(self) -> None:
+        """Configure MoviePy to use project temp directory."""
+        temp_dir = get_temp_dir()
+        os.environ["TEMP"] = str(temp_dir)
+        os.environ["TMP"] = str(temp_dir)
+
+    def _get_temp_audiofile_path(self, output_path: Path) -> str:
+        """Get temp audio file path for MoviePy write operation."""
+        temp_dir = get_temp_dir()
+        temp_audio = temp_dir / f"{output_path.stem}_TEMP_audio.mp3"
+        return str(temp_audio)
 
     def assemble(
         self,
@@ -108,6 +124,7 @@ class VideoAssembler:
                 audio_codec=self.config.audio_codec,
                 bitrate=self.config.bitrate,
                 logger=None,  # Suppress moviepy progress bar
+                temp_audiofile=self._get_temp_audiofile_path(output_path),
             )
 
             # Cleanup

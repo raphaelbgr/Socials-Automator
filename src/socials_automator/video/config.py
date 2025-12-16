@@ -5,6 +5,17 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from socials_automator.constants import (
+    VIDEO_WIDTH,
+    VIDEO_HEIGHT,
+    VIDEO_FPS,
+    VIDEO_CODEC,
+    AUDIO_CODEC,
+    VIDEO_DEFAULT_DURATION_SECONDS,
+    PEXELS_VIDEOS_PER_SEARCH,
+    CLIP_MIN_DURATION_SECONDS,
+    CLIP_MAX_DURATION_SECONDS,
+)
 from .models import SubtitleAnimation, SubtitlePosition, SubtitleStyle
 
 
@@ -50,7 +61,7 @@ class PexelsConfig(BaseModel):
     prefer_orientation: str = "portrait"
     fallback_orientation: str = "landscape"
     quality: str = "hd"
-    per_page: int = Field(default=15, ge=1, le=80)
+    per_page: int = Field(default=PEXELS_VIDEOS_PER_SEARCH, ge=1, le=80)
 
     @property
     def api_key(self) -> Optional[str]:
@@ -61,12 +72,12 @@ class PexelsConfig(BaseModel):
 class OutputConfig(BaseModel):
     """Video output configuration."""
 
-    width: int = 1080
-    height: int = 1920
-    fps: int = 30
-    duration: int = 60
-    codec: str = "libx264"
-    audio_codec: str = "aac"
+    width: int = VIDEO_WIDTH
+    height: int = VIDEO_HEIGHT
+    fps: int = VIDEO_FPS
+    duration: int = VIDEO_DEFAULT_DURATION_SECONDS
+    codec: str = VIDEO_CODEC
+    audio_codec: str = AUDIO_CODEC
     bitrate: str = "8M"
 
     @property
@@ -89,10 +100,10 @@ class VideoGeneratorConfig(BaseModel):
     output: OutputConfig = Field(default_factory=OutputConfig)
 
     # Generation options
-    target_duration: int = Field(default=60, ge=15, le=180)
+    target_duration: int = Field(default=VIDEO_DEFAULT_DURATION_SECONDS, ge=15, le=180)
     words_per_minute: int = Field(default=150, ge=100, le=200)
-    min_scene_duration: float = Field(default=3.0, ge=1.0)
-    max_scene_duration: float = Field(default=15.0, le=30.0)
+    min_scene_duration: float = Field(default=CLIP_MIN_DURATION_SECONDS, ge=1.0)
+    max_scene_duration: float = Field(default=CLIP_MAX_DURATION_SECONDS, le=30.0)
 
     # Paths
     temp_dir: Optional[str] = None

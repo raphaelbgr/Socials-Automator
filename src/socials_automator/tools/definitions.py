@@ -115,9 +115,10 @@ TOOL_SCHEMAS = [
                         "type": "string",
                         "description": (
                             "Detailed image description. Be specific about: "
-                            "subject, style (realistic/abstract/minimal), colors, mood, lighting. "
-                            "Example: 'Abstract technology background with flowing blue and purple gradients, "
-                            "subtle circuit patterns, dark base, professional and modern'"
+                            "subject, style (realistic/lifestyle/minimal), colors, mood, lighting. "
+                            "Prefer lifestyle/environmental scenes with human elements over techy imagery. "
+                            "Example: 'Person working at sunny cafe with laptop, warm natural lighting, "
+                            "plants in background, cozy lifestyle aesthetic'"
                         ),
                     },
                     "negative_prompt": {
