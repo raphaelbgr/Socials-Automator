@@ -269,7 +269,7 @@ class VideoAssembler(IVideoAssembler):
             else:
                 return clip.subclip(start_time, start_time + target_duration)
         else:
-            # Clip is shorter, loop it
+            # Clip is shorter, loop it to fill time
             try:
                 # MoviePy 2.x uses vfx.Loop
                 from moviepy import vfx

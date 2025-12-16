@@ -393,7 +393,10 @@ Respond with ONLY valid JSON."""
         videos: list[dict],
         target_duration: float,
     ) -> Optional[dict]:
-        """Select video with duration closest to target (excluding already-used).
+        """Select best video preferring LONGER clips (excluding already-used).
+
+        Prefers videos that are longer than needed (can be trimmed) over
+        shorter ones (would need slow motion).
 
         Args:
             videos: List of videos.
@@ -415,7 +418,18 @@ Respond with ONLY valid JSON."""
             self.log_progress("All videos already used, allowing reuse as last resort")
             available_videos = videos
 
-        return min(
-            available_videos,
-            key=lambda v: abs(v.get("duration", 0) - target_duration),
-        )
+        # Prefer videos LONGER than target (can be trimmed cleanly)
+        longer_videos = [v for v in available_videos if v.get("duration", 0) >= target_duration]
+
+        if longer_videos:
+            # Among longer videos, pick the one closest to target (minimize waste)
+            return min(
+                longer_videos,
+                key=lambda v: v.get("duration", 0) - target_duration,
+            )
+        else:
+            # No videos long enough - pick the longest available (minimize slow motion)
+            return max(
+                available_videos,
+                key=lambda v: v.get("duration", 0),
+            )
