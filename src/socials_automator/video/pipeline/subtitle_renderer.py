@@ -299,9 +299,9 @@ class SubtitleRenderer(ISubtitleRenderer):
             pos_y = int(video_height * 0.12)
         elif self.position == "center":
             pos_y = (video_height // 2) - (max_text_height // 2)
-        else:  # bottom - position so 2-line text stays in safe zone (above 35% from bottom)
-            # Safe bottom = 65% of height, minus text height for safety
-            pos_y = int(video_height * 0.58) - (max_text_height // 2)
+        else:  # bottom - position so 2-line text stays in safe zone
+            # Position at ~55% from top to prevent bottom clipping
+            pos_y = int(video_height * 0.55) - (max_text_height // 2)
 
         self.log_detail(f"Creating karaoke clips for {len(entries)} words...")
 
