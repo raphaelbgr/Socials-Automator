@@ -4,22 +4,73 @@
 
 ### Pipeline Flow
 ```
-cli.py -> orchestrator.py -> planner.py -> text.py (AI calls)
-                          -> slides/ (image composition)
-                          -> output.py (save files)
+cli/ -> video/pipeline/orchestrator.py -> script_planner.py -> text.py (AI calls)
+     -> content/orchestrator.py -> planner.py -> slides/ (image composition)
+                                              -> output.py (save files)
 ```
 
 ### Key Files
 | File | Purpose |
 |------|---------|
-| `cli.py` | Entry point, commands, logging setup |
-| `content/orchestrator.py` | Coordinates generation pipeline |
+| `cli/app.py` | Typer app, logging setup, command registration |
+| `cli/core/` | Shared utilities (types, validators, parsers, paths) |
+| `cli/reel/` | Video reel generation and upload feature |
+| `cli/post/` | Carousel post generation and upload feature |
+| `content/orchestrator.py` | Coordinates carousel generation pipeline |
 | `content/planner.py` | 4-phase AI content generation |
+| `video/pipeline/orchestrator.py` | Coordinates video reel pipeline |
+| `video/pipeline/script_planner.py` | AI script generation for reels |
 | `providers/text.py` | LiteLLM wrapper for all text AI |
 | `providers/image.py` | DALL-E, ComfyUI, fal.ai |
-| `services/extractor.py` | Instructor-based JSON extraction |
-| `tools/executor.py` | AI tool calling (web search) |
-| `cli_display.py` | CLI progress display |
+| `instagram/client.py` | Instagram Graph API client |
+| `instagram/uploader.py` | Cloudinary video/image uploader |
+
+## CLI Architecture (Modular, Feature-Based)
+
+The CLI uses a **feature-based vertical slices + functional/stateless** architecture:
+
+```
+src/socials_automator/cli/
+    __init__.py          # Package exports
+    __main__.py          # Entry point for python -m
+    app.py               # Typer app, logging, command registration
+
+    core/                # Shared utilities (pure functions)
+        types.py         # Result[T], Success, Failure, ProfileConfig
+        parsers.py       # parse_interval, parse_length, parse_voice_preset
+        validators.py    # validate_profile, validate_voice, validate_length
+        paths.py         # get_profile_path, get_output_dir, generate_post_id
+        console.py       # Rich console singleton
+
+    reel/                # Video reel feature
+        params.py        # ReelGenerationParams, ReelUploadParams (frozen dataclasses)
+        validators.py    # validate_reel_generation_params
+        display.py       # show_reel_config, show_reel_result (pure functions)
+        service.py       # ReelGeneratorService, ReelUploaderService (stateless)
+        commands.py      # generate_reel, upload_reel (thin wrappers)
+
+    post/                # Carousel post feature (same pattern as reel/)
+    profile/             # Profile management (list_profiles, fix_thumbnails)
+    queue/               # Queue management (queue, schedule)
+    maintenance/         # Utility commands (init, token, status, new_profile)
+```
+
+### Design Patterns
+
+1. **Immutable Parameters**: All params use `@dataclass(frozen=True)`
+2. **Result Type**: Explicit error handling with `Result[T] = Success[T] | Failure`
+3. **Pure Functions**: Display and validation functions have no side effects
+4. **Stateless Services**: Services receive all state via params
+5. **Thin Commands**: Commands just orchestrate: params -> validation -> display -> service
+
+### Adding a New Command
+
+1. Create params dataclass in `params.py` with `@dataclass(frozen=True)`
+2. Add validation in `validators.py` returning `Result[T]`
+3. Add display functions in `display.py` (pure, take Console as arg)
+4. Add service logic in `service.py` (stateless class or functions)
+5. Add command in `commands.py` (thin wrapper)
+6. Register command in `app.py` `register_commands()`
 
 ### Generation Phases
 1. **Phase 1: Planning** - Analyze topic, determine slide count
@@ -174,16 +225,33 @@ Instagram displays the first slide in a 4:3 container (cropped from 1:1). The ho
 ## Commands Overview
 
 **Generation Commands (safe to run):**
-- `generate-post` - Generate carousel content
-- `generate-reel` - Generate video reel content
+- `generate-post <profile>` - Generate carousel content
+- `generate-reel <profile>` - Generate video reel content
+  - `--length 1m` - Target duration (30s, 1m, 1m30s) - default: 1m
+  - `--gpu-accelerate / -g` - Enable GPU acceleration
+  - `--gpu <index>` - Specific GPU index
+  - `--loop-count / -n <count>` - Generate multiple videos
 
 **Upload Commands (USE --dry-run FOR TESTING):**
-- `upload-post` - Upload carousel to Instagram
-- `upload-reel` - Upload reel to Instagram
+- `upload-post <profile> [post_id]` - Upload carousel to Instagram
+- `upload-reel <profile> [reel_id]` - Upload reel to Instagram
 
-**Other Commands:**
-- `schedule` - Moves posts to pending-post queue (safe to run)
-- `queue` - View pending queue
+**Profile Commands:**
+- `list-profiles` - List all available profiles
+- `new-profile <name> --handle <handle>` - Create a new profile
+- `status <profile>` - Show profile status and content counts
+- `fix-thumbnails <profile>` - Generate missing thumbnails for reels
+
+**Queue Commands:**
+- `schedule <profile>` - Move generated posts to pending-post queue
+- `queue <profile>` - View pending queue
+
+**Maintenance Commands:**
+- `init` - Initialize project structure
+- `token --check` - Check Instagram token validity
+- `token --refresh` - Refresh Instagram token
+- `list-niches` - List available niches
+- `update-artifacts <profile>` - Update artifact metadata for reels
 
 ## Folder Structure
 

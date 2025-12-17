@@ -77,7 +77,10 @@
       "Bash(claude mcp add context7 -- npx -y @upstash/context7-mcp@latest)",
       "Bash(ffprobe:*)",
       "Bash(py -c:*)",
-      "Bash(py -m pytest:*)"
+      "Bash(py -m pytest:*)",
+      "Bash(python -c:*)",
+      "Bash(git pull:*)",
+      "Bash(py -m socials_automator.cli:*)"
     ],
     "deny": [],
     "ask": []

@@ -192,6 +192,50 @@ class TextProvider:
 
         return None
 
+    # Cache for provider availability checks (provider_name -> (is_available, timestamp))
+    _availability_cache: dict[str, tuple[bool, float]] = {}
+    _AVAILABILITY_CACHE_TTL = 30  # Cache for 30 seconds
+
+    def _is_local_provider_available(self, provider_name: str, provider_config: TextProviderConfig) -> bool:
+        """Quick health check for local providers (LMStudio, Ollama).
+
+        Returns True if provider is online, False if offline.
+        Results are cached for 30 seconds to avoid repeated checks.
+        """
+        import httpx
+
+        # Only check local providers
+        if provider_name not in ("lmstudio", "ollama"):
+            return True  # Non-local providers are assumed available
+
+        # Check cache first
+        cache_key = provider_name
+        if cache_key in self._availability_cache:
+            is_available, timestamp = self._availability_cache[cache_key]
+            if time.time() - timestamp < self._AVAILABILITY_CACHE_TTL:
+                return is_available
+
+        # Do a quick health check with short timeout
+        base_url = provider_config.get_base_url()
+        if base_url is None:
+            base_url = "http://localhost:1234/v1" if provider_name == "lmstudio" else "http://localhost:11434"
+
+        try:
+            with httpx.Client(timeout=2) as client:
+                # Try /models endpoint (works for both LMStudio and Ollama)
+                response = client.get(f"{base_url}/models")
+                is_available = response.status_code == 200
+        except Exception:
+            is_available = False
+
+        # Cache the result
+        self._availability_cache[cache_key] = (is_available, time.time())
+
+        if not is_available:
+            _logger.debug(f"Local provider {provider_name} is offline at {base_url}")
+
+        return is_available
+
     async def _emit_event(self, event: dict[str, Any]) -> None:
         """Emit an AI event if callback is set."""
         if self._event_callback:
@@ -273,6 +317,17 @@ class TextProvider:
 
         for provider_name, provider_config in providers:
             try:
+                # Quick health check for local providers (LMStudio, Ollama)
+                if not self._is_local_provider_available(provider_name, provider_config):
+                    failed_providers.append(f"{provider_name}(offline)")
+                    await self._emit_event({
+                        "type": "text_skip",
+                        "provider": provider_name,
+                        "reason": "offline",
+                        "failed_providers": failed_providers.copy(),
+                    })
+                    continue  # Skip to next provider immediately
+
                 client = self._get_client(provider_name, provider_config)
 
                 # Skip if client couldn't be created (incompatible or no API key)
@@ -503,6 +558,18 @@ class TextProvider:
 
         for provider_name, provider_config in providers:
             try:
+                # Quick health check for local providers (LMStudio, Ollama)
+                if not self._is_local_provider_available(provider_name, provider_config):
+                    failed_providers.append(f"{provider_name}(offline)")
+                    await self._emit_event({
+                        "type": "text_skip",
+                        "provider": provider_name,
+                        "reason": "offline",
+                        "structured": True,
+                        "failed_providers": failed_providers.copy(),
+                    })
+                    continue  # Skip to next provider immediately
+
                 instructor_client = self._get_instructor_client(provider_name, provider_config)
 
                 if instructor_client is None:
@@ -701,6 +768,18 @@ class TextProvider:
 
         for provider_name, provider_config in providers:
             try:
+                # Quick health check for local providers (LMStudio, Ollama)
+                if not self._is_local_provider_available(provider_name, provider_config):
+                    failed_providers.append(f"{provider_name}(offline)")
+                    await self._emit_event({
+                        "type": "text_skip",
+                        "provider": provider_name,
+                        "reason": "offline",
+                        "has_tools": True,
+                        "failed_providers": failed_providers.copy(),
+                    })
+                    continue  # Skip to next provider immediately
+
                 client = self._get_client(provider_name, provider_config)
 
                 if client is None:

@@ -151,6 +151,10 @@ Press Ctrl+C to stop the loop.
 Generate video reels and post them to Instagram:
 
 ```bash
+# One-command: Generate AND upload in a single step
+python -m socials_automator.cli generate-reel ai.for.mortals --upload
+
+# Or separate steps for more control:
 # Step 1: Generate a video reel
 python -m socials_automator.cli generate-reel ai.for.mortals
 # -> Creates reel in: reels/2025/12/generated/
@@ -163,7 +167,10 @@ python -m socials_automator.cli upload-reel ai.for.mortals
 **Or generate multiple and batch post:**
 
 ```bash
-# Generate 10 reels then stop
+# Generate 10 reels and upload each immediately after generation
+python -m socials_automator.cli generate-reel ai.for.mortals -n 10 --upload
+
+# Or generate first, upload later:
 python -m socials_automator.cli generate-reel ai.for.mortals -n 10
 
 # Post all pending reels
@@ -253,7 +260,7 @@ Get help for any command with `--help`:
 
 ```bash
 python -m socials_automator.cli --help
-python -m socials_automator.cli generate-post--help
+python -m socials_automator.cli generate-post --help
 ```
 
 ### Main Commands
@@ -373,6 +380,7 @@ python -m socials_automator.cli generate-reel <profile> [OPTIONS]
 | `--length` | `-l` | Target video length (e.g., 30s, 1m, 90s) | 1m |
 | `--output` | `-o` | Output directory | Auto |
 | `--dry-run` | | Only run first few steps without full video generation | False |
+| `--upload` | | Upload to Instagram immediately after generation | False |
 | `--loop` | `-L` | Loop continuously until stopped (Ctrl+C) | False |
 | `--loop-count` | `-n` | Generate exactly N videos then stop (implies --loop) | None |
 | `--gpu-accelerate` | `-g` | Enable GPU acceleration with NVENC (requires NVIDIA GPU) | False |
@@ -453,6 +461,15 @@ python -m socials_automator.cli generate-reel ai.for.mortals -g --gpu 0
 
 # Full example: GPU acceleration, 30-second video, local AI
 python -m socials_automator.cli generate-reel ai.for.mortals --text-ai lmstudio --length 30s -g
+
+# Generate and immediately upload to Instagram
+python -m socials_automator.cli generate-reel ai.for.mortals --upload
+
+# Generate 5 videos and upload each one after generation
+python -m socials_automator.cli generate-reel ai.for.mortals -n 5 --upload
+
+# Full pipeline: GPU acceleration, custom voice, auto-upload
+python -m socials_automator.cli generate-reel ai.for.mortals --text-ai lmstudio -g --voice adam_excited --upload
 ```
 
 **Pipeline:**
@@ -1288,12 +1305,20 @@ Socials-Automator/
 ├── logs/
 │   └── ai_calls.log        # Detailed AI execution logs
 ├── src/socials_automator/
-│   ├── cli.py              # Command-line interface
-│   ├── cli_display.py      # Rich CLI progress displays
+│   ├── cli/                # Modular CLI (feature-based architecture)
+│   │   ├── app.py          # Typer app, logging, command registration
+│   │   ├── core/           # Shared utilities (types, validators, parsers)
+│   │   ├── reel/           # Video reel commands (generate, upload)
+│   │   ├── post/           # Carousel post commands (generate, upload)
+│   │   ├── profile/        # Profile management commands
+│   │   ├── queue/          # Queue and schedule commands
+│   │   └── maintenance/    # Utility commands (init, token, status)
 │   ├── content/            # Content generation
-│   │   ├── generator.py    # Main generator
-│   │   ├── planner.py      # Content planning
+│   │   ├── orchestrator.py # Carousel generation pipeline
+│   │   ├── planner.py      # 4-phase AI content planning
 │   │   └── models.py       # Data models
+│   ├── video/              # Video reel generation
+│   │   └── pipeline/       # Video generation pipeline
 │   ├── design/             # Slide design
 │   │   ├── composer.py     # Image composition
 │   │   └── templates.py    # Slide templates
