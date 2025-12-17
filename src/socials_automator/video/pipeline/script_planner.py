@@ -61,6 +61,10 @@ class ScriptPlanner(IScriptPlanner):
         self._fallback_manager = fallback_manager
         self._preferred_provider = preferred_provider
 
+        # Duration feedback from orchestrator (set when regenerating for duration)
+        # Contains: issue (too_long/too_short), actual_duration, target_duration, current_words, target_words, message
+        self.duration_feedback: Optional[dict] = None
+
         # Calculate word requirements based on target duration
         # Narration should fill ~92% of video (some silence at start/end)
         self.min_narration_duration = target_duration * 0.92
@@ -275,6 +279,45 @@ class ScriptPlanner(IScriptPlanner):
         # Build context from research
         key_points = "\n".join(f"- {p}" for p in research.key_points[:5])
 
+        # Check for duration feedback from orchestrator (regenerating for duration)
+        duration_adjustment_section = ""
+        if self.duration_feedback:
+            fb = self.duration_feedback
+            if fb.get("issue") == "too_long":
+                duration_adjustment_section = f"""
+##########################################################
+# CRITICAL: YOUR PREVIOUS SCRIPT WAS TOO LONG!           #
+# Actual TTS duration: {fb.get('actual_duration', 0):.1f}s (target: {fb.get('target_duration', 60):.1f}s)  #
+# You wrote {fb.get('current_words', 0)} words - REDUCE to ~{fb.get('target_words', 100)} words! #
+##########################################################
+
+{fb.get('message', '')}
+
+WRITE A SHORTER SCRIPT! Each segment must be BRIEFER:
+- Use fewer words per segment (10-12 words instead of 15-20)
+- Cut unnecessary details and examples
+- Be more concise and direct
+- Focus on essential points only
+"""
+            elif fb.get("issue") == "too_short":
+                duration_adjustment_section = f"""
+##########################################################
+# CRITICAL: YOUR PREVIOUS SCRIPT WAS TOO SHORT!          #
+# Actual TTS duration: {fb.get('actual_duration', 0):.1f}s (target: {fb.get('target_duration', 60):.1f}s)  #
+# You wrote {fb.get('current_words', 0)} words - INCREASE to ~{fb.get('target_words', 200)} words! #
+##########################################################
+
+{fb.get('message', '')}
+
+WRITE A LONGER SCRIPT! Each segment must have MORE content:
+- Use more words per segment (20-25 words instead of 15)
+- Add more details and examples
+- Expand on each point with actionable tips
+- Include specific numbers, tools, or techniques
+"""
+            # Clear feedback after using it
+            self.duration_feedback = None
+
         # Show the rejected script so AI knows what was wrong
         rejected_script_section = ""
         if last_script_text and last_word_count > 0:
@@ -334,7 +377,7 @@ Each segment MUST have:
         prompt = f"""Write a 60-second video narration script for Instagram Reels about: {topic.topic}
 
 TODAY'S DATE: {current_date}
-
+{duration_adjustment_section}
 AI TOOL VERSIONS:
 When mentioning AI tools, use the version numbers found in the research findings below.
 If not found in research, use these fallbacks: ChatGPT=GPT-5.2, Claude=Opus 4.5, Gemini=3 Pro, Midjourney=V7

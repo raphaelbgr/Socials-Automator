@@ -18,6 +18,7 @@ import asyncio
 import json
 import logging
 import shutil
+import subprocess
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -42,6 +43,15 @@ from .video_downloader import VideoDownloader
 from .video_searcher import VideoSearcher
 from .voice_generator import VoiceGenerator
 
+# GPU-accelerated renderers (optional)
+try:
+    from .gpu_utils import validate_gpu_setup, GPUInfo
+    from .video_renderer_gpu import GPUVideoAssembler, GPUSubtitleRenderer
+    GPU_AVAILABLE = True
+except ImportError:
+    GPU_AVAILABLE = False
+    GPUInfo = None
+
 
 # Type alias for progress callback
 ProgressCallback = Callable[[str, float, str], None]
@@ -55,7 +65,9 @@ STEP_DESCRIPTIONS = {
     "VideoSearcher": "Searching Pexels for relevant stock footage",
     "VideoDownloader": "Downloading video clips (with cache optimization)",
     "VideoAssembler": "Assembling clips into 9:16 vertical video",
+    "GPUVideoAssembler": "Assembling clips into 9:16 vertical video (GPU NVENC)",
     "SubtitleRenderer": "Rendering karaoke-style subtitles and adding audio",
+    "GPUSubtitleRenderer": "Rendering subtitles and adding audio (GPU NVENC)",
     "ThumbnailGenerator": "Generating thumbnail with hook text for Instagram",
     "CaptionGenerator": "Generating Instagram caption and hashtags with AI validation",
 }
@@ -63,6 +75,37 @@ STEP_DESCRIPTIONS = {
 
 class VideoPipeline:
     """Orchestrates the complete video generation pipeline."""
+
+    # Duration validation constants
+    MAX_DURATION_SECONDS = 90.0  # Maximum acceptable duration (target is 60s, but up to 90s is OK)
+    MAX_DURATION_RETRIES = 10  # Maximum script regeneration attempts for duration
+
+    def _get_audio_duration(self, audio_path: Path) -> float:
+        """Get duration of audio file using ffprobe.
+
+        Args:
+            audio_path: Path to audio file.
+
+        Returns:
+            Duration in seconds.
+        """
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    str(audio_path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            return float(result.stdout.strip())
+        except Exception as e:
+            self.display.error(f"Failed to get audio duration: {e}")
+            return 0.0
 
     def __init__(
         self,
@@ -78,6 +121,8 @@ class VideoPipeline:
         progress_callback: Optional[ProgressCallback] = None,
         show_timestamps: bool = True,
         verbose: bool = False,
+        gpu_accelerate: bool = False,
+        gpu_index: Optional[int] = None,
     ):
         """Initialize video pipeline.
 
@@ -95,6 +140,8 @@ class VideoPipeline:
                 Signature: (stage: str, progress: float, message: str)
             show_timestamps: Whether to show timestamps in CLI output.
             verbose: Whether to show debug messages.
+            gpu_accelerate: Enable GPU acceleration with NVENC (requires NVIDIA GPU).
+            gpu_index: GPU index to use (0, 1, etc.). Auto-selects if not specified.
         """
         self.logger = logging.getLogger("video.pipeline")
         self.progress_callback = progress_callback
@@ -104,6 +151,9 @@ class VideoPipeline:
         self.voice = voice
         self.subtitle_size = subtitle_size
         self.subtitle_font = subtitle_font
+        self.gpu_accelerate = gpu_accelerate
+        self.gpu_index = gpu_index
+        self.gpu_info: Optional[GPUInfo] = None
 
         # Initialize debug logger
         self.debug_logger = PipelineDebugLogger()
@@ -113,6 +163,22 @@ class VideoPipeline:
             show_timestamps=show_timestamps,
             verbose=verbose,
         )
+
+        # Validate and setup GPU if requested
+        if gpu_accelerate:
+            if not GPU_AVAILABLE:
+                self.display.error("GPU acceleration requested but GPU modules not available")
+                self.display.info("Falling back to CPU rendering")
+                self.gpu_accelerate = False
+            else:
+                success, message, gpu = validate_gpu_setup(gpu_index)
+                if success:
+                    self.gpu_info = gpu
+                    self.display.info(f"GPU acceleration enabled: {gpu.name} (GPU {gpu.index})")
+                else:
+                    self.display.error(f"GPU setup failed: {message}")
+                    self.display.info("Falling back to CPU rendering")
+                    self.gpu_accelerate = False
 
         # Create AI client if text_ai is specified
         ai_client = None
@@ -140,12 +206,22 @@ class VideoPipeline:
 
         # Sequential: Assembly -> Thumbnail -> Subtitles -> Caption (need results from both parallel branches)
         # ThumbnailGenerator runs BEFORE SubtitleRenderer to get clean frames without text
-        self.final_steps: list[PipelineStep] = [
-            VideoAssembler(),  # Uses audio duration as source of truth
-            ThumbnailGenerator(font=subtitle_font, font_size=72),  # Thumbnail from clean video (no subtitles)
-            SubtitleRenderer(font=subtitle_font, font_size=subtitle_size),
-            CaptionGenerator(ai_client=ai_client),
-        ]
+        # Use GPU renderers if GPU acceleration is enabled
+        if self.gpu_accelerate and self.gpu_info:
+            self.display.info("Using GPU-accelerated video assembly and subtitle rendering (NVENC)")
+            self.final_steps: list[PipelineStep] = [
+                GPUVideoAssembler(gpu=self.gpu_info),  # GPU NVENC assembly
+                ThumbnailGenerator(font=subtitle_font, font_size=72),  # Thumbnail from clean video (no subtitles)
+                GPUSubtitleRenderer(gpu=self.gpu_info, font=subtitle_font, font_size=subtitle_size),  # GPU with ASS karaoke
+                CaptionGenerator(ai_client=ai_client),
+            ]
+        else:
+            self.final_steps: list[PipelineStep] = [
+                VideoAssembler(),  # Uses audio duration as source of truth
+                ThumbnailGenerator(font=subtitle_font, font_size=72),  # Thumbnail from clean video (no subtitles)
+                SubtitleRenderer(font=subtitle_font, font_size=subtitle_size),
+                CaptionGenerator(ai_client=ai_client),
+            ]
 
         # Collect all steps for display setup and counting
         self.steps: list[PipelineStep] = (
@@ -264,8 +340,8 @@ class VideoPipeline:
         step_counter = 0
 
         try:
-            # Phase 1: Sequential steps (Topic selection, Research, Script planning)
-            for step in self.sequential_steps:
+            # Phase 1: Sequential steps - Topic selection and Research (NOT ScriptPlanner yet)
+            for step in self.sequential_steps[:-1]:  # Skip ScriptPlanner, we'll run it in the duration loop
                 step_name = step.name
                 progress = step_counter / total_steps
                 description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
@@ -284,7 +360,39 @@ class VideoPipeline:
                         context.topic.pillar_name,
                         context.topic.keywords,
                     )
-                elif step_name == "ScriptPlanner" and context.script:
+                else:
+                    self.debug_logger.end_step(step_name)
+
+                step_counter += 1
+                self._update_progress(step_name, step_counter / total_steps, f"Completed {step_name}")
+
+            # Phase 1.5: Duration validation loop - ScriptPlanner + VoiceGenerator
+            # Regenerate script if audio duration is off target
+            script_planner = self.sequential_steps[-1]  # ScriptPlanner
+            duration_attempt = 0
+            duration_feedback: Optional[dict] = None  # Feedback for AI about duration adjustment
+
+            while duration_attempt < self.MAX_DURATION_RETRIES:
+                duration_attempt += 1
+
+                # Run ScriptPlanner (with duration feedback if retrying)
+                step_name = script_planner.name
+                progress = step_counter / total_steps
+                description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
+
+                if duration_attempt > 1:
+                    self.display.info(f"Regenerating script (attempt {duration_attempt}/{self.MAX_DURATION_RETRIES}) - adjusting for duration...")
+                    # Pass duration feedback to script planner
+                    if hasattr(script_planner, 'duration_feedback'):
+                        script_planner.duration_feedback = duration_feedback
+
+                self.display.start_step(step_name, description)
+                self.debug_logger.start_step(step_name)
+                self._update_progress(step_name, progress, f"Starting {step_name}...")
+
+                context = await script_planner.execute(context)
+
+                if context.script:
                     self.display.show_script(
                         context.script.title,
                         len(context.script.segments),
@@ -300,33 +408,78 @@ class VideoPipeline:
                         "segments": len(context.script.segments),
                         "duration": f"{context.script.total_duration:.1f}s",
                     })
-                else:
-                    self.debug_logger.end_step(step_name)
 
                 step_counter += 1
                 self._update_progress(step_name, step_counter / total_steps, f"Completed {step_name}")
 
-            # Phase 2: PARALLEL execution - Voice generation + Video search/download
-            self.display.info("Running voice generation and video search in parallel...")
-
-            async def voice_branch(ctx: PipelineContext) -> PipelineContext:
-                """Generate voiceover (determines final duration)."""
-                step = self.voice_step
-                step_name = step.name
+                # Run VoiceGenerator to get actual audio duration
+                voice_step = self.voice_step
+                step_name = voice_step.name
                 description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
 
                 self.display.start_step(step_name, description)
                 self.debug_logger.start_step(step_name)
 
-                ctx = await step.execute(ctx)
+                context = await voice_step.execute(context)
 
                 self.debug_logger.log_voice(
-                    getattr(step, 'backend', 'unknown'),
-                    getattr(step, 'voice', 'unknown'),
-                    len(getattr(ctx, '_word_timestamps', [])) if hasattr(ctx, '_word_timestamps') else 0,
+                    getattr(voice_step, 'backend', 'unknown'),
+                    getattr(voice_step, 'voice', 'unknown'),
+                    len(getattr(context, '_word_timestamps', [])) if hasattr(context, '_word_timestamps') else 0,
                 )
                 self.debug_logger.end_step(step_name)
-                return ctx
+
+                # Check actual audio duration
+                if context.audio_path and context.audio_path.exists():
+                    actual_duration = self._get_audio_duration(context.audio_path)
+
+                    self.display.info(f"Audio duration: {actual_duration:.1f}s (target: {self.target_duration:.1f}s, max: {self.MAX_DURATION_SECONDS:.0f}s)")
+
+                    # Accept any duration under MAX_DURATION_SECONDS (90s)
+                    # Target is 60s but anything under 90s is acceptable
+                    if actual_duration <= self.MAX_DURATION_SECONDS:
+                        if actual_duration <= self.target_duration:
+                            self.display.info(f"Duration OK ({actual_duration:.1f}s <= {self.target_duration:.0f}s target)")
+                        else:
+                            self.display.info(f"Duration acceptable ({actual_duration:.1f}s <= {self.MAX_DURATION_SECONDS:.0f}s max)")
+                        break
+                    else:
+                        # Too long - need shorter script
+                        over_by = actual_duration - self.MAX_DURATION_SECONDS
+                        word_count = len(context.script.full_narration.split())
+                        # Calculate target words to hit 60s (not 90s) for better results
+                        target_ratio = self.target_duration / actual_duration
+                        target_words = int(word_count * target_ratio)
+                        duration_feedback = {
+                            "issue": "too_long",
+                            "actual_duration": actual_duration,
+                            "target_duration": self.target_duration,
+                            "max_duration": self.MAX_DURATION_SECONDS,
+                            "current_words": word_count,
+                            "target_words": target_words,
+                            "message": f"Script is {over_by:.1f}s over the {self.MAX_DURATION_SECONDS:.0f}s limit. Reduce from {word_count} to ~{target_words} words to hit {self.target_duration:.0f}s.",
+                        }
+                        self.display.warning(f"Script too long ({actual_duration:.1f}s > {self.MAX_DURATION_SECONDS:.0f}s) - will regenerate shorter")
+
+                        if duration_attempt >= self.MAX_DURATION_RETRIES:
+                            self.display.warning(f"Max duration retries ({self.MAX_DURATION_RETRIES}) reached - using current script")
+                            break
+
+                        # Clean up audio files before regenerating
+                        if context.audio_path and context.audio_path.exists():
+                            context.audio_path.unlink()
+                        if context.srt_path and context.srt_path.exists():
+                            context.srt_path.unlink()
+                        context.audio_path = None
+                        context.srt_path = None
+                else:
+                    self.display.warning("Could not verify audio duration")
+                    break
+
+            step_counter += 1  # For voice step
+
+            # Phase 2: Video search/download (voice already done in duration loop above)
+            self.display.info("Running video search and download...")
 
             async def video_branch(ctx: PipelineContext) -> PipelineContext:
                 """Search and download video clips."""
@@ -371,20 +524,13 @@ class VideoPipeline:
 
                 return ctx
 
-            # Run both branches in parallel - they both modify context but on different fields
-            # Voice branch: audio_path, srt_path
-            # Video branch: clips
-            voice_ctx, video_ctx = await asyncio.gather(
-                voice_branch(context),
-                video_branch(context),
-            )
+            # Run video branch (voice already done in duration loop above)
+            video_ctx = await video_branch(context)
 
-            # Merge results from both branches into context
-            context.audio_path = voice_ctx.audio_path
-            context.srt_path = voice_ctx.srt_path
+            # Merge video results into context (audio already set in duration loop)
             context.clips = video_ctx.clips
 
-            step_counter += 3  # voice + search + download
+            step_counter += 2  # search + download
 
             # Phase 3: Sequential final steps (Assembly, Subtitles, Caption)
             for step in self.final_steps:

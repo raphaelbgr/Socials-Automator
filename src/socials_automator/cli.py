@@ -1944,6 +1944,19 @@ async def _generate_reel(
                         shutil.move(str(video_path.parent), str(new_reel_dir))
                         video_path = new_reel_dir / video_path.name
 
+            # Get actual video duration from metadata
+            actual_duration = 60  # Default fallback
+            if video_path and video_path.exists():
+                meta_path = video_path.parent / "metadata.json"
+                if meta_path.exists():
+                    try:
+                        import json
+                        with open(meta_path) as f:
+                            meta = json.load(f)
+                        actual_duration = int(meta.get("duration_seconds", 60))
+                    except Exception:
+                        pass
+
             # Build title with progress info
             if loop_enabled:
                 if loop_limit:
@@ -1956,7 +1969,7 @@ async def _generate_reel(
             console.print(Panel(
                 f"[bold green]Video generated successfully![/bold green]\n\n"
                 f"[bold]Output:[/] {video_path}\n"
-                f"[bold]Duration:[/] 60 seconds\n"
+                f"[bold]Duration:[/] {actual_duration} seconds\n"
                 f"[bold]Resolution:[/] 1080x1920 (9:16)",
                 title=title,
                 border_style="green",
