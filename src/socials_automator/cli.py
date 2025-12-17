@@ -2354,11 +2354,26 @@ async def _post_reels_to_instagram(
                         public_id = parts[1].rsplit(".", 1)[0]
                         uploader._uploaded_public_ids.append((public_id, "video"))
             else:
-                # Fresh upload to Cloudinary
+                # Fresh upload to Cloudinary - get file info first
+                file_size_mb = video_path.stat().st_size / (1024 * 1024)
+
+                # Get video duration using moviepy
+                try:
+                    from moviepy import VideoFileClip
+                    with VideoFileClip(str(video_path)) as clip:
+                        duration_secs = clip.duration
+                    duration_str = f"{int(duration_secs // 60)}:{int(duration_secs % 60):02d}"
+                except Exception:
+                    duration_str = "unknown"
+
                 print(f"\n  [Upload] Uploading video to Cloudinary...")
+                print(f"           Size: {file_size_mb:.1f} MB | Duration: {duration_str}")
 
                 folder = f"socials-automator/{profile_path.name}/reels/{reel_id_display}"
-                video_url = await uploader.upload_video_async(video_path, folder=folder)
+
+                # Upload with spinner
+                with console.status("[bold cyan]Uploading...[/bold cyan]", spinner="dots") as status:
+                    video_url = await uploader.upload_video_async(video_path, folder=folder)
 
                 print(f"  [OK] Video uploaded: {video_url[:60]}...")
 
@@ -2374,11 +2389,12 @@ async def _post_reels_to_instagram(
             cover_url = None
             thumbnail_path = reel_path / "thumbnail.jpg"
             if thumbnail_path.exists():
-                print(f"  [Upload] Uploading thumbnail to Cloudinary...")
+                thumb_size_kb = thumbnail_path.stat().st_size / 1024
+                print(f"  [Upload] Uploading thumbnail ({thumb_size_kb:.0f} KB)...")
                 try:
                     thumb_folder = f"socials-automator/{profile_path.name}/reels/{reel_id_display}/thumb"
                     cover_url = uploader.upload_image(thumbnail_path, folder=thumb_folder)
-                    print(f"  [OK] Thumbnail uploaded: {cover_url[:50]}...")
+                    print(f"  [OK] Thumbnail uploaded")
                 except Exception as e:
                     print(f"  [Warning] Thumbnail upload failed: {e} (using default)")
 
