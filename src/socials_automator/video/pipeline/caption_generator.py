@@ -213,8 +213,8 @@ class CaptionGenerator(PipelineStep):
         """
         import re
 
-        profile_handle = f"@{context.profile.id}" if context.profile.id else ""
-        profile_hashtag = f"#{context.profile.id.replace('.', '').replace('_', '').title()}" if context.profile.id else ""
+        profile_handle = context.profile.instagram_handle or ""
+        profile_hashtag = f"#{context.profile.name.replace('.', '').replace('_', '').title()}" if context.profile.name else ""
 
         # Extract the full narration - this is the source of truth
         narration = context.script.full_narration or ""
@@ -290,7 +290,7 @@ Return ONLY the JSON, no markdown or explanation."""
         """
         import json
 
-        profile_hashtag = f"#{context.profile.id.replace('.', '').replace('_', '').title()}" if context.profile.id else ""
+        profile_hashtag = f"#{context.profile.name.replace('.', '').replace('_', '').title()}" if context.profile.name else ""
 
         clean_response = response.strip()
         if clean_response.startswith("```"):
@@ -486,8 +486,8 @@ A caption is valid if score >= 7. Be strict - generic captions like "Check out t
         """
         import re
 
-        profile_handle = f"@{context.profile.id}" if context.profile.id else ""
-        profile_hashtag = f"#{context.profile.id.replace('.', '').replace('_', '').title()}" if context.profile.id else ""
+        profile_handle = context.profile.instagram_handle or ""
+        profile_hashtag = f"#{context.profile.name.replace('.', '').replace('_', '').title()}" if context.profile.name else ""
 
         # Get narration and extract key tools/concepts
         narration = context.script.full_narration or ""

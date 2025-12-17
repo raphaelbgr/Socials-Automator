@@ -101,7 +101,7 @@ class ScriptPlanner(IScriptPlanner):
 
         # Get profile info for CTA
         profile_name = context.profile.display_name or context.profile.name or "us"
-        profile_handle = f"@{context.profile.id}" if context.profile.id else ""
+        profile_handle = context.profile.instagram_handle or ""
 
         try:
             script = await self.plan_script(

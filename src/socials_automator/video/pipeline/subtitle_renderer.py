@@ -108,8 +108,8 @@ class SubtitleRenderer(ISubtitleRenderer):
             raise SubtitleRenderError("No SRT file available")
 
         # Get profile handle from context if not set
-        if not self.profile_handle and context.profile.id:
-            self.profile_handle = f"@{context.profile.id}"
+        if not self.profile_handle and context.profile.instagram_handle:
+            self.profile_handle = context.profile.instagram_handle
 
         self.log_start("Rendering subtitles and combining audio...")
 

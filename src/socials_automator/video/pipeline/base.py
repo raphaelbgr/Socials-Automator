@@ -29,6 +29,7 @@ class ProfileMetadata(BaseModel):
     id: str
     name: str
     display_name: str
+    instagram_handle: str  # e.g., @ai.for.mortals
     niche_id: str
     tagline: str
     description: str
@@ -51,10 +52,16 @@ class ProfileMetadata(BaseModel):
         research = data.get("research_sources", {})
         ai_gen = data.get("ai_generation", {})
 
+        # Get instagram_handle, fallback to @name if not set
+        instagram_handle = profile.get("instagram_handle", "")
+        if not instagram_handle:
+            instagram_handle = f"@{profile.get('name', '')}"
+
         return cls(
             id=profile.get("id", ""),
             name=profile.get("name", ""),
             display_name=profile.get("display_name", ""),
+            instagram_handle=instagram_handle,
             niche_id=profile.get("niche_id", ""),
             tagline=profile.get("tagline", ""),
             description=profile.get("description", ""),

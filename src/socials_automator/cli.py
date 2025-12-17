@@ -573,7 +573,7 @@ def new_profile(
     metadata = {
         "version": "1.0.0",
         "profile": {
-            "id": name.replace(".", "-"),
+            "id": name,  # Keep dots (e.g., ai.for.mortals)
             "name": name,
             "display_name": handle.replace("@", "").replace(".", " ").title(),
             "instagram_handle": handle if handle.startswith("@") else f"@{handle}",
@@ -1647,6 +1647,8 @@ def generate_reel(
     output_dir: str = typer.Option(None, "--output", "-o", help="Output directory (default: temp)"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Only run first few steps without full video generation"),
     loop: bool = typer.Option(False, "--loop", help="Loop continuously, generating new videos until stopped (Ctrl+C)"),
+    gpu_accelerate: bool = typer.Option(False, "--gpu-accelerate", "-g", help="Enable GPU acceleration with NVENC (requires NVIDIA GPU)"),
+    gpu: int = typer.Option(None, "--gpu", help="GPU index to use (0, 1, etc.). Auto-selects if not specified."),
 ):
     """Generate a video reel for Instagram/TikTok.
 
@@ -1677,6 +1679,8 @@ def generate_reel(
         socials generate-reel ai.for.mortals --loop  # Generate videos continuously
         socials generate-reel ai.for.mortals --voice adam_excited  # Use excited preset
         socials generate-reel ai.for.mortals --voice-rate "+12%" --voice-pitch "+3Hz"  # Custom excitement
+        socials generate-reel ai.for.mortals --gpu-accelerate  # Use GPU for faster rendering
+        socials generate-reel ai.for.mortals -g --gpu 0  # Use specific GPU
     """
     from dotenv import load_dotenv
     load_dotenv()
@@ -1738,6 +1742,14 @@ def generate_reel(
     if voice_rate != "+0%" or voice_pitch != "+0Hz":
         voice_info += f" (rate={voice_rate}, pitch={voice_pitch})"
 
+    # Format GPU info
+    gpu_info = "Disabled"
+    if gpu_accelerate:
+        if gpu is not None:
+            gpu_info = f"Enabled (GPU {gpu})"
+        else:
+            gpu_info = "Enabled (auto-select)"
+
     console.print(Panel(
         f"Generating video reel for [cyan]{profile}[/cyan]\n"
         f"Text AI: [yellow]{text_ai or 'default'}[/yellow]\n"
@@ -1746,6 +1758,7 @@ def generate_reel(
         f"Subtitle Size: [yellow]{subtitle_size}px[/yellow]\n"
         f"Font: [yellow]{font}[/yellow]\n"
         f"Target Length: [yellow]{length_display}[/yellow]\n"
+        f"GPU Acceleration: [{'green' if gpu_accelerate else 'dim'}]{gpu_info}[/{'green' if gpu_accelerate else 'dim'}]\n"
         f"Topic: [green]{topic or 'Auto-generated'}[/green]",
         title="Video Reel Generation",
     ))
@@ -1765,6 +1778,8 @@ def generate_reel(
         output_dir=Path(output_dir) if output_dir else None,
         dry_run=dry_run,
         loop=loop,
+        gpu_accelerate=gpu_accelerate,
+        gpu_index=gpu,
     ))
 
 
@@ -1782,6 +1797,8 @@ async def _generate_reel(
     output_dir: Path | None,
     dry_run: bool,
     loop: bool = False,
+    gpu_accelerate: bool = False,
+    gpu_index: int | None = None,
 ):
     """Async video reel generation."""
     from .video.pipeline import VideoPipeline, setup_logging
@@ -1805,6 +1822,8 @@ async def _generate_reel(
         subtitle_font=font,
         target_duration=target_duration,
         progress_callback=progress_callback,
+        gpu_accelerate=gpu_accelerate,
+        gpu_index=gpu_index,
     )
 
     if dry_run:
