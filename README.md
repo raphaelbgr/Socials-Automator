@@ -163,9 +163,8 @@ python -m socials_automator.cli upload-reel ai.for.mortals
 **Or generate multiple and batch post:**
 
 ```bash
-# Generate several reels (loop mode)
-python -m socials_automator.cli generate-reel ai.for.mortals --loop
-# Press Ctrl+C after generating enough
+# Generate 10 reels then stop
+python -m socials_automator.cli generate-reel ai.for.mortals -n 10
 
 # Post all pending reels
 python -m socials_automator.cli upload-reel ai.for.mortals
@@ -374,7 +373,8 @@ python -m socials_automator.cli generate-reel <profile> [OPTIONS]
 | `--length` | `-l` | Target video length (e.g., 30s, 1m, 90s) | 1m |
 | `--output` | `-o` | Output directory | Auto |
 | `--dry-run` | | Only run first few steps without full video generation | False |
-| `--loop` | | Generate videos continuously until stopped (Ctrl+C) | False |
+| `--loop` | `-L` | Loop continuously until stopped (Ctrl+C) | False |
+| `--loop-count` | `-n` | Generate exactly N videos then stop (implies --loop) | None |
 
 **Available Voices:**
 | Voice | Description |
@@ -430,11 +430,14 @@ python -m socials_automator.cli generate-reel ai.for.mortals --font BebasNeue-Re
 # Test without full video generation
 python -m socials_automator.cli generate-reel ai.for.mortals --dry-run
 
-# Generate videos continuously (loop mode)
+# Generate videos continuously (infinite loop)
 python -m socials_automator.cli generate-reel ai.for.mortals --loop
 
-# Loop mode with custom length
-python -m socials_automator.cli generate-reel ai.for.mortals --loop --length 30s
+# Generate exactly 10 videos then stop
+python -m socials_automator.cli generate-reel ai.for.mortals -n 10
+
+# Generate 50 videos with custom length
+python -m socials_automator.cli generate-reel ai.for.mortals -n 50 --length 30s
 
 # Full example: excited voice, large subtitles, 45 seconds
 python -m socials_automator.cli generate-reel ai.for.mortals --voice adam_excited --subtitle-size 90 --length 45s
