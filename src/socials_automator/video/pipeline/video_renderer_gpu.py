@@ -479,10 +479,10 @@ class GPUVideoAssembler(IVideoAssembler):
             "-c:v", "h264_nvenc",
             "-preset", "p4",  # Balanced speed/quality
             "-rc", "vbr",
-            "-cq", "20",  # Good quality (lower = better, 18-23 typical)
-            "-b:v", "10M",  # Target bitrate
-            "-maxrate", "15M",
-            "-bufsize", "20M",
+            "-cq", "23",  # Good quality for social media (18-28 range, higher = smaller)
+            "-b:v", "4M",  # Target bitrate (Instagram recommends 3.5Mbps for 1080p)
+            "-maxrate", "6M",
+            "-bufsize", "8M",
             "-gpu", str(gpu_index),
             "-an",  # No audio (added in subtitle pass)
             "-t", str(target_duration),  # Safety trim
@@ -745,10 +745,10 @@ class GPUSubtitleRenderer(ISubtitleRenderer):
             "-c:v", "h264_nvenc",
             "-preset", "p4",
             "-rc", "vbr",
-            "-cq", "20",  # Higher quality for final output
-            "-b:v", "10M",
-            "-maxrate", "15M",
-            "-bufsize", "20M",
+            "-cq", "23",  # Good quality for social media
+            "-b:v", "4M",  # Instagram recommends 3.5Mbps for 1080p
+            "-maxrate", "6M",
+            "-bufsize", "8M",
             "-gpu", str(gpu_index),
             "-c:a", "aac",
             "-b:a", "192k",
