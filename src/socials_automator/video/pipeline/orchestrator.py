@@ -478,50 +478,116 @@ class VideoPipeline:
 
             step_counter += 1  # For voice step
 
-            # Phase 2: Video search/download (voice already done in duration loop above)
+            # Phase 2: Video search/download with validation loop
             self.display.info("Running video search and download...")
 
             async def video_branch(ctx: PipelineContext) -> PipelineContext:
-                """Search and download video clips."""
-                # Video search
-                search_step = self.video_search_step
-                step_name = search_step.name
-                description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
+                """Search and download video clips with duration validation."""
+                audio_duration = ctx.audio.duration_seconds if ctx.audio else 60.0
+                max_retries = 3
+                retry_count = 0
+                all_clips = []
+                used_pexels_ids = set()
 
-                self.display.start_step(step_name, description)
-                self.debug_logger.start_step(step_name)
+                while retry_count < max_retries:
+                    # Video search
+                    search_step = self.video_search_step
+                    step_name = search_step.name
+                    description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
 
-                ctx = await search_step.execute(ctx)
+                    if retry_count == 0:
+                        self.display.start_step(step_name, description)
+                        self.debug_logger.start_step(step_name)
+                    else:
+                        self.display.info(f"Searching for more videos (attempt {retry_count + 1})...")
 
-                search_results = getattr(ctx, '_search_results', [])
-                if search_results:
-                    self.debug_logger.log_video_search(search_results)
-                self.debug_logger.end_step(step_name, {
-                    "clips_found": len(search_results) if search_results else 0,
-                })
+                    ctx = await search_step.execute(ctx)
 
-                # Video download
-                download_step = self.video_download_step
-                step_name = download_step.name
-                description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
+                    search_results = getattr(ctx, '_search_results', [])
+                    if search_results:
+                        self.debug_logger.log_video_search(search_results)
 
-                self.display.start_step(step_name, description)
-                self.debug_logger.start_step(step_name)
+                    if retry_count == 0:
+                        self.debug_logger.end_step(step_name, {
+                            "clips_found": len(search_results) if search_results else 0,
+                        })
 
-                ctx = await download_step.execute(ctx)
+                    # Video download
+                    download_step = self.video_download_step
+                    step_name = download_step.name
+                    description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
 
-                if hasattr(download_step, '_cache_hits'):
-                    hits = getattr(download_step, '_cache_hits', 0)
-                    misses = getattr(download_step, '_cache_misses', 0)
-                    self.display.show_cache_stats(hits, misses)
-                    self.debug_logger.log_cache_stats(hits, misses)
-                    self.debug_logger.end_step(step_name, {
-                        "cache_hits": hits,
-                        "cache_misses": misses,
-                    })
-                else:
-                    self.debug_logger.end_step(step_name)
+                    if retry_count == 0:
+                        self.display.start_step(step_name, description)
+                        self.debug_logger.start_step(step_name)
 
+                    ctx = await download_step.execute(ctx)
+
+                    if retry_count == 0 and hasattr(download_step, '_cache_hits'):
+                        hits = getattr(download_step, '_cache_hits', 0)
+                        misses = getattr(download_step, '_cache_misses', 0)
+                        self.display.show_cache_stats(hits, misses)
+                        self.debug_logger.log_cache_stats(hits, misses)
+                        self.debug_logger.end_step(step_name, {
+                            "cache_hits": hits,
+                            "cache_misses": misses,
+                        })
+
+                    # Add new unique clips (no duplicates by pexels_id)
+                    for clip in ctx.clips:
+                        if clip.pexels_id not in used_pexels_ids:
+                            used_pexels_ids.add(clip.pexels_id)
+                            all_clips.append(clip)
+
+                    # Calculate total unique video duration
+                    total_video_duration = sum(clip.duration_seconds for clip in all_clips)
+
+                    self.display.info(
+                        f"Video coverage: {total_video_duration:.1f}s / {audio_duration:.1f}s needed "
+                        f"({len(all_clips)} unique clips)"
+                    )
+
+                    # Check if we have enough video
+                    if total_video_duration >= audio_duration:
+                        self.display.info(f"[OK] Sufficient video coverage ({total_video_duration:.1f}s >= {audio_duration:.1f}s)")
+                        break
+
+                    # Not enough - need more videos
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        shortfall = audio_duration - total_video_duration
+                        self.display.info(f"Need {shortfall:.1f}s more video, requesting additional clips...")
+
+                        # Ask AI for different keywords
+                        if self.ai_client and ctx.script:
+                            try:
+                                prompt = f"""I need MORE stock video search keywords.
+
+Current topic: {ctx.topic.topic if ctx.topic else 'technology'}
+Already used keywords (AVOID THESE): {', '.join(k for c in all_clips for k in c.keywords_used[:2])}
+
+Generate 5 NEW, DIFFERENT 2-word search phrases for stock video sites.
+Focus on: abstract backgrounds, technology scenes, office/workspace, digital effects.
+Return ONLY the keywords, one per line, no numbers or bullets."""
+
+                                response = await self.ai_client.generate(prompt)
+                                new_keywords = [k.strip() for k in response.strip().split('\n') if k.strip()]
+
+                                # Update script segments with new keywords
+                                if new_keywords and ctx.script:
+                                    for i, segment in enumerate(ctx.script.segments):
+                                        if i < len(new_keywords):
+                                            segment.keywords = [new_keywords[i]] + segment.keywords[:2]
+                            except Exception as e:
+                                self.display.info(f"Could not generate new keywords: {e}")
+                    else:
+                        self.display.info(
+                            f"[Warning] Only {total_video_duration:.1f}s of video for {audio_duration:.1f}s audio. "
+                            "Videos may be stretched/looped."
+                        )
+
+                # Store all unique clips
+                ctx.clips = all_clips
                 return ctx
 
             # Run video branch (voice already done in duration loop above)

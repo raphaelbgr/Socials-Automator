@@ -3,7 +3,10 @@
 Searches for vertical (9:16) stock videos matching script segments.
 """
 
+import json
 import os
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -14,6 +17,7 @@ from .base import (
     VideoScript,
     VideoSearchError,
 )
+from socials_automator.constants import get_pexels_cache_dir
 
 
 class VideoSearcher(IVideoSearcher):
@@ -39,8 +43,13 @@ class VideoSearcher(IVideoSearcher):
         self.prefer_portrait = prefer_portrait
         self.ai_client = ai_client
         self._client: Optional[httpx.AsyncClient] = None
-        # Track used video IDs to prevent duplicates
+        # Track used video IDs to prevent duplicates (within single run)
         self._used_video_ids: set[int] = set()
+        # Persistent video history (across runs)
+        self._history_file = get_pexels_cache_dir() / "video_history.json"
+        self._video_history: dict[str, str] = {}  # video_id -> timestamp
+        self._history_cooldown_days = 7  # Days before video can be reused
+        self._load_video_history()
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -61,6 +70,47 @@ class VideoSearcher(IVideoSearcher):
             await self._client.aclose()
             self._client = None
 
+    def _load_video_history(self) -> None:
+        """Load video usage history from file, removing expired entries."""
+        try:
+            if self._history_file.exists():
+                with open(self._history_file, "r") as f:
+                    all_history = json.load(f)
+
+                # Remove entries older than cooldown period
+                cutoff = datetime.now() - timedelta(days=self._history_cooldown_days)
+                cutoff_str = cutoff.isoformat()
+
+                self._video_history = {
+                    vid: ts for vid, ts in all_history.items()
+                    if ts > cutoff_str
+                }
+
+                # Pre-populate used_video_ids with recent history
+                self._used_video_ids = {int(vid) for vid in self._video_history.keys()}
+
+                expired = len(all_history) - len(self._video_history)
+                if expired > 0:
+                    self.log_detail(f"Removed {expired} expired videos from history")
+                    self._save_video_history()
+        except Exception as e:
+            self.log_detail(f"Could not load video history: {e}")
+            self._video_history = {}
+
+    def _save_video_history(self) -> None:
+        """Save video usage history to file."""
+        try:
+            self._history_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._history_file, "w") as f:
+                json.dump(self._video_history, f, indent=2)
+        except Exception as e:
+            self.log_detail(f"Could not save video history: {e}")
+
+    def _mark_video_used(self, video_id: int) -> None:
+        """Mark a video as used in both session and persistent history."""
+        self._used_video_ids.add(video_id)
+        self._video_history[str(video_id)] = datetime.now().isoformat()
+
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """Execute video search step.
 
@@ -75,8 +125,11 @@ class VideoSearcher(IVideoSearcher):
 
         self.log_start(f"Searching videos for {len(context.script.segments)} segments")
 
-        # Reset used video tracking for this run
-        self._used_video_ids.clear()
+        # Load fresh history (in case another process updated it)
+        self._load_video_history()
+        history_count = len(self._video_history)
+        if history_count > 0:
+            self.log_detail(f"Loaded {history_count} videos from history (will avoid reuse)")
 
         try:
             search_results = await self.search_videos(context.script)
@@ -85,8 +138,12 @@ class VideoSearcher(IVideoSearcher):
             # We'll store them temporarily - the downloader will use them
             context._search_results = search_results
 
+            # Save updated history
+            self._save_video_history()
+
             # Log deduplication stats
-            self.log_progress(f"Used {len(self._used_video_ids)} unique videos (no duplicates)")
+            new_videos = len(self._used_video_ids) - history_count
+            self.log_progress(f"Selected {new_videos} new videos ({len(self._video_history)} in history)")
             self.log_success(f"Found videos for {len(search_results)} segments")
             return context
 
@@ -122,10 +179,10 @@ class VideoSearcher(IVideoSearcher):
             video = await self._search_for_segment(segment, keywords)
 
             if video:
-                # Mark video as used
+                # Mark video as used (persisted to avoid reuse across runs)
                 video_id = video.get("id")
                 if video_id:
-                    self._used_video_ids.add(video_id)
+                    self._mark_video_used(video_id)
 
                 results.append({
                     "segment_index": segment.index,
@@ -139,7 +196,7 @@ class VideoSearcher(IVideoSearcher):
                 if fallback:
                     video_id = fallback.get("id")
                     if video_id:
-                        self._used_video_ids.add(video_id)
+                        self._mark_video_used(video_id)
                 results.append({
                     "segment_index": segment.index,
                     "video": fallback,

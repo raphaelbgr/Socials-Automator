@@ -2008,14 +2008,26 @@ async def _generate_reel(
                     uploader = CloudinaryUploader(ig_config)
                     client = InstagramClient(ig_config)
 
-                    # Get caption from metadata
+                    # Get caption from text files (same logic as upload-reel command)
+                    reel_path = video_path.parent
+                    caption_path = reel_path / "caption.txt"
+                    hashtags_path = reel_path / "hashtags.txt"
+                    full_caption_path = reel_path / "caption+hashtags.txt"
+
                     reel_caption = ""
-                    meta_path = video_path.parent / "metadata.json"
-                    if meta_path.exists():
-                        import json
-                        with open(meta_path) as f:
-                            reel_meta = json.load(f)
-                        reel_caption = reel_meta.get("caption", "")
+                    if full_caption_path.exists():
+                        # Use the full caption file directly (caption + hashtags combined)
+                        reel_caption = full_caption_path.read_text(encoding="utf-8").strip()
+                    elif caption_path.exists():
+                        # Fallback: combine caption.txt + hashtags.txt
+                        reel_caption = caption_path.read_text(encoding="utf-8").strip()
+                        if hashtags_path.exists():
+                            hashtags = hashtags_path.read_text(encoding="utf-8").strip()
+                            if hashtags:
+                                reel_caption = f"{reel_caption}\n\n{hashtags}"
+
+                    if not reel_caption:
+                        console.print("  [red][WARNING] No caption found! Check caption.txt or caption+hashtags.txt[/red]")
 
                     # Get file info
                     file_size_mb = video_path.stat().st_size / (1024 * 1024)
