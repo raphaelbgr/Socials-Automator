@@ -20,6 +20,7 @@ from socials_automator.constants import (
     get_temp_dir,
 )
 from .base import (
+    ArtifactStatus,
     ISubtitleRenderer,
     PipelineContext,
     SubtitleRenderError,
@@ -124,11 +125,35 @@ class SubtitleRenderer(ISubtitleRenderer):
 
             context.final_video_path = result_path
 
+            # Update artifact tracking for subtitles, voiceover, and final video
+            if context.metadata:
+                # Final video has subtitles burned in
+                context.metadata.artifacts.subtitles = ArtifactStatus(
+                    status="ok",
+                    file="final.mp4",  # Subtitles are rendered into final video
+                )
+                # Voiceover was created earlier but we confirm it's in final video
+                context.metadata.artifacts.voiceover = ArtifactStatus(
+                    status="ok",
+                    file=context.audio_path.name if context.audio_path else "voiceover.mp3",
+                )
+                # Update video artifact to point to final video
+                context.metadata.artifacts.video = ArtifactStatus(
+                    status="ok",
+                    file="final.mp4",
+                )
+
             self.log_success(f"Final video: {result_path}")
             return context
 
         except Exception as e:
             self.log_error(f"Subtitle rendering failed: {e}")
+            # Update artifact tracking with error
+            if context.metadata:
+                context.metadata.artifacts.subtitles = ArtifactStatus(
+                    status="failed",
+                    error=str(e),
+                )
             raise SubtitleRenderError(f"Failed to render subtitles: {e}") from e
 
     async def render_subtitles(
@@ -278,10 +303,10 @@ class SubtitleRenderer(ISubtitleRenderer):
                 fps=VIDEO_FPS,
                 codec="libx264",
                 audio_codec="aac",
-                preset="fast",
+                preset="medium",  # Better quality
                 logger=None,
                 temp_audiofile=self._get_temp_audiofile_path(output_path),
-                ffmpeg_params=["-crf", "26"],
+                ffmpeg_params=["-crf", "18"],  # High quality
             )
             video.close()
             audio.close()
@@ -337,10 +362,10 @@ class SubtitleRenderer(ISubtitleRenderer):
             fps=VIDEO_FPS,
             codec="libx264",
             audio_codec="aac",
-            preset="fast",
+            preset="medium",  # Better quality
             logger=None,
             temp_audiofile=self._get_temp_audiofile_path(output_path),
-            ffmpeg_params=["-crf", "26"],
+            ffmpeg_params=["-crf", "18"],  # High quality
         )
 
         # Cleanup
@@ -742,10 +767,10 @@ class SubtitleRenderer(ISubtitleRenderer):
             fps=VIDEO_FPS,
             codec="libx264",
             audio_codec="aac",
-            preset="fast",
+            preset="medium",  # Better quality (was "fast")
             logger=None,
             temp_audiofile=self._get_temp_audiofile_path(output_path),
-            ffmpeg_params=["-crf", "26"],
+            ffmpeg_params=["-crf", "18"],  # High quality (was 26)
         )
 
         video.close()

@@ -6,6 +6,7 @@ Plans a video script with:
 - Call to action (3 seconds)
 
 Duration is configurable via target_duration parameter.
+Uses LLMFallbackManager for automatic retry and provider switching.
 """
 
 from datetime import datetime
@@ -20,6 +21,8 @@ from .base import (
     VideoScript,
     VideoSegment,
 )
+from ...services.llm_fallback import LLMFallbackManager, FallbackConfig
+from ...providers.config import load_provider_config
 
 
 class ScriptPlanner(IScriptPlanner):
@@ -37,22 +40,48 @@ class ScriptPlanner(IScriptPlanner):
     # Retry settings - UNLIMITED retries until success
     MAX_REGENERATION_ATTEMPTS = 50  # Keep retrying until we get valid content
 
-    def __init__(self, ai_client: Optional[object] = None, target_duration: float = 60.0):
+    def __init__(
+        self,
+        ai_client: Optional[object] = None,
+        target_duration: float = 60.0,
+        fallback_manager: Optional[LLMFallbackManager] = None,
+        preferred_provider: str | None = None,
+    ):
         """Initialize script planner.
 
         Args:
-            ai_client: Optional AI client for enhanced script generation.
+            ai_client: Optional AI client for enhanced script generation (legacy).
             target_duration: Target video duration in seconds (default 60).
+            fallback_manager: Optional LLMFallbackManager for automatic retry/fallback.
+            preferred_provider: Preferred LLM provider (e.g., 'lmstudio').
         """
         super().__init__()
         self.ai_client = ai_client
         self.target_duration = target_duration
+        self._fallback_manager = fallback_manager
+        self._preferred_provider = preferred_provider
 
         # Calculate word requirements based on target duration
         # Narration should fill ~92% of video (some silence at start/end)
         self.min_narration_duration = target_duration * 0.92
         self.min_words_required = int(self.min_narration_duration / 60 * self.WORDS_PER_MINUTE)
         self.target_words = int(target_duration / 60 * self.WORDS_PER_MINUTE)
+
+    def _get_fallback_manager(self) -> LLMFallbackManager:
+        """Get or create the LLMFallbackManager."""
+        if self._fallback_manager:
+            return self._fallback_manager
+
+        # Create with config from providers.yaml
+        provider_config = load_provider_config()
+        config = FallbackConfig.from_provider_config(provider_config)
+
+        self._fallback_manager = LLMFallbackManager(
+            preferred_provider=self._preferred_provider,
+            config=config,
+            provider_config=provider_config,
+        )
+        return self._fallback_manager
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """Execute script planning step.
@@ -381,7 +410,35 @@ Example of BAD segment (too short, 10 words) with BAD keywords:
 
 Respond with ONLY valid JSON, no other text."""
 
-        response = await self.ai_client.generate(prompt)
+        # Use LLMFallbackManager for automatic retry and provider fallback
+        manager = self._get_fallback_manager()
+
+        # Validator to check JSON parsing
+        def json_validator(response: str) -> tuple[bool, str | None]:
+            try:
+                clean = response.strip()
+                if clean.startswith("```"):
+                    clean = clean.split("```")[1]
+                    if clean.startswith("json"):
+                        clean = clean[4:]
+                clean = clean.strip()
+                json.loads(clean)
+                return True, None
+            except json.JSONDecodeError as e:
+                return False, f"Invalid JSON: {e}"
+
+        result = await manager.generate(
+            prompt=prompt,
+            task="script_planning",
+            validator=json_validator,
+        )
+
+        if not result.success:
+            self.log_detail(f"LLM fallback exhausted: {result.error}")
+            raise ValueError(f"All providers failed: {result.error}")
+
+        response = result.result
+        self.log_detail(f"Script generated using {result.provider_used} ({result.total_attempts} attempts)")
 
         # Parse JSON response
         try:

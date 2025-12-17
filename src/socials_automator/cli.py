@@ -1183,8 +1183,13 @@ async def _post_to_instagram(
         # Return gracefully instead of raising - allows loop mode to continue
         return
 
-    # Sort by folder name (date-number-slug) to get oldest first
-    pending_posts.sort(key=lambda p: p.name)
+    # Sort chronologically: oldest first
+    # Path format: posts/YYYY/MM/pending-post/DD-NNN-slug
+    pending_posts.sort(key=lambda p: (
+        p.parent.parent.parent.name,  # Year (YYYY)
+        p.parent.parent.name,         # Month (MM)
+        p.name,                       # Folder name (DD-NNN-slug)
+    ))
 
     # Show queue summary
     if post_all or len(pending_posts) > 1:
@@ -2089,8 +2094,13 @@ async def _post_reels_to_instagram(
         console.print("\n[dim]Then move to pending-post folder or use this command to auto-move generated reels.[/dim]")
         return
 
-    # Sort by folder name (date-number-slug) to get oldest first
-    pending_reels.sort(key=lambda p: p.name)
+    # Sort chronologically: oldest first
+    # Path format: reels/YYYY/MM/pending-post/DD-NNN-slug
+    pending_reels.sort(key=lambda p: (
+        p.parent.parent.parent.name,  # Year (YYYY)
+        p.parent.parent.name,         # Month (MM)
+        p.name,                       # Folder name (DD-NNN-slug)
+    ))
 
     # Show queue summary
     if post_all or len(pending_reels) > 1:
@@ -2418,6 +2428,455 @@ async def _post_reels_to_instagram(
 
     if failed_count > 0:
         raise typer.Exit(1)
+
+
+@app.command()
+def fix_thumbnails(
+    profile: str = typer.Argument(..., help="Profile name"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without making changes"),
+    force: bool = typer.Option(False, "--force", help="Regenerate ALL thumbnails, not just missing ones"),
+    font_size: int = typer.Option(54, "--font-size", "-s", help="Font size in pixels (default: 54)"),
+):
+    """Generate missing thumbnails for existing reels.
+
+    Scans all reel folders (generated, pending-post, posted) and generates
+    thumbnails for any reel that doesn't have one.
+
+    Use --force to regenerate ALL thumbnails (useful to fix incorrectly generated ones).
+    Use --font-size to customize text size (default: 54px).
+
+    Note: Instagram doesn't support updating cover images for already-posted
+    reels. For posted reels, thumbnails are generated locally for reference only.
+
+    Examples:
+        socials fix-thumbnails ai.for.mortals              # Generate missing thumbnails
+        socials fix-thumbnails ai.for.mortals --force      # Regenerate ALL thumbnails
+        socials fix-thumbnails ai.for.mortals --font-size 80  # Larger text
+        socials fix-thumbnails ai.for.mortals --dry-run    # Preview what would be done
+    """
+    import json
+    from pathlib import Path
+
+    from .video.pipeline.thumbnail_generator import ThumbnailGenerator
+
+    profile_path = get_profile_path(profile)
+    reels_dir = profile_path / "reels"
+
+    if not reels_dir.exists():
+        console.print("[yellow]No reels directory found.[/yellow]")
+        return
+
+    # Find all reel folders
+    all_reels = []
+    for year_dir in reels_dir.glob("*"):
+        if year_dir.is_dir() and year_dir.name.isdigit():
+            for month_dir in year_dir.glob("*"):
+                if month_dir.is_dir() and month_dir.name.isdigit():
+                    for status_dir in ["generated", "pending-post", "posted"]:
+                        status_path = month_dir / status_dir
+                        if status_path.exists():
+                            for reel_dir in status_path.iterdir():
+                                if reel_dir.is_dir():
+                                    # Check for video file
+                                    video_file = reel_dir / "final.mp4"
+                                    if video_file.exists():
+                                        all_reels.append({
+                                            "path": reel_dir,
+                                            "status": status_dir,
+                                            "has_thumbnail": (reel_dir / "thumbnail.jpg").exists(),
+                                            "video_path": video_file,
+                                        })
+
+    if not all_reels:
+        console.print("[yellow]No reels found.[/yellow]")
+        return
+
+    # Count reels by status
+    missing_thumbnails = [r for r in all_reels if not r["has_thumbnail"]]
+    has_thumbnails = [r for r in all_reels if r["has_thumbnail"]]
+
+    console.print(f"\n[bold]Thumbnail Status[/bold]")
+    console.print(f"  [green]Have thumbnails:[/green] {len(has_thumbnails)}")
+    console.print(f"  [yellow]Missing thumbnails:[/yellow] {len(missing_thumbnails)}")
+
+    # Determine which reels to process
+    if force:
+        reels_to_process = all_reels
+        console.print(f"\n[bold cyan]--force: Will regenerate ALL {len(all_reels)} thumbnail(s)[/bold cyan]")
+    else:
+        reels_to_process = missing_thumbnails
+        if not reels_to_process:
+            console.print("\n[green]All reels have thumbnails![/green]")
+            console.print("[dim]Use --force to regenerate all thumbnails[/dim]")
+            return
+
+    # Group by status
+    by_status = {}
+    for reel in reels_to_process:
+        status = reel["status"]
+        if status not in by_status:
+            by_status[status] = []
+        by_status[status].append(reel)
+
+    label = "Thumbnails to regenerate" if force else "Missing thumbnails"
+    console.print(f"\n[bold]{label} by status:[/bold]")
+    for status, reels in by_status.items():
+        console.print(f"  {status}: {len(reels)}")
+
+    if dry_run:
+        action = "regenerate" if force else "generate"
+        console.print(f"\n[yellow]DRY RUN - Would {action} {len(reels_to_process)} thumbnail(s):[/yellow]")
+        for reel in reels_to_process:
+            console.print(f"  - {reel['path'].name} ({reel['status']})")
+        return
+
+    # Generate thumbnails
+    action = "Regenerating" if force else "Generating"
+    console.print(f"\n[bold cyan]{action} {len(reels_to_process)} thumbnail(s)...[/bold cyan]")
+    console.print(f"  Font size: {font_size}px")
+
+    # Initialize thumbnail generator
+    thumb_gen = ThumbnailGenerator(font_size=font_size)
+
+    generated_count = 0
+    failed_count = 0
+    posted_count = 0
+
+    # Get pexels cache directory
+    pexels_cache_dir = Path(__file__).parent.parent.parent / "pexels" / "cache"
+
+    for reel in reels_to_process:
+        reel_path = reel["path"]
+        status = reel["status"]
+
+        # Get hook text and first segment's pexels_id from metadata
+        metadata_path = reel_path / "metadata.json"
+        hook_text = None
+        first_pexels_id = None
+        metadata = None
+
+        if metadata_path.exists():
+            try:
+                with open(metadata_path, encoding="utf-8") as f:
+                    metadata = json.load(f)
+                # Try different places where hook might be stored
+                hook_text = metadata.get("hook")
+                if not hook_text and "script" in metadata:
+                    hook_text = metadata["script"].get("hook")
+                if not hook_text and "video" in metadata:
+                    hook_text = metadata["video"].get("hook")
+
+                # Get first segment's pexels_id for raw video (no subtitles)
+                segments = metadata.get("segments", [])
+                if segments:
+                    first_pexels_id = segments[0].get("pexels_id")
+            except Exception as e:
+                console.print(f"  [dim]Warning: Could not read metadata for {reel_path.name}: {e}[/dim]")
+
+        # Use folder name as fallback hook text
+        if not hook_text:
+            # Extract topic from folder name (format: DD-NNN-topic-slug)
+            folder_name = reel_path.name
+            parts = folder_name.split("-", 2)
+            if len(parts) >= 3:
+                hook_text = parts[2].replace("-", " ").title()
+            else:
+                hook_text = folder_name.replace("-", " ").title()
+
+        console.print(f"  [{status}] {reel_path.name}...", end=" ")
+
+        try:
+            # Use raw cached video (no subtitles) if available, fallback to final.mp4
+            video_path = None
+            using_raw_cache = False
+            if first_pexels_id and pexels_cache_dir.exists():
+                cached_video = pexels_cache_dir / f"{first_pexels_id}.mp4"
+                if cached_video.exists():
+                    video_path = cached_video
+                    using_raw_cache = True
+
+            # Fallback to final.mp4 if cache not available
+            if not video_path:
+                video_path = reel_path / "final.mp4"
+                console.print("[dim](using final.mp4)[/dim] ", end="")
+
+            # Extract frame from video
+            frame_image = thumb_gen._extract_frame(video_path, thumb_gen.frame_time)
+
+            # If using raw cache, need to crop/resize to 1080x1920 (9:16)
+            # Raw Pexels videos can be any aspect ratio
+            if using_raw_cache:
+                from PIL import Image
+                TARGET_WIDTH = 1080
+                TARGET_HEIGHT = 1920
+                TARGET_RATIO = 9 / 16
+
+                w, h = frame_image.size
+                current_ratio = w / h
+
+                # Crop to 9:16 aspect ratio (center crop)
+                if abs(current_ratio - TARGET_RATIO) > 0.01:
+                    if current_ratio > TARGET_RATIO:
+                        # Image is too wide, crop width
+                        new_width = int(h * TARGET_RATIO)
+                        left = (w - new_width) // 2
+                        frame_image = frame_image.crop((left, 0, left + new_width, h))
+                    else:
+                        # Image is too tall, crop height
+                        new_height = int(w / TARGET_RATIO)
+                        top = (h - new_height) // 2
+                        frame_image = frame_image.crop((0, top, w, top + new_height))
+
+                # Resize to exact target dimensions
+                frame_image = frame_image.resize((TARGET_WIDTH, TARGET_HEIGHT), Image.Resampling.LANCZOS)
+
+            # Render hook text on frame
+            thumbnail = thumb_gen._render_text_on_image(frame_image, hook_text)
+
+            # Save thumbnail
+            thumbnail_path = reel_path / "thumbnail.jpg"
+            thumbnail.save(thumbnail_path, "JPEG", quality=95)
+
+            # Update artifact metadata
+            if metadata_path.exists():
+                try:
+                    with open(metadata_path, encoding="utf-8") as f:
+                        metadata = json.load(f)
+
+                    # Initialize artifacts section if it doesn't exist
+                    if "artifacts" not in metadata:
+                        metadata["artifacts"] = {}
+
+                    # Update thumbnail artifact
+                    metadata["artifacts"]["thumbnail"] = {
+                        "status": "ok",
+                        "file": "thumbnail.jpg",
+                    }
+
+                    # Also populate other artifacts if missing (for existing reels)
+                    if "video" not in metadata["artifacts"]:
+                        if (reel_path / "final.mp4").exists():
+                            metadata["artifacts"]["video"] = {"status": "ok", "file": "final.mp4"}
+                    if "voiceover" not in metadata["artifacts"]:
+                        if (reel_path / "voiceover.mp3").exists():
+                            metadata["artifacts"]["voiceover"] = {"status": "ok", "file": "voiceover.mp3"}
+                    if "subtitles" not in metadata["artifacts"]:
+                        if (reel_path / "final.mp4").exists():
+                            metadata["artifacts"]["subtitles"] = {"status": "ok", "file": "final.mp4"}
+                    if "caption" not in metadata["artifacts"]:
+                        if (reel_path / "caption.txt").exists():
+                            metadata["artifacts"]["caption"] = {"status": "ok", "file": "caption.txt"}
+                    if "hashtags" not in metadata["artifacts"]:
+                        if (reel_path / "caption+hashtags.txt").exists():
+                            metadata["artifacts"]["hashtags"] = {"status": "ok", "file": "caption+hashtags.txt"}
+
+                    # Write updated metadata
+                    with open(metadata_path, "w", encoding="utf-8") as f:
+                        json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+                except Exception as meta_err:
+                    console.print(f"[dim]Warning: Could not update metadata: {meta_err}[/dim]")
+
+            if status == "posted":
+                console.print("[green][OK][/green] [dim](local only - can't update Instagram)[/dim]")
+                posted_count += 1
+            else:
+                console.print("[green][OK][/green]")
+            generated_count += 1
+
+        except Exception as e:
+            console.print(f"[red][FAILED][/red] {e}")
+            # Update artifact metadata with failure
+            if metadata_path.exists():
+                try:
+                    with open(metadata_path, encoding="utf-8") as f:
+                        metadata = json.load(f)
+                    if "artifacts" not in metadata:
+                        metadata["artifacts"] = {}
+                    metadata["artifacts"]["thumbnail"] = {
+                        "status": "failed",
+                        "error": str(e),
+                    }
+                    with open(metadata_path, "w", encoding="utf-8") as f:
+                        json.dump(metadata, f, indent=2, ensure_ascii=False)
+                except Exception:
+                    pass
+            failed_count += 1
+
+    # Summary
+    console.print(f"\n{'='*60}")
+    console.print(f"[bold]Thumbnail Generation Summary[/bold]")
+    console.print(f"{'='*60}")
+    console.print(f"  [green]Generated:[/green] {generated_count}")
+    if posted_count > 0:
+        console.print(f"  [dim]  (of which {posted_count} are posted - local only)[/dim]")
+    if failed_count > 0:
+        console.print(f"  [red]Failed:[/red] {failed_count}")
+
+    if posted_count > 0:
+        console.print(f"\n[yellow]Note:[/yellow] Instagram doesn't support updating cover images for")
+        console.print(f"already-posted reels. The {posted_count} posted reel thumbnail(s) are saved")
+        console.print(f"locally for reference only.")
+
+
+@app.command()
+def update_artifacts(
+    profile: str = typer.Argument(..., help="Profile name"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without making changes"),
+):
+    """Update artifact metadata for all existing reels.
+
+    Scans all reel folders and populates the artifacts section in metadata.json
+    based on what files exist in each folder.
+
+    Artifact tracking includes:
+    - video: final.mp4
+    - voiceover: voiceover.mp3
+    - subtitles: (burned into final.mp4)
+    - thumbnail: thumbnail.jpg
+    - caption: caption.txt
+    - hashtags: caption+hashtags.txt
+
+    Examples:
+        socials update-artifacts ai.for.mortals              # Update all metadata
+        socials update-artifacts ai.for.mortals --dry-run    # Preview what would be done
+    """
+    import json
+    from pathlib import Path
+
+    profile_path = get_profile_path(profile)
+    reels_dir = profile_path / "reels"
+
+    if not reels_dir.exists():
+        console.print("[yellow]No reels directory found.[/yellow]")
+        return
+
+    # Find all reel folders
+    all_reels = []
+    for year_dir in reels_dir.glob("*"):
+        if year_dir.is_dir() and year_dir.name.isdigit():
+            for month_dir in year_dir.glob("*"):
+                if month_dir.is_dir() and month_dir.name.isdigit():
+                    for status_dir in ["generated", "pending-post", "posted"]:
+                        status_path = month_dir / status_dir
+                        if status_path.exists():
+                            for reel_dir in status_path.iterdir():
+                                if reel_dir.is_dir():
+                                    metadata_path = reel_dir / "metadata.json"
+                                    if metadata_path.exists():
+                                        all_reels.append({
+                                            "path": reel_dir,
+                                            "status": status_dir,
+                                            "metadata_path": metadata_path,
+                                        })
+
+    if not all_reels:
+        console.print("[yellow]No reels found.[/yellow]")
+        return
+
+    console.print(f"\n[bold]Found {len(all_reels)} reel(s)[/bold]")
+
+    # Check which need artifact updates
+    needs_update = []
+    already_has = []
+
+    for reel in all_reels:
+        with open(reel["metadata_path"], encoding="utf-8") as f:
+            metadata = json.load(f)
+        if "artifacts" in metadata and len(metadata["artifacts"]) >= 6:
+            already_has.append(reel)
+        else:
+            needs_update.append(reel)
+
+    console.print(f"  [green]Have artifacts:[/green] {len(already_has)}")
+    console.print(f"  [yellow]Missing/incomplete artifacts:[/yellow] {len(needs_update)}")
+
+    if not needs_update:
+        console.print("\n[green]All reels have complete artifact metadata![/green]")
+        return
+
+    if dry_run:
+        console.print(f"\n[yellow]DRY RUN - Would update {len(needs_update)} metadata file(s):[/yellow]")
+        for reel in needs_update:
+            console.print(f"  - {reel['path'].name} ({reel['status']})")
+        return
+
+    # Update metadata
+    console.print(f"\n[bold cyan]Updating {len(needs_update)} metadata file(s)...[/bold cyan]")
+
+    updated_count = 0
+    failed_count = 0
+
+    for reel in needs_update:
+        reel_path = reel["path"]
+        metadata_path = reel["metadata_path"]
+
+        console.print(f"  [{reel['status']}] {reel_path.name}...", end=" ")
+
+        try:
+            with open(metadata_path, encoding="utf-8") as f:
+                metadata = json.load(f)
+
+            # Build artifacts based on existing files
+            artifacts = metadata.get("artifacts", {})
+
+            # Video (final.mp4)
+            if (reel_path / "final.mp4").exists():
+                artifacts["video"] = {"status": "ok", "file": "final.mp4"}
+            else:
+                artifacts["video"] = {"status": "missing"}
+
+            # Voiceover (voiceover.mp3)
+            if (reel_path / "voiceover.mp3").exists():
+                artifacts["voiceover"] = {"status": "ok", "file": "voiceover.mp3"}
+            else:
+                artifacts["voiceover"] = {"status": "missing"}
+
+            # Subtitles (burned into final.mp4)
+            if (reel_path / "final.mp4").exists():
+                artifacts["subtitles"] = {"status": "ok", "file": "final.mp4"}
+            else:
+                artifacts["subtitles"] = {"status": "missing"}
+
+            # Thumbnail
+            if (reel_path / "thumbnail.jpg").exists():
+                artifacts["thumbnail"] = {"status": "ok", "file": "thumbnail.jpg"}
+            else:
+                artifacts["thumbnail"] = {"status": "missing"}
+
+            # Caption
+            if (reel_path / "caption.txt").exists():
+                artifacts["caption"] = {"status": "ok", "file": "caption.txt"}
+            else:
+                artifacts["caption"] = {"status": "missing"}
+
+            # Hashtags
+            if (reel_path / "caption+hashtags.txt").exists():
+                artifacts["hashtags"] = {"status": "ok", "file": "caption+hashtags.txt"}
+            else:
+                artifacts["hashtags"] = {"status": "missing"}
+
+            metadata["artifacts"] = artifacts
+
+            with open(metadata_path, "w", encoding="utf-8") as f:
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+            # Count ok/missing
+            ok_count = sum(1 for a in artifacts.values() if a.get("status") == "ok")
+            console.print(f"[green][OK][/green] ({ok_count}/6 artifacts)")
+            updated_count += 1
+
+        except Exception as e:
+            console.print(f"[red][FAILED][/red] {e}")
+            failed_count += 1
+
+    # Summary
+    console.print(f"\n{'='*60}")
+    console.print(f"[bold]Artifact Update Summary[/bold]")
+    console.print(f"{'='*60}")
+    console.print(f"  [green]Updated:[/green] {updated_count}")
+    if failed_count > 0:
+        console.print(f"  [red]Failed:[/red] {failed_count}")
 
 
 def main():

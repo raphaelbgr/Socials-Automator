@@ -267,6 +267,8 @@ python -m socials_automator.cli generate-post--help
 | `upload-reel` | Upload pending video reels to Instagram |
 | `queue` | List all posts in the publishing queue |
 | `schedule` | Move generated posts to pending queue |
+| `fix-thumbnails` | Generate missing thumbnails for existing reels |
+| `update-artifacts` | Update artifact metadata for existing reels |
 | `token` | Manage Instagram access tokens |
 | `new-profile` | Create a new profile interactively |
 | `list-profiles` | List all available profiles |
@@ -645,6 +647,114 @@ python -m socials_automator.cli schedule <profile> [OPTIONS]
 ```bash
 # Schedule all generated posts
 python -m socials_automator.cli schedule ai.for.mortals --all
+```
+
+---
+
+### fix-thumbnails
+
+Generate missing thumbnails for existing reels, or regenerate all thumbnails. Uses the raw Pexels source video (from cache) to avoid text-over-text issues.
+
+```bash
+python -m socials_automator.cli fix-thumbnails <profile> [OPTIONS]
+```
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `profile` | Profile name (required) |
+
+**Options:**
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--dry-run` | | Show what would be done without making changes | False |
+| `--force` | | Regenerate ALL thumbnails, not just missing ones | False |
+| `--font-size` | `-s` | Font size in pixels | 54 |
+
+**Examples:**
+```bash
+# Generate only missing thumbnails
+python -m socials_automator.cli fix-thumbnails ai.for.mortals
+
+# Preview what would be done
+python -m socials_automator.cli fix-thumbnails ai.for.mortals --dry-run
+
+# Regenerate ALL thumbnails (useful to fix incorrectly generated ones)
+python -m socials_automator.cli fix-thumbnails ai.for.mortals --force
+
+# Regenerate with larger text (80px)
+python -m socials_automator.cli fix-thumbnails ai.for.mortals --force --font-size 80
+
+# Regenerate with smaller text (40px)
+python -m socials_automator.cli fix-thumbnails ai.for.mortals --force -s 40
+
+# Preview full regeneration
+python -m socials_automator.cli fix-thumbnails ai.for.mortals --force --dry-run
+```
+
+**Thumbnail Specifications:**
+- **Font size**: 54px default (customizable with `--font-size`)
+- **Max words**: 10 (longer titles are truncated)
+- **Max lines**: 3 (text wraps to fit)
+- **Source**: Raw Pexels video from cache (no subtitles)
+- **Fallback**: Uses final.mp4 if cache unavailable
+
+**Note:** Instagram doesn't support updating cover images for already-posted reels via API. For posted reels, thumbnails are generated locally for reference only. To update them on Instagram, you must do it manually through the Instagram app.
+
+---
+
+### update-artifacts
+
+Update artifact metadata for all existing reels. Scans reel folders and populates the `artifacts` section in `metadata.json` based on what files exist.
+
+```bash
+python -m socials_automator.cli update-artifacts <profile> [OPTIONS]
+```
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `profile` | Profile name (required) |
+
+**Options:**
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--dry-run` | Show what would be done without making changes | False |
+
+**Examples:**
+```bash
+# Update all metadata files
+python -m socials_automator.cli update-artifacts ai.for.mortals
+
+# Preview what would be done
+python -m socials_automator.cli update-artifacts ai.for.mortals --dry-run
+```
+
+**Artifact Tracking:**
+
+The command checks for these artifacts and sets their status in `metadata.json`:
+
+| Artifact | File | Status |
+|----------|------|--------|
+| `video` | final.mp4 | ok/missing |
+| `voiceover` | voiceover.mp3 | ok/missing |
+| `subtitles` | final.mp4 (burned in) | ok/missing |
+| `thumbnail` | thumbnail.jpg | ok/missing |
+| `caption` | caption.txt | ok/missing |
+| `hashtags` | caption+hashtags.txt | ok/missing |
+
+**Example metadata.json artifacts section:**
+```json
+{
+  "artifacts": {
+    "video": {"status": "ok", "file": "final.mp4"},
+    "voiceover": {"status": "ok", "file": "voiceover.mp3"},
+    "subtitles": {"status": "ok", "file": "final.mp4"},
+    "thumbnail": {"status": "ok", "file": "thumbnail.jpg"},
+    "caption": {"status": "ok", "file": "caption.txt"},
+    "hashtags": {"status": "ok", "file": "caption+hashtags.txt"}
+  }
+}
 ```
 
 ---

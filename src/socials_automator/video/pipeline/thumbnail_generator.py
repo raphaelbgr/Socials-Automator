@@ -23,6 +23,7 @@ from socials_automator.constants import (
     SUBTITLE_FONT_NAME,
 )
 from .base import (
+    ArtifactStatus,
     PipelineContext,
     PipelineStep,
     ThumbnailGenerationError,
@@ -34,13 +35,15 @@ GRID_SAFE_ZONE_SIZE = 1080  # 1:1 square
 FEED_PREVIEW_HEIGHT = 1350  # 4:5 aspect
 
 # Text styling
-DEFAULT_FONT_SIZE = 72
+DEFAULT_FONT_SIZE = 54  # Default size (use --font-size to customize)
 DEFAULT_TEXT_COLOR = "#FFFFFF"
 DEFAULT_STROKE_COLOR = "#000000"
-DEFAULT_STROKE_WIDTH = 4
-TEXT_HORIZONTAL_MARGIN = 0.12  # 12% margin on each side
-TEXT_VERTICAL_MARGIN = 0.15  # 15% margin top/bottom within safe zone
-MAX_CHARS_PER_LINE = 20  # Force line breaks for readability
+DEFAULT_STROKE_WIDTH = 3  # Stroke width for text outline
+TEXT_HORIZONTAL_MARGIN = 0.08  # 8% margin on each side (reduced for larger text)
+TEXT_VERTICAL_MARGIN = 0.12  # 12% margin top/bottom within safe zone
+MAX_CHARS_PER_LINE = 18  # Force line breaks for readability
+MAX_WORDS = 10  # Maximum words in thumbnail title
+MAX_LINES = 3  # Maximum lines of text
 
 
 class ThumbnailGenerator(PipelineStep):
@@ -129,17 +132,30 @@ class ThumbnailGenerator(PipelineStep):
             if clip:
                 clip.close()
 
-    def _wrap_text(self, text: str, max_chars: int = MAX_CHARS_PER_LINE) -> list[str]:
+    def _wrap_text(
+        self,
+        text: str,
+        max_chars: int = MAX_CHARS_PER_LINE,
+        max_words: int = MAX_WORDS,
+        max_lines: int = MAX_LINES,
+    ) -> list[str]:
         """Wrap text into lines for better readability.
 
         Args:
             text: Text to wrap.
             max_chars: Maximum characters per line.
+            max_words: Maximum total words (truncate if exceeded).
+            max_lines: Maximum number of lines (truncate if exceeded).
 
         Returns:
             List of lines.
         """
         words = text.split()
+
+        # Limit to max_words
+        if len(words) > max_words:
+            words = words[:max_words]
+
         lines = []
         current_line = []
         current_length = 0
@@ -153,10 +169,13 @@ class ThumbnailGenerator(PipelineStep):
             else:
                 if current_line:
                     lines.append(" ".join(current_line))
+                    # Check if we've hit max lines
+                    if len(lines) >= max_lines:
+                        return lines
                 current_line = [word]
                 current_length = word_length
 
-        if current_line:
+        if current_line and len(lines) < max_lines:
             lines.append(" ".join(current_line))
 
         return lines
@@ -303,9 +322,22 @@ class ThumbnailGenerator(PipelineStep):
             # Note: We add thumbnail_path as an extra attribute
             context._thumbnail_path = thumbnail_path
 
+            # Update artifact tracking
+            if context.metadata:
+                context.metadata.artifacts.thumbnail = ArtifactStatus(
+                    status="ok",
+                    file=thumbnail_path.name,
+                )
+
             return context
 
         except Exception as e:
             self.log_detail(f"Thumbnail generation failed: {e}")
+            # Update artifact tracking with error
+            if context.metadata:
+                context.metadata.artifacts.thumbnail = ArtifactStatus(
+                    status="failed",
+                    error=str(e),
+                )
             # Don't fail the pipeline, thumbnail is optional
             return context

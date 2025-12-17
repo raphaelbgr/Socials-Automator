@@ -8,11 +8,14 @@ import random
 import re
 from typing import Any, Callable, Awaitable
 
+from markdown_text_clean import clean_text as strip_markdown
 from pydantic import BaseModel
 
 from ..providers import TextProvider, get_text_provider
+from ..providers.config import load_provider_config
 from ..knowledge import KnowledgeStore
 from ..services import StructuredExtractor
+from ..services.llm_fallback import LLMFallbackManager, FallbackConfig
 from .models import PostPlan, HookType, SlideType, GenerationProgress
 from .responses import (
     PlanningResponse,
@@ -82,6 +85,8 @@ class ContentPlanner:
         progress_callback: ProgressCallback | None = None,
         auto_retry: bool = False,
         extractor: StructuredExtractor | None = None,
+        fallback_manager: LLMFallbackManager | None = None,
+        preferred_provider: str | None = None,
     ):
         """Initialize the content planner.
 
@@ -92,12 +97,16 @@ class ContentPlanner:
             progress_callback: Callback for progress updates.
             auto_retry: If True, retry indefinitely until valid content.
             extractor: Structured data extractor using Instructor.
+            fallback_manager: Optional LLMFallbackManager for automatic retry/fallback.
+            preferred_provider: Preferred LLM provider (e.g., 'lmstudio').
         """
         self.profile = profile_config
         self.text_provider = text_provider or get_text_provider()
         self.knowledge = knowledge_store
         self.progress_callback = progress_callback
         self.auto_retry = auto_retry
+        self._fallback_manager = fallback_manager
+        self._preferred_provider = preferred_provider
 
         # Create extractor with same event callback as text provider
         self.extractor = extractor or StructuredExtractor(
@@ -112,6 +121,22 @@ class ContentPlanner:
         self.content_strategy = profile_config.get("content_strategy", {})
         self.hook_strategies = profile_config.get("hook_strategies", {})
         self.ai_config = profile_config.get("ai_generation", {})
+
+    def _get_fallback_manager(self) -> LLMFallbackManager:
+        """Get or create the LLMFallbackManager."""
+        if self._fallback_manager:
+            return self._fallback_manager
+
+        # Create with config from providers.yaml
+        provider_config = load_provider_config()
+        config = FallbackConfig.from_provider_config(provider_config)
+
+        self._fallback_manager = LLMFallbackManager(
+            preferred_provider=self._preferred_provider,
+            config=config,
+            provider_config=provider_config,
+        )
+        return self._fallback_manager
 
     async def _emit_progress(
         self,
@@ -1290,6 +1315,7 @@ REQUIREMENTS:
 5. Use emojis to separate sections and add visual appeal
 6. MAXIMUM 1000 characters (this is strict!)
 7. No hashtags (added separately)
+8. NO MARKDOWN FORMATTING - Do not use asterisks (*), underscores (_), backticks (`), or any other markdown syntax. Plain text only.
 
 FORMAT EXAMPLE for a "5 prompts" post:
 ```
@@ -1308,35 +1334,48 @@ Save this for later! [Emoji]
 Return ONLY the caption text.
 {self._get_date_context()}"""
 
-        # Try to generate a valid caption with retries
-        for attempt in range(max_retries):
-            caption = await self.text_provider.generate(
-                prompt=prompt,
-                system=self._get_system_prompt(),
-                task="content_planning",
-                temperature=0.7 + (attempt * 0.1),  # Increase temp on retries
-                max_tokens=500,  # Allow longer response
-            )
-
-            caption = caption.strip()
-
+        def clean_caption(raw: str) -> str:
+            """Clean and extract caption from raw response."""
+            caption = raw.strip()
             # Remove markdown code blocks if present
             if caption.startswith("```"):
                 caption = caption.split("```")[1] if "```" in caption[3:] else caption[3:]
                 caption = caption.strip()
+            # Strip any remaining markdown formatting
+            caption = strip_markdown(caption)
+            return caption
 
-            # Validate caption quality
+        # Validator that cleans and validates caption
+        def caption_validator(raw: str) -> tuple[bool, str | None]:
+            caption = clean_caption(raw)
             is_valid, error = self._validate_caption(caption, topic)
             if is_valid:
-                break
+                self._last_valid_caption = caption  # Store for retrieval
+            return is_valid, error
 
-            _logger.warning(f"Caption validation failed (attempt {attempt + 1}): {error}")
-            _logger.debug(f"Invalid caption: {caption[:100]}...")
+        # Use LLMFallbackManager for automatic retry and provider fallback
+        manager = self._get_fallback_manager()
 
-            if attempt == max_retries - 1:
-                # Last attempt failed - use a safe default
-                _logger.error(f"All caption attempts failed, using default for topic: {topic}")
-                caption = f"Check out these {topic.lower()}! Save this for later."
+        result = await manager.generate(
+            prompt=prompt,
+            system=self._get_system_prompt(),
+            task="caption",
+            max_tokens=500,
+            validator=caption_validator,
+        )
+
+        if result.success:
+            # Use the last valid caption that passed validation
+            if hasattr(self, '_last_valid_caption'):
+                caption = self._last_valid_caption
+                del self._last_valid_caption
+            else:
+                caption = clean_caption(result.result)
+            _logger.info(f"Caption generated using {result.provider_used} ({result.total_attempts} attempts)")
+        else:
+            # All providers exhausted - use a safe default
+            _logger.error(f"All caption attempts failed, using default for topic: {topic}")
+            caption = f"Check out these {topic.lower()}! Save this for later."
 
         # Truncate caption if too long (stay under 1200 char limit, aim for 1000)
         if len(caption) > 1000:

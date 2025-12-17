@@ -24,6 +24,8 @@ from socials_automator.constants import (
     get_temp_dir,
 )
 from .base import (
+    ArtifactStatus,
+    ArtifactsInfo,
     IVideoAssembler,
     PipelineContext,
     VideoAssemblyError,
@@ -303,9 +305,9 @@ class VideoAssembler(IVideoAssembler):
             fps=self.FPS,
             codec="libx264",
             audio=False,
-            preset="fast",  # ~2-3x faster than default 'medium'
+            preset="medium",  # Better quality (was "fast")
             logger=None,
-            ffmpeg_params=["-crf", "26"],  # Slightly faster, imperceptible quality loss
+            ffmpeg_params=["-crf", "18"],  # High quality (was 26)
         )
 
         # Cleanup
@@ -313,7 +315,20 @@ class VideoAssembler(IVideoAssembler):
         for clip in video_clips:
             clip.close()
 
-        # Create metadata
+        # Create metadata with artifact tracking
+        artifacts = ArtifactsInfo(
+            video=ArtifactStatus(
+                status="ok",
+                file=str(output_path.name),
+            ),
+            # Other artifacts will be set by their respective pipeline steps
+            voiceover=ArtifactStatus(status="pending"),
+            subtitles=ArtifactStatus(status="pending"),
+            thumbnail=ArtifactStatus(status="pending"),
+            caption=ArtifactStatus(status="pending"),
+            hashtags=ArtifactStatus(status="pending"),
+        )
+
         metadata = VideoMetadata(
             post_id=output_path.parent.name,
             title=script.title,
@@ -330,6 +345,7 @@ class VideoAssembler(IVideoAssembler):
                 for c in sorted_clips
             ],
             narration=script.full_narration,
+            artifacts=artifacts,
         )
 
         return output_path, metadata

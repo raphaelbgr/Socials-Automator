@@ -89,10 +89,20 @@ class TaskOverride(BaseModel):
     temperature: float | None = None
 
 
+class LLMFallbackConfig(BaseModel):
+    """LLM fallback and retry configuration."""
+
+    local_max_retries: int = 10
+    external_max_retries: int = 5
+    local_providers: list[str] = Field(default_factory=lambda: ["lmstudio", "ollama"])
+    fallback_priority: list[str] = Field(default_factory=lambda: ["zai", "gemini", "groq", "openai"])
+
+
 class ProviderConfig(BaseModel):
     """Full provider configuration."""
 
     provider_settings: ProviderSettings = Field(default_factory=ProviderSettings)
+    llm_fallback: LLMFallbackConfig = Field(default_factory=LLMFallbackConfig)
     text_providers: dict[str, TextProviderConfig] = Field(default_factory=dict)
     image_providers: dict[str, ImageProviderConfig] = Field(default_factory=dict)
     text_priority_chain: list[str] = Field(default_factory=list)

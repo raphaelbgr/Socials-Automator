@@ -11,6 +11,31 @@ provider_settings:
   fallback_on_error: true
 
 # ============================================
+# LLM FALLBACK CONFIGURATION
+# ============================================
+# Controls automatic retry and provider switching behavior.
+# Local LLMs (LM Studio, Ollama) get more retries since they may
+# need multiple attempts for valid JSON output.
+
+llm_fallback:
+  # Retry counts by provider type
+  local_max_retries: 10      # LM Studio, Ollama - more retries for JSON issues
+  external_max_retries: 5    # Cloud APIs - fewer retries, more reliable
+
+  # Which providers are considered "local" (get more retries)
+  local_providers:
+    - lmstudio
+    - ollama
+
+  # Fallback priority order (when preferred provider exhausted)
+  # Comment out providers you don't have API keys for
+  fallback_priority:
+    - zai           # Z.AI GLM-4.5-Air (cheap, fast)
+    - gemini        # Google Gemini 2.0 Flash
+    - groq          # Groq Llama 3.3 70B
+    - openai        # OpenAI GPT-4o (premium fallback)
+
+# ============================================
 # TEXT PROVIDERS (via LiteLLM)
 # ============================================
 # LiteLLM uses model prefixes to route to correct provider:

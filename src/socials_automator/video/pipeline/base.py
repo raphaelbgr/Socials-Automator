@@ -132,6 +132,25 @@ class VideoClipInfo(BaseModel):
     keywords_used: list[str] = Field(default_factory=list)
 
 
+class ArtifactStatus(BaseModel):
+    """Status of a generated artifact."""
+
+    status: str = "pending"  # pending, ok, failed, missing
+    file: str | None = None
+    error: str | None = None
+
+
+class ArtifactsInfo(BaseModel):
+    """Tracking info for all generated artifacts."""
+
+    video: ArtifactStatus = Field(default_factory=ArtifactStatus)
+    voiceover: ArtifactStatus = Field(default_factory=ArtifactStatus)
+    subtitles: ArtifactStatus = Field(default_factory=ArtifactStatus)
+    thumbnail: ArtifactStatus = Field(default_factory=ArtifactStatus)
+    caption: ArtifactStatus = Field(default_factory=ArtifactStatus)
+    hashtags: ArtifactStatus = Field(default_factory=ArtifactStatus)
+
+
 class VideoMetadata(BaseModel):
     """Metadata for the assembled video (SRT-like structure)."""
 
@@ -143,6 +162,7 @@ class VideoMetadata(BaseModel):
     segments: list[dict] = Field(default_factory=list)  # With timing info
     clips_used: list[dict] = Field(default_factory=list)
     narration: str = ""
+    artifacts: ArtifactsInfo = Field(default_factory=ArtifactsInfo)
 
 
 class PipelineContext(BaseModel):
