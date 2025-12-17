@@ -1648,6 +1648,8 @@ def generate_reel(
     dry_run: bool = typer.Option(False, "--dry-run", help="Only run first few steps without full video generation"),
     loop: bool = typer.Option(False, "--loop", "-L", help="Loop continuously until stopped (Ctrl+C)"),
     loop_count: int = typer.Option(None, "--loop-count", "-n", help="Generate exactly N videos then stop (implies --loop)"),
+    upload: bool = typer.Option(False, "--upload", help="Upload to Instagram after each generation (stops on upload failure)"),
+    share_to_feed: bool = typer.Option(True, "--share-to-feed/--no-share-to-feed", help="Show reel on profile grid when uploading (default: True)"),
     gpu_accelerate: bool = typer.Option(False, "--gpu-accelerate", "-g", help="Enable GPU acceleration with NVENC (requires NVIDIA GPU)"),
     gpu: int = typer.Option(None, "--gpu", help="GPU index to use (0, 1, etc.). Auto-selects if not specified."),
 ):
@@ -1679,6 +1681,8 @@ def generate_reel(
         socials generate-reel ai.for.mortals --subtitle-size 90 --font Poppins-Bold.ttf
         socials generate-reel ai.for.mortals --loop  # Generate videos indefinitely
         socials generate-reel ai.for.mortals -n 10  # Generate 10 videos then stop
+        socials generate-reel ai.for.mortals --upload  # Generate and upload immediately
+        socials generate-reel ai.for.mortals --upload --loop  # Generate->Upload loop until rate limit
         socials generate-reel ai.for.mortals --voice adam_excited  # Use excited preset
         socials generate-reel ai.for.mortals --voice-rate "+12%" --voice-pitch "+3Hz"  # Custom excitement
         socials generate-reel ai.for.mortals --gpu-accelerate  # Use GPU for faster rendering
@@ -1781,6 +1785,8 @@ def generate_reel(
         dry_run=dry_run,
         loop=loop,
         loop_count=loop_count,
+        upload=upload,
+        share_to_feed=share_to_feed,
         gpu_accelerate=gpu_accelerate,
         gpu_index=gpu,
     ))
@@ -1801,6 +1807,8 @@ async def _generate_reel(
     dry_run: bool,
     loop: bool = False,
     loop_count: int | None = None,
+    upload: bool = False,
+    share_to_feed: bool = True,
     gpu_accelerate: bool = False,
     gpu_index: int | None = None,
 ):
@@ -1974,6 +1982,94 @@ async def _generate_reel(
                 title=title,
                 border_style="green",
             ))
+
+            # Upload to Instagram if --upload flag is set
+            if upload and video_path and video_path.exists():
+                console.print("\n[bold cyan]Uploading to Instagram...[/bold cyan]")
+                try:
+                    from .instagram.models import InstagramConfig
+                    from .instagram import InstagramClient, CloudinaryUploader
+
+                    # Load config
+                    ig_config = InstagramConfig.from_env()
+
+                    # Try token refresh
+                    try:
+                        from .instagram import TokenManager
+                        token_manager = TokenManager.from_env()
+                        if token_manager.can_refresh:
+                            new_token = await token_manager.ensure_valid_token()
+                            if new_token != ig_config.access_token:
+                                ig_config.access_token = new_token
+                    except Exception:
+                        pass
+
+                    # Upload video
+                    uploader = CloudinaryUploader(ig_config)
+                    client = InstagramClient(ig_config)
+
+                    # Get caption from metadata
+                    reel_caption = ""
+                    meta_path = video_path.parent / "metadata.json"
+                    if meta_path.exists():
+                        import json
+                        with open(meta_path) as f:
+                            reel_meta = json.load(f)
+                        reel_caption = reel_meta.get("caption", "")
+
+                    # Get file info
+                    file_size_mb = video_path.stat().st_size / (1024 * 1024)
+                    console.print(f"  [Upload] Video size: {file_size_mb:.1f} MB")
+
+                    # Upload to Cloudinary
+                    folder = f"socials-automator/{profile_path.name}/reels"
+                    with console.status("[bold cyan]Uploading to Cloudinary...[/bold cyan]", spinner="dots"):
+                        video_url = await uploader.upload_video_async(video_path, folder=folder)
+                    console.print(f"  [OK] Cloudinary upload complete")
+
+                    # Upload thumbnail if exists
+                    cover_url = None
+                    thumbnail_path = video_path.parent / "thumbnail.jpg"
+                    if thumbnail_path.exists():
+                        cover_url = uploader.upload_image(thumbnail_path, folder=folder)
+                        console.print(f"  [OK] Thumbnail uploaded")
+
+                    # Publish to Instagram
+                    console.print(f"  [Publish] Publishing to Instagram...")
+                    result = await client.publish_reel(
+                        video_url=video_url,
+                        caption=reel_caption,
+                        cover_url=cover_url,
+                        share_to_feed=share_to_feed,
+                    )
+
+                    if result.success:
+                        console.print(f"  [bold green][OK] Published to Instagram![/bold green]")
+                        console.print(f"      Media ID: {result.media_id}")
+                        if result.permalink:
+                            console.print(f"      URL: {result.permalink}")
+
+                        # Cleanup Cloudinary
+                        await uploader.cleanup_async()
+
+                        # Move to posted folder
+                        posted_dir = video_path.parent.parent.parent / "posted"
+                        posted_dir.mkdir(parents=True, exist_ok=True)
+                        import shutil
+                        new_path = posted_dir / video_path.parent.name
+                        shutil.move(str(video_path.parent), str(new_path))
+                        console.print(f"  [OK] Moved to posted/")
+                    else:
+                        console.print(f"  [red][FAILED] Instagram upload failed: {result.error}[/red]")
+                        if loop_enabled:
+                            console.print(f"\n[yellow]Stopping loop due to upload failure (rate limit?)[/yellow]")
+                        break
+
+                except Exception as e:
+                    console.print(f"  [red][FAILED] Upload error: {e}[/red]")
+                    if loop_enabled:
+                        console.print(f"\n[yellow]Stopping loop due to upload failure[/yellow]")
+                    break
 
             # If not looping, exit after first successful generation
             if not loop_enabled:
