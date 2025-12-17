@@ -374,7 +374,20 @@ Each segment MUST have:
         current_date = now.strftime("%B %d, %Y")
         current_year = now.year
 
-        prompt = f"""Write a 60-second video narration script for Instagram Reels about: {topic.topic}
+        # Calculate dynamic structure based on target duration
+        target_secs = int(duration)
+        content_duration = duration - self.HOOK_DURATION - self.CTA_DURATION
+        num_segments = max(2, min(10, round(content_duration / 7)))  # 7 seconds per segment, 2-10 range
+        segment_duration = content_duration / num_segments
+        words_per_segment = int(segment_duration / 60 * self.WORDS_PER_MINUTE)
+
+        # Generate segment JSON template dynamically
+        segment_template = ',\n        '.join([
+            f'{{{{"text": "Segment {i+1} narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}}}}'
+            for i in range(num_segments)
+        ])
+
+        prompt = f"""Write a {target_secs}-second video narration script for Instagram Reels about: {topic.topic}
 
 TODAY'S DATE: {current_date}
 {duration_adjustment_section}
@@ -386,31 +399,24 @@ Research findings:
 {key_points}
 {emphasis}
 
-IMPORTANT: The total narration must be {word_requirement}.
+IMPORTANT: The total narration must be {word_requirement}. Target duration is {target_secs} seconds!
 
 Structure:
-- Hook (3 seconds, ~10 words): Attention-grabbing opener that stops the scroll
-- 8 segments (7-8 seconds each, ~18 words each): Valuable content with specific tips
-- CTA (4 seconds, ~12 words): Call to action mentioning the creator
+- Hook ({int(self.HOOK_DURATION)} seconds, ~10 words): Attention-grabbing opener that stops the scroll
+- {num_segments} segments (~{segment_duration:.0f} seconds each, ~{words_per_segment} words each): Valuable content with specific tips
+- CTA ({int(self.CTA_DURATION)} seconds, ~12 words): Call to action mentioning the creator
 
 Format your response as JSON:
 {{
     "hook": "Your hook here - must be exactly 8-12 words, punchy and attention-grabbing",
     "segments": [
-        {{"text": "Segment 1 narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}},
-        {{"text": "Segment 2 narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}},
-        {{"text": "Segment 3 narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}},
-        {{"text": "Segment 4 narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}},
-        {{"text": "Segment 5 narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}},
-        {{"text": "Segment 6 narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}},
-        {{"text": "Segment 7 narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}},
-        {{"text": "Segment 8 narration - {segment_requirement}", "keywords": ["visual1", "visual2"]}}
+        {segment_template}
     ],
     "cta_ending": "for more AI tips!"
 }}
 
 CRITICAL Rules:
-- Each segment MUST be 15-20 words (2-3 sentences) - 8 segments total
+- Each segment MUST be {words_per_segment}-{words_per_segment + 5} words (2-3 sentences) - {num_segments} segments total
 - Total narration MUST be at least {self.min_words_required} words - COUNT YOUR WORDS!
 - Write in first person, conversational style ("I discovered...", "Here's what works...")
 - Include specific examples, numbers, or actionable tips in each segment

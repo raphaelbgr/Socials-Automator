@@ -77,7 +77,7 @@ class VideoPipeline:
     """Orchestrates the complete video generation pipeline."""
 
     # Duration validation constants
-    MAX_DURATION_SECONDS = 90.0  # Maximum acceptable duration (target is 60s, but up to 90s is OK)
+    MAX_DURATION_MULTIPLIER = 1.5  # Accept up to 1.5x target duration (e.g., 60s target -> 90s max)
     MAX_DURATION_RETRIES = 10  # Maximum script regeneration attempts for duration
 
     def _get_audio_duration(self, audio_path: Path) -> float:
@@ -432,34 +432,34 @@ class VideoPipeline:
                 # Check actual audio duration
                 if context.audio_path and context.audio_path.exists():
                     actual_duration = self._get_audio_duration(context.audio_path)
+                    max_duration = self.target_duration * self.MAX_DURATION_MULTIPLIER
 
-                    self.display.info(f"Audio duration: {actual_duration:.1f}s (target: {self.target_duration:.1f}s, max: {self.MAX_DURATION_SECONDS:.0f}s)")
+                    self.display.info(f"Audio duration: {actual_duration:.1f}s (target: {self.target_duration:.1f}s, max: {max_duration:.0f}s)")
 
-                    # Accept any duration under MAX_DURATION_SECONDS (90s)
-                    # Target is 60s but anything under 90s is acceptable
-                    if actual_duration <= self.MAX_DURATION_SECONDS:
+                    # Accept any duration under max (target * 1.5)
+                    if actual_duration <= max_duration:
                         if actual_duration <= self.target_duration:
                             self.display.info(f"Duration OK ({actual_duration:.1f}s <= {self.target_duration:.0f}s target)")
                         else:
-                            self.display.info(f"Duration acceptable ({actual_duration:.1f}s <= {self.MAX_DURATION_SECONDS:.0f}s max)")
+                            self.display.info(f"Duration acceptable ({actual_duration:.1f}s <= {max_duration:.0f}s max)")
                         break
                     else:
                         # Too long - need shorter script
-                        over_by = actual_duration - self.MAX_DURATION_SECONDS
+                        over_by = actual_duration - max_duration
                         word_count = len(context.script.full_narration.split())
-                        # Calculate target words to hit 60s (not 90s) for better results
+                        # Calculate target words to hit target duration (not max) for better results
                         target_ratio = self.target_duration / actual_duration
                         target_words = int(word_count * target_ratio)
                         duration_feedback = {
                             "issue": "too_long",
                             "actual_duration": actual_duration,
                             "target_duration": self.target_duration,
-                            "max_duration": self.MAX_DURATION_SECONDS,
+                            "max_duration": max_duration,
                             "current_words": word_count,
                             "target_words": target_words,
-                            "message": f"Script is {over_by:.1f}s over the {self.MAX_DURATION_SECONDS:.0f}s limit. Reduce from {word_count} to ~{target_words} words to hit {self.target_duration:.0f}s.",
+                            "message": f"Script is {over_by:.1f}s over the {max_duration:.0f}s limit. Reduce from {word_count} to ~{target_words} words to hit {self.target_duration:.0f}s.",
                         }
-                        self.display.warning(f"Script too long ({actual_duration:.1f}s > {self.MAX_DURATION_SECONDS:.0f}s) - will regenerate shorter")
+                        self.display.warning(f"Script too long ({actual_duration:.1f}s > {max_duration:.0f}s) - will regenerate shorter")
 
                         if duration_attempt >= self.MAX_DURATION_RETRIES:
                             self.display.warning(f"Max duration retries ({self.MAX_DURATION_RETRIES}) reached - using current script")

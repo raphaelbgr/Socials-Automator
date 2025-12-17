@@ -375,6 +375,8 @@ python -m socials_automator.cli generate-reel <profile> [OPTIONS]
 | `--dry-run` | | Only run first few steps without full video generation | False |
 | `--loop` | `-L` | Loop continuously until stopped (Ctrl+C) | False |
 | `--loop-count` | `-n` | Generate exactly N videos then stop (implies --loop) | None |
+| `--gpu-accelerate` | `-g` | Enable GPU acceleration with NVENC (requires NVIDIA GPU) | False |
+| `--gpu` | | GPU index to use (0, 1, etc.). Auto-selects if not specified | Auto |
 
 **Available Voices:**
 | Voice | Description |
@@ -441,6 +443,16 @@ python -m socials_automator.cli generate-reel ai.for.mortals -n 50 --length 30s
 
 # Full example: excited voice, large subtitles, 45 seconds
 python -m socials_automator.cli generate-reel ai.for.mortals --voice adam_excited --subtitle-size 90 --length 45s
+
+# GPU acceleration (faster rendering with NVIDIA GPU)
+python -m socials_automator.cli generate-reel ai.for.mortals --gpu-accelerate
+python -m socials_automator.cli generate-reel ai.for.mortals -g
+
+# Use specific GPU (for multi-GPU systems)
+python -m socials_automator.cli generate-reel ai.for.mortals -g --gpu 0
+
+# Full example: GPU acceleration, 30-second video, local AI
+python -m socials_automator.cli generate-reel ai.for.mortals --text-ai lmstudio --length 30s -g
 ```
 
 **Pipeline:**
@@ -448,12 +460,26 @@ python -m socials_automator.cli generate-reel ai.for.mortals --voice adam_excite
 2. Research topic via web search
 3. [AI] Plan video script (targeting --length duration)
 4. Generate voiceover (determines actual video duration)
-5. Search Pexels for stock footage (with local cache)
-6. Download video clips
-7. Assemble into 9:16 vertical video (matches narration length)
-8. Add karaoke-style subtitles with watermark
-9. [AI] Generate caption and hashtags (with AI validation and retry)
-10. Output final.mp4
+5. **[AI] Validate duration** - regenerates script if too long (up to 10 retries)
+6. Search Pexels for stock footage (with local cache)
+7. Download video clips
+8. Assemble into 9:16 vertical video (matches narration length)
+9. Add karaoke-style subtitles with moving watermark
+10. [AI] Generate caption and hashtags (with AI validation and retry)
+11. Output final.mp4
+
+**Duration Validation:**
+- The AI generates scripts targeting your `--length` duration
+- After voice generation, actual audio duration is checked
+- If duration exceeds 1.5x target (e.g., >90s for 1m target), script is regenerated
+- AI receives feedback to write shorter content
+- Up to 10 regeneration attempts to hit target duration
+
+**GPU Acceleration (`-g`):**
+- Uses NVIDIA NVENC for hardware-accelerated video encoding
+- Significantly faster than CPU rendering (especially for longer videos)
+- Requires NVIDIA GPU with NVENC support (GTX 600+, most modern GPUs)
+- Falls back to CPU if GPU unavailable
 
 **Output:**
 ```
