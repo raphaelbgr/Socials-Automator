@@ -1,12 +1,47 @@
 """Image uploader for Instagram posting using Cloudinary."""
 
 import asyncio
+import io
 from pathlib import Path
 from typing import Callable, Awaitable
 import cloudinary
 import cloudinary.uploader
 
 from .models import InstagramConfig
+
+
+class ProgressFileWrapper(io.IOBase):
+    """File wrapper that reports read progress."""
+
+    def __init__(
+        self,
+        file_path: Path,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ):
+        self._file = open(file_path, "rb")
+        self._size = file_path.stat().st_size
+        self._read = 0
+        self._callback = progress_callback
+
+    def read(self, size: int = -1) -> bytes:
+        data = self._file.read(size)
+        self._read += len(data)
+        if self._callback:
+            self._callback(self._read, self._size)
+        return data
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        return self._file.seek(offset, whence)
+
+    def tell(self) -> int:
+        return self._file.tell()
+
+    def close(self) -> None:
+        self._file.close()
+
+    @property
+    def size(self) -> int:
+        return self._size
 
 
 class CloudinaryUploader:
@@ -68,24 +103,47 @@ class CloudinaryUploader:
 
         return result["secure_url"]
 
-    def upload_video(self, video_path: Path, folder: str = "socials-automator") -> str:
-        """Upload a video to Cloudinary.
+    def upload_video(
+        self,
+        video_path: Path,
+        folder: str = "socials-automator",
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> str:
+        """Upload a video to Cloudinary with progress tracking.
 
         Args:
             video_path: Path to the video file (MP4 recommended)
             folder: Cloudinary folder to organize uploads
+            progress_callback: Optional callback(bytes_uploaded, total_bytes) for progress
 
         Returns:
             Public URL of the uploaded video
         """
-        result = cloudinary.uploader.upload(
-            str(video_path),
-            folder=folder,
-            resource_type="video",
-            overwrite=True,
-            # Use original filename as public_id for easier cleanup
-            public_id=f"{folder}/{video_path.stem}",
-        )
+        file_size = video_path.stat().st_size
+
+        # For large files (>20MB), use chunked upload
+        if file_size > 20_000_000:
+            result = cloudinary.uploader.upload_large(
+                str(video_path),
+                folder=folder,
+                resource_type="video",
+                overwrite=True,
+                public_id=f"{folder}/{video_path.stem}",
+                chunk_size=6_000_000,  # 6MB chunks
+            )
+        else:
+            # For smaller files, use regular upload with progress wrapper
+            wrapper = ProgressFileWrapper(video_path, progress_callback)
+            try:
+                result = cloudinary.uploader.upload(
+                    wrapper,
+                    folder=folder,
+                    resource_type="video",
+                    overwrite=True,
+                    public_id=f"{folder}/{video_path.stem}",
+                )
+            finally:
+                wrapper.close()
 
         # Track for cleanup (need to specify resource_type for videos)
         self._uploaded_public_ids.append((result["public_id"], "video"))

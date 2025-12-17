@@ -1985,96 +1985,41 @@ async def _generate_reel(
 
             # Upload to Instagram if --upload flag is set
             if upload and video_path and video_path.exists():
-                console.print("\n[bold cyan]Uploading to Instagram...[/bold cyan]")
+                console.print("\n[bold cyan]Uploading to Instagram via upload-reel command...[/bold cyan]")
                 try:
-                    from .instagram.models import InstagramConfig
-                    from .instagram import InstagramClient, CloudinaryUploader
+                    import subprocess
+                    import sys
 
-                    # Load config
-                    ig_config = InstagramConfig.from_env()
+                    # Get the reel folder name (e.g., "20241217-143052")
+                    reel_folder = video_path.parent.name
 
-                    # Try token refresh
-                    try:
-                        from .instagram import TokenManager
-                        token_manager = TokenManager.from_env()
-                        if token_manager.can_refresh:
-                            new_token = await token_manager.ensure_valid_token()
-                            if new_token != ig_config.access_token:
-                                ig_config.access_token = new_token
-                    except Exception:
-                        pass
+                    # First, move to pending-post (upload-reel expects files there)
+                    pending_dir = video_path.parent.parent.parent / "pending-post"
+                    pending_dir.mkdir(parents=True, exist_ok=True)
+                    pending_path = pending_dir / reel_folder
 
-                    # Upload video
-                    uploader = CloudinaryUploader(ig_config)
-                    client = InstagramClient(ig_config)
+                    # Move generated reel to pending-post
+                    import shutil
+                    if video_path.parent != pending_path:
+                        shutil.move(str(video_path.parent), str(pending_path))
+                        console.print(f"  [OK] Moved to pending-post/")
 
-                    # Get caption from text files (same logic as upload-reel command)
-                    reel_path = video_path.parent
-                    caption_path = reel_path / "caption.txt"
-                    hashtags_path = reel_path / "hashtags.txt"
-                    full_caption_path = reel_path / "caption+hashtags.txt"
+                    # Build upload-reel command
+                    cmd = [
+                        sys.executable, "-m", "socials_automator.cli",
+                        "upload-reel", profile_path.name, reel_folder,
+                    ]
+                    if not share_to_feed:
+                        cmd.append("--no-share-to-feed")
 
-                    reel_caption = ""
-                    if full_caption_path.exists():
-                        # Use the full caption file directly (caption + hashtags combined)
-                        reel_caption = full_caption_path.read_text(encoding="utf-8").strip()
-                    elif caption_path.exists():
-                        # Fallback: combine caption.txt + hashtags.txt
-                        reel_caption = caption_path.read_text(encoding="utf-8").strip()
-                        if hashtags_path.exists():
-                            hashtags = hashtags_path.read_text(encoding="utf-8").strip()
-                            if hashtags:
-                                reel_caption = f"{reel_caption}\n\n{hashtags}"
+                    # Run upload-reel command (shows all progress, status, etc.)
+                    console.print(f"  [Run] {' '.join(cmd)}\n")
+                    result = subprocess.run(cmd)
 
-                    if not reel_caption:
-                        console.print("  [red][WARNING] No caption found! Check caption.txt or caption+hashtags.txt[/red]")
-
-                    # Get file info
-                    file_size_mb = video_path.stat().st_size / (1024 * 1024)
-                    console.print(f"  [Upload] Video size: {file_size_mb:.1f} MB")
-
-                    # Upload to Cloudinary
-                    folder = f"socials-automator/{profile_path.name}/reels"
-                    with console.status("[bold cyan]Uploading to Cloudinary...[/bold cyan]", spinner="dots"):
-                        video_url = await uploader.upload_video_async(video_path, folder=folder)
-                    console.print(f"  [OK] Cloudinary upload complete")
-
-                    # Upload thumbnail if exists
-                    cover_url = None
-                    thumbnail_path = video_path.parent / "thumbnail.jpg"
-                    if thumbnail_path.exists():
-                        cover_url = uploader.upload_image(thumbnail_path, folder=folder)
-                        console.print(f"  [OK] Thumbnail uploaded")
-
-                    # Publish to Instagram
-                    console.print(f"  [Publish] Publishing to Instagram...")
-                    result = await client.publish_reel(
-                        video_url=video_url,
-                        caption=reel_caption,
-                        cover_url=cover_url,
-                        share_to_feed=share_to_feed,
-                    )
-
-                    if result.success:
-                        console.print(f"  [bold green][OK] Published to Instagram![/bold green]")
-                        console.print(f"      Media ID: {result.media_id}")
-                        if result.permalink:
-                            console.print(f"      URL: {result.permalink}")
-
-                        # Cleanup Cloudinary
-                        await uploader.cleanup_async()
-
-                        # Move to posted folder
-                        posted_dir = video_path.parent.parent.parent / "posted"
-                        posted_dir.mkdir(parents=True, exist_ok=True)
-                        import shutil
-                        new_path = posted_dir / video_path.parent.name
-                        shutil.move(str(video_path.parent), str(new_path))
-                        console.print(f"  [OK] Moved to posted/")
-                    else:
-                        console.print(f"  [red][FAILED] Instagram upload failed: {result.error}[/red]")
+                    if result.returncode != 0:
+                        console.print(f"\n[red][FAILED] upload-reel exited with code {result.returncode}[/red]")
                         if loop_enabled:
-                            console.print(f"\n[yellow]Stopping loop due to upload failure (rate limit?)[/yellow]")
+                            console.print(f"[yellow]Stopping loop due to upload failure (rate limit?)[/yellow]")
                         break
 
                 except Exception as e:
@@ -2244,6 +2189,7 @@ async def _post_reels_to_instagram(
                 console.print(f"  [red][ERROR][/red] Failed to move {reel_dir.name}: {e}")
 
     # Step 2: Find reels in pending-post folder
+    # A valid reel has either metadata.json OR a video file (final.mp4, video.mp4, etc.)
     pending_reels = []
     for year_dir in reels_dir.glob("*"):
         if year_dir.is_dir() and year_dir.name.isdigit():
@@ -2252,7 +2198,12 @@ async def _post_reels_to_instagram(
                     pending_dir = month_dir / "pending-post"
                     if pending_dir.exists():
                         for reel_dir in pending_dir.iterdir():
-                            if reel_dir.is_dir() and (reel_dir / "metadata.json").exists():
+                            if not reel_dir.is_dir():
+                                continue
+                            # Check for metadata.json OR video file
+                            has_metadata = (reel_dir / "metadata.json").exists()
+                            has_video = any((reel_dir / v).exists() for v in ["final.mp4", "video.mp4", "reel.mp4", "output.mp4"])
+                            if has_metadata or has_video:
                                 pending_reels.append(reel_dir)
 
     if not pending_reels:
@@ -2288,15 +2239,54 @@ async def _post_reels_to_instagram(
     if post_all:
         reels_to_publish = pending_reels
     elif reel_id:
-        # Find specific reel
+        # Find specific reel - first check pending-post
         reel_path = None
         for p in pending_reels:
             if reel_id in p.name or p.name.startswith(reel_id):
                 reel_path = p
                 break
+
+        # If not found in pending, also search in generated folders
         if not reel_path:
-            console.print(f"[red]Reel not found in pending-post: {reel_id}[/red]")
-            console.print(f"[dim]Available: {[p.name for p in pending_reels]}[/dim]")
+            console.print(f"[dim]Not in pending-post, searching generated folders...[/dim]")
+            for year_dir in reels_dir.glob("*"):
+                if year_dir.is_dir() and year_dir.name.isdigit():
+                    for month_dir in year_dir.glob("*"):
+                        if month_dir.is_dir() and month_dir.name.isdigit():
+                            generated_dir = month_dir / "generated"
+                            if generated_dir.exists():
+                                for reel_dir in generated_dir.iterdir():
+                                    if reel_dir.is_dir() and (reel_id in reel_dir.name or reel_dir.name.startswith(reel_id)):
+                                        # Found it - move to pending-post
+                                        pending_dir = month_dir / "pending-post"
+                                        pending_dir.mkdir(parents=True, exist_ok=True)
+                                        new_path = pending_dir / reel_dir.name
+                                        try:
+                                            shutil.move(str(reel_dir), str(new_path))
+                                            console.print(f"[green][OK][/green] Moved from generated to pending: {reel_dir.name}")
+                                            reel_path = new_path
+                                        except Exception as e:
+                                            console.print(f"[red]Failed to move: {e}[/red]")
+                                        break
+                        if reel_path:
+                            break
+                if reel_path:
+                    break
+
+        if not reel_path:
+            console.print(f"[red]Reel not found: {reel_id}[/red]")
+            all_reels = [p.name for p in pending_reels]
+            # Also list generated reels
+            for year_dir in reels_dir.glob("*"):
+                if year_dir.is_dir() and year_dir.name.isdigit():
+                    for month_dir in year_dir.glob("*"):
+                        if month_dir.is_dir() and month_dir.name.isdigit():
+                            generated_dir = month_dir / "generated"
+                            if generated_dir.exists():
+                                for reel_dir in generated_dir.iterdir():
+                                    if reel_dir.is_dir():
+                                        all_reels.append(f"{reel_dir.name} (generated)")
+            console.print(f"[dim]Available: {all_reels}[/dim]")
             raise typer.Exit(1)
         reels_to_publish = [reel_path]
     else:
@@ -2328,12 +2318,18 @@ async def _post_reels_to_instagram(
         # Load reel metadata
         metadata_path = reel_path / "metadata.json"
         if not metadata_path.exists():
-            console.print(f"[red]Reel metadata not found: {metadata_path}[/red]")
-            failed_count += 1
-            continue
-
-        with open(metadata_path, encoding="utf-8") as f:
-            reel_metadata = json.load(f)
+            # Create minimal metadata from folder name
+            console.print(f"[dim]No metadata.json found - creating minimal metadata from folder name[/dim]")
+            reel_metadata = {
+                "id": reel_path.name,
+                "topic": reel_path.name.split("-", 2)[-1].replace("-", " ").title() if "-" in reel_path.name else reel_path.name,
+            }
+            # Save the minimal metadata
+            with open(metadata_path, "w", encoding="utf-8") as f:
+                json.dump(reel_metadata, f, indent=2)
+        else:
+            with open(metadata_path, encoding="utf-8") as f:
+                reel_metadata = json.load(f)
 
         # Check for duplicates
         print(f"\n  [Phase 0] Checking for duplicates...")
@@ -2425,6 +2421,24 @@ async def _post_reels_to_instagram(
             published_count += 1
             continue
 
+        # ================================================================
+        # UPLOAD PIPELINE WITH AUTO-RETRY
+        # ================================================================
+        # Steps:
+        #   1. Upload video to Cloudinary (with resume support)
+        #   2. Upload thumbnail to Cloudinary (optional)
+        #   3. Create Instagram media container
+        #   4. Wait for Instagram processing
+        #   5. Publish to Instagram
+        #   6. Cleanup Cloudinary files
+        # ================================================================
+
+        from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
+        import time as time_module
+
+        MAX_RETRIES = 3
+        RETRY_DELAY_BASE = 5  # seconds
+
         # Initialize progress display
         display = InstagramPostingDisplay()
 
@@ -2437,13 +2451,63 @@ async def _post_reels_to_instagram(
 
         result = None
         video_url = None
+        cover_url = None
+
+        def log_step(step_num: int, total: int, status: str, message: str, detail: str = ""):
+            """Print organized step log."""
+            status_colors = {
+                "START": "cyan",
+                "OK": "green",
+                "SKIP": "yellow",
+                "RETRY": "yellow",
+                "FAIL": "red",
+                "RESUME": "blue",
+            }
+            color = status_colors.get(status, "white")
+            step_info = f"[dim]Step {step_num}/{total}[/dim]"
+            status_badge = f"[{color}][{status}][/{color}]"
+            console.print(f"\n  {step_info} {status_badge} {message}")
+            if detail:
+                console.print(f"           [dim]{detail}[/dim]")
+
+        async def retry_operation(operation_name: str, operation_func, step_num: int, total_steps: int):
+            """Execute operation with auto-retry."""
+            last_error = None
+            for attempt in range(1, MAX_RETRIES + 1):
+                try:
+                    if attempt == 1:
+                        log_step(step_num, total_steps, "START", operation_name)
+                    else:
+                        log_step(step_num, total_steps, "RETRY", f"{operation_name} (attempt {attempt}/{MAX_RETRIES})",
+                                f"Waiting {RETRY_DELAY_BASE * attempt}s before retry...")
+                        await asyncio.sleep(RETRY_DELAY_BASE * attempt)
+
+                    result = await operation_func()
+                    log_step(step_num, total_steps, "OK", f"{operation_name} complete")
+                    return result
+
+                except Exception as e:
+                    last_error = e
+                    error_msg = str(e)[:100]
+                    if attempt < MAX_RETRIES:
+                        console.print(f"           [red]Error: {error_msg}[/red]")
+                    else:
+                        log_step(step_num, total_steps, "FAIL", f"{operation_name} failed after {MAX_RETRIES} attempts",
+                                error_msg)
+                        raise
+
+            raise last_error
 
         try:
-            # Check for resume - if we already uploaded to Cloudinary
+            total_steps = 5
+
+            # ============================================================
+            # STEP 1: Upload video to Cloudinary
+            # ============================================================
             upload_state = reel_metadata.get("_upload_state", {})
             existing_url = upload_state.get("cloudinary_url")
 
-            # Check if upload state is too old
+            # Check if upload state is too old (>24h)
             upload_is_stale = False
             if existing_url and upload_state.get("uploaded_at"):
                 try:
@@ -2451,13 +2515,13 @@ async def _post_reels_to_instagram(
                     age_hours = (datetime.now() - uploaded_at).total_seconds() / 3600
                     if age_hours > 24:
                         upload_is_stale = True
-                        print(f"\n  [Warning] Cloudinary upload is {age_hours:.1f}h old - uploading fresh")
                 except Exception:
                     pass
 
             if existing_url and not upload_is_stale:
-                # Resume: use existing Cloudinary URL
-                print(f"\n  [Resume] Found existing Cloudinary upload")
+                # Resume from existing Cloudinary upload
+                log_step(1, total_steps, "RESUME", "Using existing Cloudinary upload",
+                        f"Uploaded {upload_state.get('uploaded_at', 'recently')[:19]}")
                 video_url = existing_url
                 # Track for cleanup
                 if "cloudinary.com" in video_url:
@@ -2466,10 +2530,10 @@ async def _post_reels_to_instagram(
                         public_id = parts[1].rsplit(".", 1)[0]
                         uploader._uploaded_public_ids.append((public_id, "video"))
             else:
-                # Fresh upload to Cloudinary - get file info first
+                # Fresh upload to Cloudinary
                 file_size_mb = video_path.stat().st_size / (1024 * 1024)
 
-                # Get video duration using moviepy
+                # Get video duration
                 try:
                     from moviepy import VideoFileClip
                     with VideoFileClip(str(video_path)) as clip:
@@ -2477,17 +2541,92 @@ async def _post_reels_to_instagram(
                     duration_str = f"{int(duration_secs // 60)}:{int(duration_secs % 60):02d}"
                 except Exception:
                     duration_str = "unknown"
+                    duration_secs = 60
 
-                print(f"\n  [Upload] Uploading video to Cloudinary...")
-                print(f"           Size: {file_size_mb:.1f} MB | Duration: {duration_str}")
+                log_step(1, total_steps, "START", "Uploading video to Cloudinary",
+                        f"Size: {file_size_mb:.1f} MB | Duration: {duration_str}")
 
                 folder = f"socials-automator/{profile_path.name}/reels/{reel_id_display}"
 
-                # Upload with spinner
-                with console.status("[bold cyan]Uploading...[/bold cyan]", spinner="dots") as status:
-                    video_url = await uploader.upload_video_async(video_path, folder=folder)
+                # Estimate upload time based on ~2 MB/s typical upload speed
+                estimated_seconds = max(10, int(file_size_mb / 2))
 
-                print(f"  [OK] Video uploaded: {video_url[:60]}...")
+                async def upload_video_with_progress():
+                    nonlocal video_url
+
+                    # Timeout: if upload takes longer than expected + buffer, consider it stalled
+                    # Allow 3x estimated time before timeout (min 2 minutes, max 10 minutes)
+                    upload_timeout = min(600, max(120, estimated_seconds * 3))
+
+                    with Progress(
+                        SpinnerColumn(),
+                        TextColumn("[bold cyan]Uploading...[/bold cyan]"),
+                        BarColumn(),
+                        TaskProgressColumn(),
+                        TextColumn("[dim]({task.fields[uploaded]:.1f} / {task.fields[size]:.1f} MB)[/dim]"),
+                        TimeElapsedColumn(),
+                        console=console,
+                        transient=True,
+                    ) as progress:
+                        task = progress.add_task(
+                            "upload",
+                            total=100,
+                            uploaded=0.0,
+                            size=file_size_mb,
+                        )
+
+                        upload_complete = False
+                        upload_error = None
+
+                        async def do_upload():
+                            nonlocal upload_complete, video_url, upload_error
+                            try:
+                                video_url = await uploader.upload_video_async(video_path, folder=folder)
+                            except Exception as e:
+                                upload_error = e
+                            finally:
+                                upload_complete = True
+
+                        asyncio.create_task(do_upload())
+
+                        start_time = time_module.time()
+                        while not upload_complete:
+                            elapsed = time_module.time() - start_time
+                            estimated_progress = min(95, (elapsed / estimated_seconds) * 100)
+                            estimated_uploaded = (estimated_progress / 100) * file_size_mb
+
+                            progress.update(task, completed=estimated_progress, uploaded=estimated_uploaded)
+
+                            # Check for timeout (stalled upload) - auto retry
+                            if elapsed > upload_timeout:
+                                raise TimeoutError(f"Upload stalled - no response for {int(elapsed)}s")
+
+                            await asyncio.sleep(0.5)
+
+                        progress.update(task, completed=100, uploaded=file_size_mb)
+
+                        if upload_error:
+                            raise upload_error
+
+                    return video_url
+
+                # Upload with retry
+                for attempt in range(1, MAX_RETRIES + 1):
+                    try:
+                        if attempt > 1:
+                            console.print(f"           [yellow]Retry {attempt}/{MAX_RETRIES} in {RETRY_DELAY_BASE * attempt}s...[/yellow]")
+                            await asyncio.sleep(RETRY_DELAY_BASE * attempt)
+
+                        await upload_video_with_progress()
+                        break
+                    except Exception as e:
+                        if attempt == MAX_RETRIES:
+                            log_step(1, total_steps, "FAIL", "Cloudinary upload failed", str(e)[:100])
+                            raise
+                        console.print(f"           [red]Upload error: {str(e)[:80]}[/red]")
+
+                log_step(1, total_steps, "OK", "Video uploaded to Cloudinary",
+                        f"{video_url[:50]}...")
 
                 # Save upload state for resume capability
                 reel_metadata["_upload_state"] = {
@@ -2497,33 +2636,52 @@ async def _post_reels_to_instagram(
                 with open(metadata_path, "w", encoding="utf-8") as f:
                     json.dump(reel_metadata, f, indent=2)
 
-            # Check for thumbnail and upload if exists
-            cover_url = None
+            # ============================================================
+            # STEP 2: Upload thumbnail (optional)
+            # ============================================================
             thumbnail_path = reel_path / "thumbnail.jpg"
             if thumbnail_path.exists():
                 thumb_size_kb = thumbnail_path.stat().st_size / 1024
-                print(f"  [Upload] Uploading thumbnail ({thumb_size_kb:.0f} KB)...")
-                try:
+
+                async def upload_thumbnail():
                     thumb_folder = f"socials-automator/{profile_path.name}/reels/{reel_id_display}/thumb"
-                    cover_url = uploader.upload_image(thumbnail_path, folder=thumb_folder)
-                    print(f"  [OK] Thumbnail uploaded")
+                    return uploader.upload_image(thumbnail_path, folder=thumb_folder)
+
+                try:
+                    log_step(2, total_steps, "START", "Uploading thumbnail",
+                            f"Size: {thumb_size_kb:.0f} KB")
+                    cover_url = await retry_operation("Thumbnail upload", upload_thumbnail, 2, total_steps)
                 except Exception as e:
-                    print(f"  [Warning] Thumbnail upload failed: {e} (using default)")
+                    log_step(2, total_steps, "SKIP", "Thumbnail upload failed (using default)",
+                            str(e)[:80])
+            else:
+                log_step(2, total_steps, "SKIP", "No thumbnail found", "Instagram will auto-generate")
 
-            print(f"  [Publish] Publishing to Instagram Reels...")
+            # ============================================================
+            # STEP 3-4: Create container & wait for processing
+            # ============================================================
+            log_step(3, total_steps, "START", "Creating Instagram media container")
 
-            # Publish to Instagram
-            result = await client.publish_reel(
-                video_url=video_url,
-                caption=caption,
-                cover_url=cover_url,
-                share_to_feed=share_to_feed,
-            )
+            # ============================================================
+            # STEP 5: Publish to Instagram
+            # ============================================================
+            async def publish_to_instagram():
+                return await client.publish_reel(
+                    video_url=video_url,
+                    caption=caption,
+                    cover_url=cover_url,
+                    share_to_feed=share_to_feed,
+                )
 
-            # Cleanup Cloudinary on success
+            result = await retry_operation("Instagram publish", publish_to_instagram, 4, total_steps)
+
+            # ============================================================
+            # STEP 6: Cleanup
+            # ============================================================
             if result.success:
+                log_step(5, total_steps, "START", "Cleaning up temporary files")
                 deleted_count = await uploader.cleanup_async()
-                print(f"  [Cleanup] Removed {deleted_count} temporary Cloudinary video(s)")
+                log_step(5, total_steps, "OK", f"Removed {deleted_count} Cloudinary file(s)")
 
                 # Remove upload state from metadata
                 if "_upload_state" in reel_metadata:
@@ -2532,9 +2690,15 @@ async def _post_reels_to_instagram(
                         json.dump(reel_metadata, f, indent=2)
 
         except Exception as e:
-            console.print(f"[red]Error publishing reel: {e}[/red]")
+            console.print(f"\n[red]{'=' * 60}[/red]")
+            console.print(f"[red]UPLOAD FAILED: {e}[/red]")
+            console.print(f"[red]{'=' * 60}[/red]")
+
             if video_url:
-                console.print(f"\n[yellow]Cloudinary upload saved - run the command again to resume.[/yellow]")
+                console.print(f"\n[yellow]Your video was uploaded to Cloudinary and saved.[/yellow]")
+                console.print(f"[yellow]Run this command again to resume from where it stopped.[/yellow]")
+                console.print(f"[dim]Resume state saved in: {metadata_path}[/dim]")
+
             failed_count += 1
             if not post_all:
                 raise typer.Exit(1)

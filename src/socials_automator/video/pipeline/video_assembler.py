@@ -167,8 +167,21 @@ class VideoAssembler(IVideoAssembler):
 
         self.log_detail("Loading and processing clips...")
 
+        # Deduplicate clips by pexels_id (keep first occurrence, preserve segment order)
+        seen_pexels_ids = set()
+        unique_clips = []
+        for clip in clips:
+            if clip.pexels_id not in seen_pexels_ids:
+                seen_pexels_ids.add(clip.pexels_id)
+                unique_clips.append(clip)
+            else:
+                self.log_detail(f"Skipping duplicate pexels_id={clip.pexels_id} for segment {clip.segment_index}")
+
+        if len(unique_clips) < len(clips):
+            self.log_progress(f"Deduplicated: {len(clips)} clips -> {len(unique_clips)} unique clips")
+
         # Sort clips by segment index
-        sorted_clips = sorted(clips, key=lambda c: c.segment_index)
+        sorted_clips = sorted(unique_clips, key=lambda c: c.segment_index)
 
         # Process clips and keep adding until we have enough footage
         # to cover the entire audio duration
@@ -231,11 +244,13 @@ class VideoAssembler(IVideoAssembler):
         # Check if we have enough footage - KEEP LOOPING until we fill the audio duration
         if current_duration < target_duration:
             remaining_time = target_duration - current_duration
-            self.log_detail(f"Need {remaining_time:.1f}s more video - extending with additional clips...")
+            self.log_progress(f"[WARNING] Not enough unique video ({current_duration:.1f}s) for audio ({target_duration:.1f}s)")
+            self.log_progress(f"[WARNING] Will reuse clips to fill {remaining_time:.1f}s gap - videos may repeat!")
 
             # Keep adding clips until we reach the target duration
             extend_index = 0
             max_iterations = 20  # Safety limit
+            reused_ids = set()
 
             while current_duration < target_duration and extend_index < max_iterations:
                 # Rotate through clips, starting from middle to avoid obvious repetition

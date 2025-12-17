@@ -181,9 +181,9 @@ class VideoPipeline:
                     self.gpu_accelerate = False
 
         # Create AI client if text_ai is specified
-        ai_client = None
+        self.ai_client = None
         if text_ai:
-            ai_client = self._create_ai_client(text_ai)
+            self.ai_client = self._create_ai_client(text_ai)
             self.logger.info(f"Using text AI: {text_ai}")
             self.display.info(f"Text AI provider: {text_ai}")
 
@@ -192,16 +192,16 @@ class VideoPipeline:
 
         # Sequential: Topic selection -> Research -> Script planning
         self.sequential_steps: list[PipelineStep] = [
-            TopicSelector(ai_client=ai_client),
+            TopicSelector(ai_client=self.ai_client),
             TopicResearcher(),
-            ScriptPlanner(ai_client=ai_client, target_duration=target_duration),
+            ScriptPlanner(ai_client=self.ai_client, target_duration=target_duration),
         ]
 
         # Parallel branch A: Voice generation (determines final duration)
         self.voice_step = VoiceGenerator(voice=voice, rate=voice_rate, pitch=voice_pitch)
 
         # Parallel branch B: Video search and download
-        self.video_search_step = VideoSearcher(api_key=pexels_api_key, ai_client=ai_client)
+        self.video_search_step = VideoSearcher(api_key=pexels_api_key, ai_client=self.ai_client)
         self.video_download_step = VideoDownloader()
 
         # Sequential: Assembly -> Thumbnail -> Subtitles -> Caption (need results from both parallel branches)
@@ -213,14 +213,14 @@ class VideoPipeline:
                 GPUVideoAssembler(gpu=self.gpu_info),  # GPU NVENC assembly
                 ThumbnailGenerator(font=subtitle_font, font_size=72),  # Thumbnail from clean video (no subtitles)
                 GPUSubtitleRenderer(gpu=self.gpu_info, font=subtitle_font, font_size=subtitle_size),  # GPU with ASS karaoke
-                CaptionGenerator(ai_client=ai_client),
+                CaptionGenerator(ai_client=self.ai_client),
             ]
         else:
             self.final_steps: list[PipelineStep] = [
                 VideoAssembler(),  # Uses audio duration as source of truth
                 ThumbnailGenerator(font=subtitle_font, font_size=72),  # Thumbnail from clean video (no subtitles)
                 SubtitleRenderer(font=subtitle_font, font_size=subtitle_size),
-                CaptionGenerator(ai_client=ai_client),
+                CaptionGenerator(ai_client=self.ai_client),
             ]
 
         # Collect all steps for display setup and counting
@@ -482,12 +482,22 @@ class VideoPipeline:
             self.display.info("Running video search and download...")
 
             async def video_branch(ctx: PipelineContext) -> PipelineContext:
-                """Search and download video clips with duration validation."""
-                audio_duration = ctx.audio.duration_seconds if ctx.audio else 60.0
-                max_retries = 3
+                """Search and download video clips until we have enough unique coverage.
+
+                Strategy:
+                1. Deduplicate all clips by pexels_id
+                2. Keep searching with AI-generated keywords until video duration > audio duration
+                3. Merge new unique clips with existing collection
+                4. Stop when we have enough or hit max retries
+                """
+                # Get audio duration using ffprobe (ctx has audio_path, not audio object)
+                audio_duration = self._get_audio_duration(ctx.audio_path) if ctx.audio_path else 60.0
+                max_retries = 10
                 retry_count = 0
-                all_clips = []
-                used_pexels_ids = set()
+
+                # Track ALL unique clips by pexels_id (the source of truth)
+                unique_clips_by_id: dict[int, object] = {}  # pexels_id -> VideoClipInfo
+                all_used_keywords: set[str] = set()
 
                 while retry_count < max_retries:
                     # Video search
@@ -499,7 +509,7 @@ class VideoPipeline:
                         self.display.start_step(step_name, description)
                         self.debug_logger.start_step(step_name)
                     else:
-                        self.display.info(f"Searching for more videos (attempt {retry_count + 1})...")
+                        self.display.info(f"Searching for more unique videos (attempt {retry_count + 1}/{max_retries})...")
 
                     ctx = await search_step.execute(ctx)
 
@@ -533,61 +543,81 @@ class VideoPipeline:
                             "cache_misses": misses,
                         })
 
-                    # Add new unique clips (no duplicates by pexels_id)
+                    # Merge new clips - deduplicate by pexels_id
+                    new_clips_added = 0
                     for clip in ctx.clips:
-                        if clip.pexels_id not in used_pexels_ids:
-                            used_pexels_ids.add(clip.pexels_id)
-                            all_clips.append(clip)
+                        if clip.pexels_id not in unique_clips_by_id:
+                            unique_clips_by_id[clip.pexels_id] = clip
+                            new_clips_added += 1
+                            # Track keywords used
+                            for kw in clip.keywords_used:
+                                all_used_keywords.add(kw.lower())
 
                     # Calculate total unique video duration
+                    all_clips = list(unique_clips_by_id.values())
                     total_video_duration = sum(clip.duration_seconds for clip in all_clips)
 
                     self.display.info(
                         f"Video coverage: {total_video_duration:.1f}s / {audio_duration:.1f}s needed "
-                        f"({len(all_clips)} unique clips)"
+                        f"({len(all_clips)} unique clips, +{new_clips_added} new)"
                     )
 
                     # Check if we have enough video
                     if total_video_duration >= audio_duration:
-                        self.display.info(f"[OK] Sufficient video coverage ({total_video_duration:.1f}s >= {audio_duration:.1f}s)")
+                        self.display.info(f"[OK] Sufficient unique video coverage ({total_video_duration:.1f}s >= {audio_duration:.1f}s)")
                         break
 
                     # Not enough - need more videos
                     retry_count += 1
-                    if retry_count < max_retries:
-                        shortfall = audio_duration - total_video_duration
-                        self.display.info(f"Need {shortfall:.1f}s more video, requesting additional clips...")
 
-                        # Ask AI for different keywords
-                        if self.ai_client and ctx.script:
-                            try:
-                                prompt = f"""I need MORE stock video search keywords.
+                    if retry_count >= max_retries:
+                        self.display.warning(
+                            f"Max retries reached. Only {total_video_duration:.1f}s of unique video for {audio_duration:.1f}s audio. "
+                            "Videos may be reused/looped."
+                        )
+                        break
 
-Current topic: {ctx.topic.topic if ctx.topic else 'technology'}
-Already used keywords (AVOID THESE): {', '.join(k for c in all_clips for k in c.keywords_used[:2])}
+                    # Calculate shortfall
+                    shortfall = audio_duration - total_video_duration
+                    self.display.info(f"Need {shortfall:.1f}s more unique video, generating new search keywords...")
 
-Generate 5 NEW, DIFFERENT 2-word search phrases for stock video sites.
-Focus on: abstract backgrounds, technology scenes, office/workspace, digital effects.
+                    # Ask AI for DIFFERENT keywords (avoiding all previously used)
+                    if self.ai_client and ctx.script:
+                        try:
+                            used_kw_list = ', '.join(sorted(all_used_keywords)[:20])  # Limit to avoid huge prompt
+                            prompt = f"""Generate stock video search keywords for a video about: {ctx.topic.topic if ctx.topic else 'technology'}
+
+CRITICAL: Generate COMPLETELY DIFFERENT keywords. DO NOT use any of these already-used keywords:
+{used_kw_list}
+
+I need {shortfall:.0f} more seconds of unique video footage.
+
+Generate 8 NEW 2-word search phrases that will find DIFFERENT videos.
+Think creatively - try related concepts, different angles, abstract visuals.
+Examples of good variety: "sunrise timelapse", "hands typing", "city aerial", "water droplets", "light particles"
+
 Return ONLY the keywords, one per line, no numbers or bullets."""
 
-                                response = await self.ai_client.generate(prompt)
-                                new_keywords = [k.strip() for k in response.strip().split('\n') if k.strip()]
+                            response = await self.ai_client.generate(prompt)
+                            new_keywords = [k.strip() for k in response.strip().split('\n') if k.strip() and k.lower() not in all_used_keywords]
 
-                                # Update script segments with new keywords
-                                if new_keywords and ctx.script:
-                                    for i, segment in enumerate(ctx.script.segments):
-                                        if i < len(new_keywords):
-                                            segment.keywords = [new_keywords[i]] + segment.keywords[:2]
-                            except Exception as e:
-                                self.display.info(f"Could not generate new keywords: {e}")
-                    else:
-                        self.display.info(
-                            f"[Warning] Only {total_video_duration:.1f}s of video for {audio_duration:.1f}s audio. "
-                            "Videos may be stretched/looped."
-                        )
+                            # Update script segments with new keywords (spread across segments)
+                            if new_keywords and ctx.script:
+                                self.display.info(f"AI generated {len(new_keywords)} new keywords: {new_keywords[:3]}...")
+                                for i, segment in enumerate(ctx.script.segments):
+                                    # Assign different keywords to each segment
+                                    kw_idx = i % len(new_keywords)
+                                    segment.keywords = [new_keywords[kw_idx]] + new_keywords[(kw_idx + 1) % len(new_keywords):kw_idx + 3]
+                        except Exception as e:
+                            self.display.info(f"Could not generate new keywords: {e}")
+                            # Fallback: use generic abstract keywords
+                            fallback_keywords = ["abstract motion", "light effects", "digital waves", "gradient flow", "particle system"]
+                            if ctx.script:
+                                for i, segment in enumerate(ctx.script.segments):
+                                    segment.keywords = [fallback_keywords[i % len(fallback_keywords)]]
 
-                # Store all unique clips
-                ctx.clips = all_clips
+                # Store all unique clips (sorted by segment index for consistent ordering)
+                ctx.clips = sorted(all_clips, key=lambda c: c.segment_index)
                 return ctx
 
             # Run video branch (voice already done in duration loop above)

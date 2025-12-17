@@ -182,7 +182,11 @@ class VideoSearcher(IVideoSearcher):
                 # Mark video as used (persisted to avoid reuse across runs)
                 video_id = video.get("id")
                 if video_id:
+                    # Check if already used (shouldn't happen, but log if it does)
+                    if video_id in self._used_video_ids:
+                        self.log_detail(f"[WARNING] Video {video_id} already used but returned again!")
                     self._mark_video_used(video_id)
+                    self.log_detail(f"Segment {segment.index}: selected video {video_id} (duration: {video.get('duration', 0)}s)")
 
                 results.append({
                     "segment_index": segment.index,
