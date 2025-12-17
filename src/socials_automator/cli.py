@@ -2015,6 +2015,7 @@ def upload_reel(
     reel_id: str = typer.Argument(None, help="Reel ID to upload (if specified, uploads only this one)"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate without uploading"),
     one: bool = typer.Option(False, "--one", "-1", help="Upload only the oldest pending (instead of all)"),
+    share_to_feed: bool = typer.Option(True, "--share-to-feed/--no-share-to-feed", help="Show reel on profile grid (default: True)"),
 ):
     """Upload pending reels to Instagram.
 
@@ -2031,6 +2032,7 @@ def upload_reel(
         socials upload-reel ai.for.mortals --one              # Upload only oldest pending
         socials upload-reel ai.for.mortals 15-001            # Upload specific (by prefix)
         socials upload-reel ai.for.mortals --dry-run         # Validate only
+        socials upload-reel ai.for.mortals --no-share-to-feed # Don't show on profile grid
     """
     # Determine if posting all or just one
     all_reels = not one and reel_id is None
@@ -2079,6 +2081,7 @@ def upload_reel(
         config=config,
         dry_run=dry_run,
         post_all=all_reels,
+        share_to_feed=share_to_feed,
     ))
 
 
@@ -2088,6 +2091,7 @@ async def _post_reels_to_instagram(
     config,
     dry_run: bool,
     post_all: bool = False,
+    share_to_feed: bool = True,
 ):
     """Async Instagram Reels posting with progress display."""
     from datetime import datetime
@@ -2405,6 +2409,7 @@ async def _post_reels_to_instagram(
                 video_url=video_url,
                 caption=caption,
                 cover_url=cover_url,
+                share_to_feed=share_to_feed,
             )
 
             # Cleanup Cloudinary on success
