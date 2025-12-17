@@ -1646,7 +1646,7 @@ def generate_reel(
     length: str = typer.Option("1m", "--length", "-l", help="Target video length (e.g., 30s, 1m, 90s). Default: 1m"),
     output_dir: str = typer.Option(None, "--output", "-o", help="Output directory (default: temp)"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Only run first few steps without full video generation"),
-    loop: bool = typer.Option(False, "--loop", help="Loop continuously, generating new videos until stopped (Ctrl+C)"),
+    loop: int = typer.Option(None, "--loop", "-L", is_flag=False, flag_value=0, help="Loop mode: --loop for infinite, --loop N for N iterations"),
     gpu_accelerate: bool = typer.Option(False, "--gpu-accelerate", "-g", help="Enable GPU acceleration with NVENC (requires NVIDIA GPU)"),
     gpu: int = typer.Option(None, "--gpu", help="GPU index to use (0, 1, etc.). Auto-selects if not specified."),
 ):
@@ -1676,7 +1676,8 @@ def generate_reel(
         socials generate-reel ai.for.mortals --voice british_female --length 90s
         socials generate-reel ai.for.mortals --video-matcher pexels
         socials generate-reel ai.for.mortals --subtitle-size 90 --font Poppins-Bold.ttf
-        socials generate-reel ai.for.mortals --loop  # Generate videos continuously
+        socials generate-reel ai.for.mortals --loop  # Generate videos indefinitely
+        socials generate-reel ai.for.mortals --loop 10  # Generate 10 videos then stop
         socials generate-reel ai.for.mortals --voice adam_excited  # Use excited preset
         socials generate-reel ai.for.mortals --voice-rate "+12%" --voice-pitch "+3Hz"  # Custom excitement
         socials generate-reel ai.for.mortals --gpu-accelerate  # Use GPU for faster rendering
@@ -1875,14 +1876,19 @@ async def _generate_reel(
     import time
 
     loop_count = 0
+    loop_enabled = loop is not None  # --loop was provided
+    loop_limit = loop if loop and loop > 0 else None  # None means infinite
 
-    if loop:
-        console.print("\n[bold yellow]LOOP MODE[/bold yellow] - Will generate videos continuously. Press Ctrl+C to stop.\n")
+    if loop_enabled:
+        if loop_limit:
+            console.print(f"\n[bold yellow]LOOP MODE[/bold yellow] - Will generate {loop_limit} video(s). Press Ctrl+C to stop.\n")
+        else:
+            console.print("\n[bold yellow]LOOP MODE[/bold yellow] - Will generate videos continuously. Press Ctrl+C to stop.\n")
 
     while True:
         loop_count += 1
 
-        if loop and loop_count > 1:
+        if loop_enabled and loop_count > 1:
             console.print(f"\n[bold cyan]{'='*60}[/bold cyan]")
             console.print(f"[bold cyan]Starting video #{loop_count}...[/bold cyan]")
             console.print(f"[bold cyan]{'='*60}[/bold cyan]\n")
@@ -1935,21 +1941,36 @@ async def _generate_reel(
                         shutil.move(str(video_path.parent), str(new_reel_dir))
                         video_path = new_reel_dir / video_path.name
 
+            # Build title with progress info
+            if loop_enabled:
+                if loop_limit:
+                    title = f"Complete (Video #{loop_count}/{loop_limit})"
+                else:
+                    title = f"Complete (Video #{loop_count})"
+            else:
+                title = "Complete"
+
             console.print(Panel(
                 f"[bold green]Video generated successfully![/bold green]\n\n"
                 f"[bold]Output:[/] {video_path}\n"
                 f"[bold]Duration:[/] 60 seconds\n"
                 f"[bold]Resolution:[/] 1080x1920 (9:16)",
-                title=f"Complete (Video #{loop_count})" if loop else "Complete",
+                title=title,
                 border_style="green",
             ))
 
             # If not looping, exit after first successful generation
-            if not loop:
+            if not loop_enabled:
+                break
+
+            # If we've reached the loop limit, exit
+            if loop_limit and loop_count >= loop_limit:
+                console.print(f"\n[bold green]Completed all {loop_limit} videos![/bold green]")
                 break
 
             # Brief pause before next iteration
-            console.print("\n[dim]Starting next video in 3 seconds... (Ctrl+C to stop)[/dim]")
+            remaining = f" ({loop_limit - loop_count} remaining)" if loop_limit else ""
+            console.print(f"\n[dim]Starting next video in 3 seconds...{remaining} (Ctrl+C to stop)[/dim]")
             time.sleep(3)
 
         except KeyboardInterrupt:
@@ -1960,7 +1981,7 @@ async def _generate_reel(
             console.print(f"\n[red]Video generation failed: {e}[/red]")
             console.print("[dim]Check logs for details[/dim]")
 
-            if not loop:
+            if not loop_enabled:
                 raise typer.Exit(1)
 
             # In loop mode, ask if user wants to continue after error
