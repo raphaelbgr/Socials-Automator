@@ -735,6 +735,247 @@ class InstagramClient:
             image_urls=image_urls,
         )
 
+    async def create_reel_container(
+        self,
+        video_url: str,
+        caption: str,
+        share_to_feed: bool = True,
+        thumb_offset_ms: int | None = None,
+        cover_url: str | None = None,
+    ) -> str:
+        """Create a Reel container for publishing.
+
+        Args:
+            video_url: Public URL of the video (must be MP4, max 90s for API)
+            caption: Post caption (max 2200 chars)
+            share_to_feed: Whether to also share to main feed (default True)
+            thumb_offset_ms: Thumbnail offset in milliseconds (optional, ignored if cover_url is set)
+            cover_url: Custom thumbnail image URL (1080x1920, JPEG/PNG)
+
+        Returns:
+            Container ID (creation_id)
+        """
+        endpoint = f"{self.config.instagram_user_id}/media"
+        params = {
+            "media_type": "REELS",
+            "video_url": video_url,
+            "caption": caption[:2200],  # Instagram caption limit
+            "share_to_feed": "true" if share_to_feed else "false",
+        }
+
+        # cover_url takes precedence over thumb_offset
+        if cover_url:
+            params["cover_url"] = cover_url
+        elif thumb_offset_ms is not None:
+            params["thumb_offset"] = str(thumb_offset_ms)
+
+        result = await self._make_request("POST", endpoint, params=params)
+        return result["id"]
+
+    async def publish_reel(
+        self,
+        video_url: str,
+        caption: str,
+        share_to_feed: bool = True,
+        cover_url: str | None = None,
+        max_retries: int = 3,
+    ) -> InstagramPublishResult:
+        """Publish a Reel to Instagram.
+
+        Complete workflow:
+        1. Create Reel container with video URL
+        2. Wait for video processing (can take 1-5 minutes)
+        3. Publish the container
+
+        Args:
+            video_url: Public URL of the video (Cloudinary, etc.)
+            caption: Full caption including hashtags
+            share_to_feed: Whether to share to main feed
+            cover_url: Custom thumbnail image URL (optional)
+            max_retries: Number of retries on failure
+
+        Returns:
+            InstagramPublishResult with success status and details
+        """
+        _api_logger.info(f"=== NEW SESSION === Instagram User ID: {self.config.instagram_user_id}")
+
+        self._progress = InstagramProgress(
+            total_images=1,  # Reels are single video
+            image_urls=[video_url],
+        )
+
+        container_id = None
+        last_error = None
+        publish_attempted = False
+
+        for attempt in range(max_retries + 1):
+            try:
+                # Step 1: Create Reel container
+                if container_id is None:
+                    await self._report_progress(
+                        InstagramPostStatus.CREATING_CONTAINERS,
+                        "Creating Reel container...",
+                        10.0,
+                    )
+                    container_id = await self.create_reel_container(
+                        video_url=video_url,
+                        caption=caption,
+                        share_to_feed=share_to_feed,
+                        cover_url=cover_url,
+                    )
+                    _api_logger.info(f"Reel container created: {container_id}")
+
+                # Step 2: Wait for video processing (longer than images)
+                await self._report_progress(
+                    InstagramPostStatus.CREATING_CONTAINERS,
+                    "Processing video (this may take a few minutes)...",
+                    30.0,
+                )
+                ready = await self.wait_for_container(
+                    container_id,
+                    max_wait_seconds=600,  # 10 minutes max for video
+                    poll_interval=15.0,  # Check every 15s
+                )
+
+                if not ready:
+                    raise InstagramAPIError(
+                        "Video processing timed out",
+                        is_retryable=True,
+                    )
+
+                # Step 3: Publish
+                await self._report_progress(
+                    InstagramPostStatus.PUBLISHING,
+                    "Publishing Reel...",
+                    80.0,
+                )
+
+                publish_attempted = True
+                media_id = await self.publish_container(container_id)
+                _api_logger.info(f"Reel published! Media ID: {media_id}")
+
+                # Get permalink
+                permalink = await self.get_media_permalink(media_id)
+
+                await self._report_progress(
+                    InstagramPostStatus.PUBLISHED,
+                    "Reel published successfully!",
+                    100.0,
+                )
+
+                _api_logger.info(f"=== SESSION COMPLETE === Total API calls: {self._api_call_count}")
+
+                return InstagramPublishResult(
+                    success=True,
+                    media_id=media_id,
+                    permalink=permalink,
+                    container_ids=[container_id],
+                    image_urls=[video_url],
+                    published_at=datetime.now(),
+                )
+
+            except InstagramAPIError as e:
+                last_error = e
+                error_info = get_error_info(e.error_code, e.error_subcode)
+
+                _api_logger.warning(
+                    f"Attempt {attempt + 1}/{max_retries + 1} failed: "
+                    f"[{error_info['name']}] {e}"
+                )
+
+                # Check for DAILY POSTING LIMIT
+                if e.error_subcode == 2207069:
+                    _api_logger.error(f"DAILY POSTING LIMIT HIT - not retrying")
+                    await self._report_progress(
+                        InstagramPostStatus.FAILED,
+                        "Daily posting limit reached!",
+                        self._progress.progress_percent,
+                    )
+                    break
+
+                # If publish was attempted, check for ghost publish
+                if publish_attempted:
+                    _api_logger.warning("Checking for ghost publish...")
+                    await asyncio.sleep(5)
+
+                    try:
+                        recent = await self.get_recent_media(limit=1)
+                        if recent:
+                            recent_post = recent[0]
+                            from datetime import timezone
+                            recent_time = datetime.fromisoformat(
+                                recent_post.get("timestamp", "").replace("Z", "+00:00")
+                            )
+                            seconds_ago = (datetime.now(timezone.utc) - recent_time).total_seconds()
+
+                            if seconds_ago < 300:  # 5 minutes for video
+                                _api_logger.warning(f"GHOST PUBLISH DETECTED! Reel is live ({seconds_ago:.0f}s ago)")
+                                return InstagramPublishResult(
+                                    success=True,
+                                    media_id=recent_post.get("id"),
+                                    permalink=recent_post.get("permalink"),
+                                    container_ids=[container_id] if container_id else [],
+                                    image_urls=[video_url],
+                                    published_at=datetime.now(),
+                                )
+                    except Exception as check_err:
+                        _api_logger.warning(f"Ghost check failed: {check_err}")
+
+                    # Don't retry after publish attempt
+                    break
+
+                # Retry if possible
+                if e.is_retryable and attempt < max_retries:
+                    retry_delay = error_info.get("retry_delay", 60)
+                    await self._report_progress(
+                        InstagramPostStatus.CREATING_CONTAINERS,
+                        f"Retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})",
+                        self._progress.progress_percent,
+                    )
+                    _api_logger.info(f"Waiting {retry_delay}s before retry...")
+                    await asyncio.sleep(retry_delay)
+                    container_id = None  # Reset container for fresh attempt
+                    continue
+
+                break
+
+            except Exception as e:
+                last_error = InstagramAPIError(f"Unexpected error: {e}")
+                break
+
+        # Build error result
+        if last_error:
+            error_code = last_error.error_code if hasattr(last_error, 'error_code') else None
+            error_subcode = last_error.error_subcode if hasattr(last_error, 'error_subcode') else None
+            error_info = get_error_info(error_code, error_subcode)
+            user_message = error_info.get("user_message", str(last_error))
+            error_name = error_info.get("name", "UNKNOWN")
+
+            await self._report_progress(
+                InstagramPostStatus.FAILED,
+                f"[{error_name}] {user_message[:50]}...",
+                self._progress.progress_percent,
+            )
+
+            _api_logger.error(
+                f"=== SESSION FAILED === Total API calls: {self._api_call_count} | "
+                f"Error: [{error_name}] {last_error}"
+            )
+
+            return InstagramPublishResult(
+                success=False,
+                error_message=f"[{error_name}] {user_message}",
+                container_ids=[container_id] if container_id else [],
+                image_urls=[video_url],
+            )
+
+        return InstagramPublishResult(
+            success=False,
+            error_message="Unknown error occurred",
+            container_ids=[container_id] if container_id else [],
+            image_urls=[video_url],
+        )
+
     async def get_recent_media(self, limit: int = 1) -> list[dict]:
         """Get recent media posts from the account.
 

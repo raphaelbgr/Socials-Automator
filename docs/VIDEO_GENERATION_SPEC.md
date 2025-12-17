@@ -586,13 +586,13 @@ Important:
 
 ```bash
 # Generate video for profile
-python -m socials_automator.cli reel ai.for.mortals --topic "5 AI Tools for Productivity"
+python -m socials_automator.cli generate-reel ai.for.mortals --topic "5 AI Tools for Productivity"
 
 # With auto-generated topic
-python -m socials_automator.cli reel ai.for.mortals
+python -m socials_automator.cli generate-reel ai.for.mortals
 
 # Dry run (generate but don't post)
-python -m socials_automator.cli reel ai.for.mortals --dry-run
+python -m socials_automator.cli generate-reel ai.for.mortals --dry-run
 ```
 
 ---

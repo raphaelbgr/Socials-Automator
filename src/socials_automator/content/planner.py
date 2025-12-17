@@ -494,12 +494,12 @@ IMPORTANT: Generate EXACTLY {content_count} slide titles.
         content_type: str,
         history: list[dict[str, str]],
         topic: str = "",
-        max_validation_retries: int = 2,
+        max_validation_retries: int = 49,
     ) -> tuple[dict[str, Any], list[dict[str, str]]]:
         """Phase 3: Generate content for a single slide with validation.
 
         Generates content and validates it. If validation fails, regenerates
-        with feedback about what was wrong.
+        with feedback about what was wrong. High retry count for local LLMs.
 
         Returns:
             Tuple of (slide_content, updated_history)
@@ -1248,7 +1248,7 @@ If there are problems, set is_valid=false and list the specific issues."""
         hook_text: str,
         slides_data: list[dict[str, str]] | None = None,
         hashtags: list[str] | None = None,
-        max_retries: int = 3,
+        max_retries: int = 50,
     ) -> str:
         """Generate Instagram caption for a post with validation.
 
@@ -1257,7 +1257,7 @@ If there are problems, set is_valid=false and list the specific issues."""
             hook_text: The hook used.
             slides_data: List of slide dicts with heading, body, type.
             hashtags: Hashtags to include (unused, for backwards compat).
-            max_retries: Maximum retry attempts for bad captions.
+            max_retries: Maximum retry attempts (high for local LLMs like LM Studio).
 
         Returns:
             Complete caption text (max ~1000 chars to stay under 1200 limit).

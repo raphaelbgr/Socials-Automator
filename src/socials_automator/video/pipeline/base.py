@@ -437,3 +437,9 @@ class SubtitleRenderError(PipelineError):
     """Error during subtitle rendering."""
 
     pass
+
+
+class ThumbnailGenerationError(PipelineError):
+    """Error during thumbnail generation."""
+
+    pass

@@ -13,13 +13,13 @@ No API costs. No subscriptions. Run everything on your own computer:
 
 ```bash
 # Generate and post with 100% local AI - completely FREE
-python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfyui --post
+python -m socials_automator.cli generate-post ai.for.mortals --text-ai lmstudio --image-ai comfyui --upload
 
 # Run continuously every 5 minutes
-python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfyui --post --loop-each 5m
+python -m socials_automator.cli generate-post ai.for.mortals --text-ai lmstudio --image-ai comfyui --upload --loop-each 5m
 
 # Enable AI web research for up-to-date content
-python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfyui --post --ai-tools
+python -m socials_automator.cli generate-post ai.for.mortals --text-ai lmstudio --image-ai comfyui --upload --ai-tools
 ```
 
 ## Features
@@ -45,7 +45,7 @@ Generate carousel content, then manually upload to Instagram:
 
 ```bash
 # Generate a post
-python -m socials_automator.cli generate ai.for.mortals --topic "5 AI tools for productivity"
+python -m socials_automator.cli generate-post ai.for.mortals --topic "5 AI tools for productivity"
 
 # Output goes to: profiles/ai.for.mortals/posts/2025/12/generated/
 # Contains: slide images, caption.txt, hashtags.txt
@@ -67,7 +67,7 @@ Generate and immediately publish to Instagram in a single command:
 
 ```bash
 # Generate AND post in one command
-python -m socials_automator.cli generate ai.for.mortals --topic "5 AI tools for productivity" --post
+python -m socials_automator.cli generate-post ai.for.mortals --topic "5 AI tools for productivity" --upload
 ```
 
 **Requires:** Instagram API + Cloudinary setup (see [Instagram Posting Setup](#instagram-posting-setup))
@@ -80,7 +80,7 @@ Generate content, schedule it, then auto-post to Instagram (for more control):
 
 ```bash
 # Step 1: Generate content
-python -m socials_automator.cli generate ai.for.mortals --topic "5 AI tools for productivity"
+python -m socials_automator.cli generate-post ai.for.mortals --topic "5 AI tools for productivity"
 # → Creates post in: posts/2025/12/generated/
 
 # Step 2: Schedule for posting (moves to pending queue)
@@ -88,7 +88,7 @@ python -m socials_automator.cli schedule ai.for.mortals
 # → Moves to: posts/2025/12/pending-post/
 
 # Step 3: Publish to Instagram
-python -m socials_automator.cli post ai.for.mortals
+python -m socials_automator.cli upload-post ai.for.mortals
 # → Publishes and moves to: posts/2025/12/posted/
 ```
 
@@ -110,7 +110,7 @@ Generate multiple posts at once:
 
 ```bash
 # Generate 5 posts with AI-chosen topics
-python -m socials_automator.cli generate ai.for.mortals -n 5
+python -m socials_automator.cli generate-post ai.for.mortals -n 5
 
 # Schedule all generated posts
 python -m socials_automator.cli schedule ai.for.mortals --all
@@ -119,10 +119,10 @@ python -m socials_automator.cli schedule ai.for.mortals --all
 python -m socials_automator.cli queue ai.for.mortals
 
 # Post ALL pending posts in order (default behavior)
-python -m socials_automator.cli post ai.for.mortals
+python -m socials_automator.cli upload-post ai.for.mortals
 
 # Or post just one at a time
-python -m socials_automator.cli post ai.for.mortals --one
+python -m socials_automator.cli upload-post ai.for.mortals --one
 ```
 
 ---
@@ -133,16 +133,59 @@ Run the generator in a loop for continuous content creation:
 
 ```bash
 # Generate a new post every 5 minutes
-python -m socials_automator.cli generate ai.for.mortals --loop-each 5m
+python -m socials_automator.cli generate-post ai.for.mortals --loop-each 5m
 
 # Generate and post every hour
-python -m socials_automator.cli generate ai.for.mortals --loop-each 1h --post
+python -m socials_automator.cli generate-post ai.for.mortals --loop-each 1h --upload
 
 # Use specific AI providers in loop mode
-python -m socials_automator.cli generate ai.for.mortals --loop-each 10m --text-ai lmstudio --image-ai comfy
+python -m socials_automator.cli generate-post ai.for.mortals --loop-each 10m --text-ai lmstudio --image-ai comfy
 ```
 
 Press Ctrl+C to stop the loop.
+
+---
+
+### Workflow 6: Video Reels (Generate + Post)
+
+Generate video reels and post them to Instagram:
+
+```bash
+# Step 1: Generate a video reel
+python -m socials_automator.cli generate-reel ai.for.mortals
+# -> Creates reel in: reels/2025/12/generated/
+
+# Step 2: Post to Instagram Reels
+python -m socials_automator.cli upload-reel ai.for.mortals
+# -> Auto-moves to pending-post, publishes, then moves to: reels/2025/12/posted/
+```
+
+**Or generate multiple and batch post:**
+
+```bash
+# Generate several reels (loop mode)
+python -m socials_automator.cli generate-reel ai.for.mortals --loop
+# Press Ctrl+C after generating enough
+
+# Post all pending reels
+python -m socials_automator.cli upload-reel ai.for.mortals
+
+# Or post just one at a time
+python -m socials_automator.cli upload-reel ai.for.mortals --one
+
+# Dry run to validate first
+python -m socials_automator.cli upload-reel ai.for.mortals --dry-run
+```
+
+**Folder structure:**
+```
+reels/2025/12/
+├── generated/      <- New reels land here
+├── pending-post/   <- Auto-moved when posting
+└── posted/         <- Successfully published
+```
+
+**Note:** Video processing on Instagram's servers can take 1-10 minutes. The command will wait automatically.
 
 ---
 
@@ -199,10 +242,10 @@ Then edit `profiles/your-profile-name/metadata.json` with your account details.
 
 ```bash
 # Generate a post with a specific topic
-python -m socials_automator.cli generate your-profile-name --topic "5 ChatGPT tricks for productivity"
+python -m socials_automator.cli generate-post your-profile-name --topic "5 ChatGPT tricks for productivity"
 
 # Let AI choose the topic automatically
-python -m socials_automator.cli generate your-profile-name
+python -m socials_automator.cli generate-post your-profile-name
 ```
 
 ## CLI Reference
@@ -211,16 +254,17 @@ Get help for any command with `--help`:
 
 ```bash
 python -m socials_automator.cli --help
-python -m socials_automator.cli generate --help
+python -m socials_automator.cli generate-post--help
 ```
 
 ### Main Commands
 
 | Command | Description |
 |---------|-------------|
-| `generate` | Generate carousel posts for a profile |
-| `reel` | Generate video reels for Instagram/TikTok |
-| `post` | Publish pending posts to Instagram (all by default) |
+| `generate-post` | Generate carousel posts for a profile |
+| `generate-reel` | Generate video reels for Instagram/TikTok |
+| `upload-post` | Upload pending carousel posts to Instagram |
+| `upload-reel` | Upload pending video reels to Instagram |
 | `queue` | List all posts in the publishing queue |
 | `schedule` | Move generated posts to pending queue |
 | `token` | Manage Instagram access tokens |
@@ -232,12 +276,12 @@ python -m socials_automator.cli generate --help
 
 ---
 
-### generate
+### generate-post
 
 Generate carousel posts for a profile. By default, the AI decides the optimal number of slides (3-10) based on the topic content.
 
 ```bash
-python -m socials_automator.cli generate <profile> [OPTIONS]
+python -m socials_automator.cli generate-post <profile> [OPTIONS]
 ```
 
 **Arguments:**
@@ -254,7 +298,7 @@ python -m socials_automator.cli generate <profile> [OPTIONS]
 | `--slides` | `-s` | Force specific slide count (overrides AI decision) | AI decides |
 | `--min-slides` | | Minimum slides when AI decides | 3 |
 | `--max-slides` | | Maximum slides when AI decides | 10 |
-| `--post` | | Publish to Instagram after generating | False |
+| `--upload` | | Upload to Instagram after generating | False |
 | `--auto-retry` | | Retry indefinitely until valid content generated | False |
 | `--text-ai` | | Override text AI provider (zai, groq, gemini, openai, lmstudio, ollama) | Config |
 | `--image-ai` | | Override image AI provider (dalle, fal_flux, comfy) | Config |
@@ -264,49 +308,49 @@ python -m socials_automator.cli generate <profile> [OPTIONS]
 **Examples:**
 ```bash
 # Generate 1 post with AI-chosen topic
-python -m socials_automator.cli generate ai.for.mortals
+python -m socials_automator.cli generate-post ai.for.mortals
 
 # Generate 3 posts with AI-chosen topics
-python -m socials_automator.cli generate ai.for.mortals -n 3
+python -m socials_automator.cli generate-post ai.for.mortals -n 3
 
 # Generate post with specific topic
-python -m socials_automator.cli generate ai.for.mortals -t "How to use ChatGPT for email"
+python -m socials_automator.cli generate-post ai.for.mortals -t "How to use ChatGPT for email"
 
 # Generate post with exactly 5 slides
-python -m socials_automator.cli generate ai.for.mortals -t "AI tools for writers" -s 5
+python -m socials_automator.cli generate-post ai.for.mortals -t "AI tools for writers" -s 5
 
 # Generate post with 4-8 slides (AI decides within range)
-python -m socials_automator.cli generate ai.for.mortals --min-slides 4 --max-slides 8
+python -m socials_automator.cli generate-post ai.for.mortals --min-slides 4 --max-slides 8
 
 # Generate and immediately post to Instagram
-python -m socials_automator.cli generate ai.for.mortals -t "AI productivity tips" --post
+python -m socials_automator.cli generate-post ai.for.mortals -t "AI productivity tips" --upload
 
 # Use local LM Studio for text and ComfyUI for images
-python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfy
+python -m socials_automator.cli generate-post ai.for.mortals --text-ai lmstudio --image-ai comfy
 
 # Enable AI-driven research (AI decides when to search the web)
-python -m socials_automator.cli generate ai.for.mortals --ai-tools -t "Latest AI trends 2025"
+python -m socials_automator.cli generate-post ai.for.mortals --ai-tools -t "Latest AI trends 2025"
 
 # Retry until valid content is generated
-python -m socials_automator.cli generate ai.for.mortals --auto-retry
+python -m socials_automator.cli generate-post ai.for.mortals --auto-retry
 
 # Run in loop mode - generate new post every 10 minutes
-python -m socials_automator.cli generate ai.for.mortals --loop-each 10m
+python -m socials_automator.cli generate-post ai.for.mortals --loop-each 10m
 
 # Loop mode with posting
-python -m socials_automator.cli generate ai.for.mortals --loop-each 1h --post
+python -m socials_automator.cli generate-post ai.for.mortals --loop-each 1h --upload
 ```
 
 ---
 
-### reel
+### generate-reel
 
 Generate video reels for Instagram/TikTok. Uses AI for topic selection and script planning, then matches stock footage from Pexels to create a complete video with voiceover and karaoke-style subtitles.
 
 The narration audio is the source of truth for video length - video clips are trimmed to match the narration duration.
 
 ```bash
-python -m socials_automator.cli reel <profile> [OPTIONS]
+python -m socials_automator.cli generate-reel <profile> [OPTIONS]
 ```
 
 **Arguments:**
@@ -320,7 +364,9 @@ python -m socials_automator.cli reel <profile> [OPTIONS]
 | `--topic` | `-t` | Topic for the video (auto-generated if not provided) | Auto |
 | `--text-ai` | | Text AI provider (zai, groq, gemini, openai, lmstudio, ollama) | Config |
 | `--video-matcher` | `-m` | Video source (pexels) | pexels |
-| `--voice` | `-v` | Voice preset (rvc_adam, alloy, shimmer, etc.) | rvc_adam |
+| `--voice` | `-v` | Voice preset (see Available Voices below) | rvc_adam |
+| `--voice-rate` | | Speech rate adjustment (e.g., "+12%" faster, "-10%" slower) | +0% |
+| `--voice-pitch` | | Pitch adjustment (e.g., "+3Hz" higher, "-2Hz" lower) | +0Hz |
 | `--subtitle-size` | `-s` | Subtitle font size in pixels | 80 |
 | `--font` | | Subtitle font from /fonts folder | Montserrat-Bold.ttf |
 | `--length` | `-l` | Target video length (e.g., 30s, 1m, 90s) | 1m |
@@ -328,40 +374,68 @@ python -m socials_automator.cli reel <profile> [OPTIONS]
 | `--dry-run` | | Only run first few steps without full video generation | False |
 | `--loop` | | Generate videos continuously until stopped (Ctrl+C) | False |
 
+**Available Voices:**
+| Voice | Description |
+|-------|-------------|
+| `rvc_adam` | THE viral TikTok voice - FREE, runs locally (default) |
+| `rvc_adam_excited` | Same voice with faster rate and higher pitch |
+| `adam_excited` | Alias for rvc_adam_excited |
+| `tiktok-adam` | Alias for rvc_adam |
+| `adam` | Short alias for rvc_adam |
+| `professional_female` | Professional female voice |
+| `professional_male` | Professional male voice |
+| `friendly_female` | Friendly female voice |
+| `friendly_male` | Friendly male voice |
+| `energetic` | High-energy voice |
+| `british_female` | British accent female |
+| `british_male` | British accent male |
+
 **Examples:**
 ```bash
 # Generate a 1-minute video reel with auto-generated topic
-python -m socials_automator.cli reel ai.for.mortals
+python -m socials_automator.cli generate-reel ai.for.mortals
 
 # Generate with specific topic and AI provider
-python -m socials_automator.cli reel ai.for.mortals --text-ai lmstudio --topic "5 AI productivity tips"
+python -m socials_automator.cli generate-reel ai.for.mortals --text-ai lmstudio --topic "5 AI productivity tips"
 
 # Generate a 30-second video
-python -m socials_automator.cli reel ai.for.mortals --length 30s
+python -m socials_automator.cli generate-reel ai.for.mortals --length 30s
 
 # Generate a 90-second video
-python -m socials_automator.cli reel ai.for.mortals --length 90s
+python -m socials_automator.cli generate-reel ai.for.mortals --length 90s
 
 # Use a different voice
-python -m socials_automator.cli reel ai.for.mortals --voice alloy
+python -m socials_automator.cli generate-reel ai.for.mortals --voice british_female
+
+# Use excited preset (faster + higher pitch)
+python -m socials_automator.cli generate-reel ai.for.mortals --voice adam_excited
+
+# Custom voice adjustments (make it more energetic)
+python -m socials_automator.cli generate-reel ai.for.mortals --voice-rate "+12%" --voice-pitch "+3Hz"
+
+# Slower, calmer voice
+python -m socials_automator.cli generate-reel ai.for.mortals --voice-rate "-10%" --voice-pitch "-2Hz"
 
 # Larger subtitles
-python -m socials_automator.cli reel ai.for.mortals --subtitle-size 100
+python -m socials_automator.cli generate-reel ai.for.mortals --subtitle-size 100
 
 # Use a different font (from /fonts folder)
-python -m socials_automator.cli reel ai.for.mortals --font Poppins-Bold.ttf
+python -m socials_automator.cli generate-reel ai.for.mortals --font Poppins-Bold.ttf
 
 # Custom font and size
-python -m socials_automator.cli reel ai.for.mortals --font BebasNeue-Regular.ttf --subtitle-size 90
+python -m socials_automator.cli generate-reel ai.for.mortals --font BebasNeue-Regular.ttf --subtitle-size 90
 
 # Test without full video generation
-python -m socials_automator.cli reel ai.for.mortals --dry-run
+python -m socials_automator.cli generate-reel ai.for.mortals --dry-run
 
 # Generate videos continuously (loop mode)
-python -m socials_automator.cli reel ai.for.mortals --loop
+python -m socials_automator.cli generate-reel ai.for.mortals --loop
 
 # Loop mode with custom length
-python -m socials_automator.cli reel ai.for.mortals --loop --length 30s
+python -m socials_automator.cli generate-reel ai.for.mortals --loop --length 30s
+
+# Full example: excited voice, large subtitles, 45 seconds
+python -m socials_automator.cli generate-reel ai.for.mortals --voice adam_excited --subtitle-size 90 --length 45s
 ```
 
 **Pipeline:**
@@ -400,12 +474,12 @@ profiles/<profile>/reels/YYYY/MM/generated/<post-id>/
 
 ---
 
-### post
+### upload-post
 
-Publish pending carousel posts to Instagram. **By default, posts ALL pending posts** in chronological order. Requires Instagram API and Cloudinary credentials (see [Instagram Posting Setup](#instagram-posting-setup)).
+Upload pending carousel posts to Instagram. **By default, posts ALL pending posts** in chronological order. Requires Instagram API and Cloudinary credentials (see [Instagram Posting Setup](#instagram-posting-setup)).
 
 ```bash
-python -m socials_automator.cli post <profile> [post-id] [OPTIONS]
+python -m socials_automator.cli upload-post <profile> [post-id] [OPTIONS]
 ```
 
 **Arguments:**
@@ -423,17 +497,17 @@ python -m socials_automator.cli post <profile> [post-id] [OPTIONS]
 **Examples:**
 ```bash
 # Post ALL pending posts (default behavior)
-python -m socials_automator.cli post ai.for.mortals
+python -m socials_automator.cli upload-post ai.for.mortals
 
 # Post only the oldest pending post
-python -m socials_automator.cli post ai.for.mortals --one
-python -m socials_automator.cli post ai.for.mortals -1
+python -m socials_automator.cli upload-post ai.for.mortals --one
+python -m socials_automator.cli upload-post ai.for.mortals -1
 
 # Post a specific post by ID
-python -m socials_automator.cli post ai.for.mortals 20251211-001
+python -m socials_automator.cli upload-post ai.for.mortals 20251211-001
 
 # Validate without posting
-python -m socials_automator.cli post ai.for.mortals --dry-run
+python -m socials_automator.cli upload-post ai.for.mortals --dry-run
 ```
 
 **Workflow:**
@@ -446,6 +520,72 @@ python -m socials_automator.cli post ai.for.mortals --dry-run
    - Cleans up temporary Cloudinary uploads
    - Moves post to `posted/` folder
 3. Shows summary of published/failed posts
+
+---
+
+### upload-reel
+
+Upload pending video reels to Instagram. **By default, posts ALL pending reels** in chronological order. Requires Instagram API and Cloudinary credentials (see [Instagram Posting Setup](#instagram-posting-setup)).
+
+```bash
+python -m socials_automator.cli upload-reel <profile> [reel-id] [OPTIONS]
+```
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `profile` | Profile name (required) |
+| `reel-id` | Reel ID to publish (optional, posts only this specific reel) |
+
+**Options:**
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--one` | `-1` | Post only the oldest pending (instead of all) | False |
+| `--dry-run` | | Validate the reel without actually publishing | False |
+
+**Examples:**
+```bash
+# Post ALL pending reels (default behavior)
+python -m socials_automator.cli upload-reel ai.for.mortals
+
+# Post only the oldest pending reel
+python -m socials_automator.cli upload-reel ai.for.mortals --one
+python -m socials_automator.cli upload-reel ai.for.mortals -1
+
+# Post a specific reel by ID
+python -m socials_automator.cli upload-reel ai.for.mortals 16-001
+
+# Validate without posting
+python -m socials_automator.cli upload-reel ai.for.mortals --dry-run
+```
+
+**Workflow:**
+1. Auto-moves reels from `reels/YYYY/MM/generated/` to `reels/YYYY/MM/pending-post/`
+2. For each reel (oldest first):
+   - Uploads video to Cloudinary (Instagram requires public URLs)
+   - Creates Instagram Reels container
+   - Waits for video processing (can take 1-10 minutes)
+   - Publishes to Instagram Reels
+   - Cleans up temporary Cloudinary upload
+   - Moves reel to `reels/YYYY/MM/posted/` folder
+3. Shows summary of published/failed reels
+
+**Folder Structure:**
+```
+profiles/<profile>/reels/YYYY/MM/
+├── generated/      <- New reels from `generate-reel` command
+├── pending-post/   <- Ready to publish
+└── posted/         <- Successfully published
+```
+
+**Resume Capability:**
+If the Instagram publish fails after Cloudinary upload succeeds, the Cloudinary URL is saved. Running the command again will reuse the existing upload instead of re-uploading.
+
+**Video Requirements:**
+- Format: MP4 (H.264 codec recommended)
+- Duration: 15-90 seconds via API
+- Aspect Ratio: 9:16 (portrait/vertical)
+- Resolution: 1080x1920 recommended
 
 ---
 
@@ -876,20 +1016,20 @@ Run completely FREE using local AI models on your own computer. No API keys need
 # Start ComfyUI server: python main.py
 
 # Generate with 100% local AI
-python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfyui
+python -m socials_automator.cli generate-post ai.for.mortals --text-ai lmstudio --image-ai comfyui
 
 # Generate, post to Instagram, and loop every 5 minutes
-python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfyui --post --loop-each 5m
+python -m socials_automator.cli generate-post ai.for.mortals --text-ai lmstudio --image-ai comfyui --upload --loop-each 5m
 
 # With AI-powered web research
-python -m socials_automator.cli generate ai.for.mortals --text-ai lmstudio --image-ai comfyui --post --ai-tools
+python -m socials_automator.cli generate-post ai.for.mortals --text-ai lmstudio --image-ai comfyui --upload --ai-tools
 ```
 
 **Cost: $0.00** - Everything runs on your hardware.
 
 ## Instagram Posting Setup
 
-To use the `post` command to publish directly to Instagram, you need to set up both Instagram API access and Cloudinary for image hosting.
+To use the `upload-post` command to publish directly to Instagram, you need to set up both Instagram API access and Cloudinary for image hosting.
 
 ### Requirements
 
@@ -966,10 +1106,10 @@ CLOUDINARY_API_SECRET=abcdefghijklmnop
 
 ```bash
 # Dry run to validate credentials
-python -m socials_automator.cli post ai.for.mortals --dry-run
+python -m socials_automator.cli upload-post ai.for.mortals --dry-run
 
 # Publish for real
-python -m socials_automator.cli post ai.for.mortals
+python -m socials_automator.cli upload-post ai.for.mortals
 ```
 
 ### Rate Limits
@@ -1074,7 +1214,7 @@ Features that are **NOT included** in this project:
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Video/Reels** | **Included!** | Use `reel` command to generate video reels |
+| **Video/Reels** | **Included!** | Use `generate-reel` command to generate video reels |
 | **Stories** | Not included | Instagram Stories not supported |
 | **Scheduled posting** | Not included | No built-in scheduler (use cron/Task Scheduler with `--loop-each`) |
 | **Multiple platforms** | Not included | Instagram only (no Twitter/X, LinkedIn, TikTok) |
@@ -1097,7 +1237,7 @@ Features that are **NOT included** in this project:
 
 ## Roadmap
 
-- [x] Instagram API integration (`post` command)
+- [x] Instagram API integration (`upload-post` command)
 - [x] Batch posting - post all queued content
 - [x] Queue management (`queue` command)
 - [x] AI tool calling - AI decides when to search (`--ai-tools`)
@@ -1105,9 +1245,10 @@ Features that are **NOT included** in this project:
 - [x] Provider override flags (`--text-ai`, `--image-ai`)
 - [x] Auto-retry for robust generation (`--auto-retry`)
 - [x] 100% Local AI support - LM Studio + ComfyUI (FREE)
-- [x] Video/Reels generation (`reel` command with stock footage)
+- [x] Video/Reels generation (`generate-reel` command with stock footage)
+- [x] Instagram Reels posting (`upload-reel` command)
 - [ ] Scheduled posting (`--schedule "2025-12-11 10:00"`)
-- [ ] Multiple social platforms (Twitter/X, LinkedIn)
+- [ ] Multiple social platforms (Twitter/X, LinkedIn, TikTok)
 - [ ] A/B testing for hooks
 
 ## License

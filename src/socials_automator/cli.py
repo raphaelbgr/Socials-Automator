@@ -136,7 +136,7 @@ def list_profiles():
 
 
 @app.command()
-def generate(
+def generate_post(
     profile: str = typer.Argument(..., help="Profile name to generate for"),
     topic: str = typer.Option(None, "--topic", "-t", help="Topic for the post"),
     pillar: str = typer.Option(None, "--pillar", "-p", help="Content pillar"),
@@ -144,7 +144,7 @@ def generate(
     slides: int = typer.Option(None, "--slides", "-s", help="Number of slides (default: AI decides)"),
     min_slides: int = typer.Option(3, "--min-slides", help="Minimum slides when AI decides"),
     max_slides: int = typer.Option(10, "--max-slides", help="Maximum slides when AI decides"),
-    post_after: bool = typer.Option(False, "--post", help="Publish to Instagram after generating"),
+    upload_after: bool = typer.Option(False, "--upload", help="Upload to Instagram after generating"),
     auto_retry: bool = typer.Option(False, "--auto-retry", help="Retry indefinitely until valid content"),
     text_ai: str = typer.Option(None, "--text-ai", help="Text AI provider (zai, groq, gemini, openai, lmstudio, ollama)"),
     image_ai: str = typer.Option(None, "--image-ai", help="Image AI provider (dalle, fal_flux, comfy)"),
@@ -156,7 +156,7 @@ def generate(
     By default, the AI decides the optimal number of slides (3-10) based on
     the topic content. Use --slides to force a specific count.
 
-    Use --post to automatically publish to Instagram after generation.
+    Use --upload to automatically upload to Instagram after generation.
     Use --auto-retry to keep retrying until valid content is generated.
     Use --text-ai to select text provider (zai, groq, gemini, openai, lmstudio, ollama).
     Use --image-ai to select image provider (dalle, fal_flux, comfy).
@@ -234,7 +234,7 @@ def generate(
                         slides=slides,
                         min_slides=min_slides,
                         max_slides=max_slides,
-                        post_after=post_after,
+                        upload_after=upload_after,
                         auto_retry=auto_retry,
                         text_ai=text_ai,
                         image_ai=image_ai,
@@ -278,7 +278,7 @@ def generate(
             slides=slides,
             min_slides=min_slides,
             max_slides=max_slides,
-            post_after=post_after,
+            upload_after=upload_after,
             auto_retry=auto_retry,
             text_ai=text_ai,
             image_ai=image_ai,
@@ -296,7 +296,7 @@ async def _generate_posts(
     min_slides: int = 3,
     max_slides: int = 10,
     verbose: bool = True,
-    post_after: bool = False,
+    upload_after: bool = False,
     auto_retry: bool = False,
     text_ai: str | None = None,
     image_ai: str | None = None,
@@ -423,7 +423,7 @@ async def _generate_posts(
         # Auto-generated topic - use the first generated post
         post_path_to_use = generator._get_output_path(posts[0])
 
-    if post_after and post_path_to_use:
+    if upload_after and post_path_to_use:
         import shutil
         from dotenv import load_dotenv
         load_dotenv()
@@ -734,7 +734,7 @@ def schedule(
     if not generated_posts:
         console.print("[yellow]No posts in generated folders.[/yellow]")
         console.print("\n[dim]Generate posts first:[/dim]")
-        console.print("  [cyan]python -m socials_automator.cli generate <profile> --topic '...'[/cyan]")
+        console.print("  [cyan]python -m socials_automator.cli generate-post <profile> --topic '...'[/cyan]")
         raise typer.Exit(1)
 
     # Sort by folder name
@@ -785,7 +785,7 @@ def schedule(
 
     console.print(f"\n[bold green]Scheduled {len(to_schedule)} post(s) for publishing.[/bold green]")
     console.print("\n[dim]To publish:[/dim]")
-    console.print("  [cyan]python -m socials_automator.cli post <profile>[/cyan]")
+    console.print("  [cyan]python -m socials_automator.cli upload-post <profile>[/cyan]")
 
 
 @app.command()
@@ -844,7 +844,7 @@ def queue(
     if not all_posts:
         console.print("[yellow]No posts in queue.[/yellow]")
         console.print("\n[dim]Generate posts with:[/dim]")
-        console.print("  [cyan]python -m socials_automator.cli generate <profile> --topic '...'[/cyan]")
+        console.print("  [cyan]python -m socials_automator.cli generate-post <profile> --topic '...'[/cyan]")
         return
 
     # Sort by folder name (date-number-slug) for chronological order
@@ -881,33 +881,33 @@ def queue(
     console.print(table)
     console.print(f"\n[dim]Total: {len(all_posts)} post(s) in queue[/dim]")
     console.print("\n[dim]To post all:[/dim]")
-    console.print("  [cyan]python -m socials_automator.cli post <profile>[/cyan]")
+    console.print("  [cyan]python -m socials_automator.cli upload-post <profile>[/cyan]")
     console.print("\n[dim]To post just one:[/dim]")
-    console.print("  [cyan]python -m socials_automator.cli post <profile> --one[/cyan]")
+    console.print("  [cyan]python -m socials_automator.cli upload-post <profile> --one[/cyan]")
 
 
 @app.command()
-def post(
+def upload_post(
     profile: str = typer.Argument(..., help="Profile name"),
-    post_id: str = typer.Argument(None, help="Post ID to publish (if specified, posts only this one)"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Validate without posting"),
-    one: bool = typer.Option(False, "--one", "-1", help="Post only the oldest pending (instead of all)"),
+    post_id: str = typer.Argument(None, help="Post ID to upload (if specified, uploads only this one)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate without uploading"),
+    one: bool = typer.Option(False, "--one", "-1", help="Upload only the oldest pending (instead of all)"),
 ):
-    """Post pending carousels to Instagram.
+    """Upload pending carousels to Instagram.
 
-    By default, posts ALL pending posts in chronological order.
-    Use --one to post only the oldest pending post.
+    By default, uploads ALL pending posts in chronological order.
+    Use --one to upload only the oldest pending post.
 
     Workflow:
-        1. generate: Creates posts in posts/YYYY/MM/generated/
+        1. generate-post: Creates posts in posts/YYYY/MM/generated/
         2. schedule: Moves to posts/YYYY/MM/pending-post/
-        3. post: Publishes to Instagram, moves to posts/YYYY/MM/posted/ (this command)
+        3. upload-post: Uploads to Instagram, moves to posts/YYYY/MM/posted/ (this command)
 
     Examples:
-        socials post ai.for.mortals                    # Post ALL pending posts
-        socials post ai.for.mortals --one              # Post only oldest pending
-        socials post ai.for.mortals 11-001            # Post specific (by prefix)
-        socials post ai.for.mortals --dry-run         # Validate only
+        socials upload-post ai.for.mortals                    # Upload ALL pending posts
+        socials upload-post ai.for.mortals --one              # Upload only oldest pending
+        socials upload-post ai.for.mortals 11-001            # Upload specific (by prefix)
+        socials upload-post ai.for.mortals --dry-run         # Validate only
     """
     # Determine if posting all or just one
     all_posts = not one and post_id is None  # Post all unless --one or specific post_id given
@@ -1628,7 +1628,7 @@ VIDEO_MATCHER_CHOICES = ["pexels"]
 
 
 @app.command()
-def reel(
+def generate_reel(
     profile: str = typer.Argument(..., help="Profile name to generate for"),
     topic: str = typer.Option(None, "--topic", "-t", help="Topic for the video (auto-generated if not provided)"),
     text_ai: str = typer.Option(None, "--text-ai", help="Text AI provider (zai, groq, gemini, openai, lmstudio, ollama)"),
@@ -1663,15 +1663,15 @@ def reel(
         9. Output final.mp4
 
     Examples:
-        socials reel ai.for.mortals
-        socials reel ai.for.mortals --text-ai lmstudio --length 1m
-        socials reel ai.for.mortals --topic "5 AI productivity tips"
-        socials reel ai.for.mortals --voice british_female --length 90s
-        socials reel ai.for.mortals --video-matcher pexels
-        socials reel ai.for.mortals --subtitle-size 90 --font Poppins-Bold.ttf
-        socials reel ai.for.mortals --loop  # Generate videos continuously
-        socials reel ai.for.mortals --voice adam_excited  # Use excited preset
-        socials reel ai.for.mortals --voice-rate "+12%" --voice-pitch "+3Hz"  # Custom excitement
+        socials generate-reel ai.for.mortals
+        socials generate-reel ai.for.mortals --text-ai lmstudio --length 1m
+        socials generate-reel ai.for.mortals --topic "5 AI productivity tips"
+        socials generate-reel ai.for.mortals --voice british_female --length 90s
+        socials generate-reel ai.for.mortals --video-matcher pexels
+        socials generate-reel ai.for.mortals --subtitle-size 90 --font Poppins-Bold.ttf
+        socials generate-reel ai.for.mortals --loop  # Generate videos continuously
+        socials generate-reel ai.for.mortals --voice adam_excited  # Use excited preset
+        socials generate-reel ai.for.mortals --voice-rate "+12%" --voice-pitch "+3Hz"  # Custom excitement
     """
     from dotenv import load_dotenv
     load_dotenv()
@@ -1946,6 +1946,478 @@ async def _generate_reel(
             except KeyboardInterrupt:
                 console.print(f"\n[yellow]Loop stopped by user after {loop_count} attempt(s).[/yellow]")
                 break
+
+
+@app.command()
+def upload_reel(
+    profile: str = typer.Argument(..., help="Profile name"),
+    reel_id: str = typer.Argument(None, help="Reel ID to upload (if specified, uploads only this one)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate without uploading"),
+    one: bool = typer.Option(False, "--one", "-1", help="Upload only the oldest pending (instead of all)"),
+):
+    """Upload pending reels to Instagram.
+
+    By default, uploads ALL pending reels in chronological order.
+    Use --one to upload only the oldest pending reel.
+
+    Workflow:
+        1. generate-reel: Generate videos in reels/YYYY/MM/generated/
+        2. (manual) Move to reels/YYYY/MM/pending-post/
+        3. upload-reel: Upload to Instagram, move to reels/YYYY/MM/posted/ (this command)
+
+    Examples:
+        socials upload-reel ai.for.mortals                    # Upload ALL pending reels
+        socials upload-reel ai.for.mortals --one              # Upload only oldest pending
+        socials upload-reel ai.for.mortals 15-001            # Upload specific (by prefix)
+        socials upload-reel ai.for.mortals --dry-run         # Validate only
+    """
+    # Determine if posting all or just one
+    all_reels = not one and reel_id is None
+    profile_path = get_profile_path(profile)
+
+    if not profile_path.exists():
+        console.print(f"[red]Profile not found: {profile}[/red]")
+        raise typer.Exit(1)
+
+    # Check for Instagram credentials
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    try:
+        from .instagram.models import InstagramConfig
+        config = InstagramConfig.from_env()
+    except ValueError as e:
+        console.print(f"[red]{e}[/red]")
+        console.print("\n[yellow]To set up Instagram posting:[/]")
+        console.print("  1. Create a Facebook App at https://developers.facebook.com")
+        console.print("  2. Connect your Instagram Business/Creator account")
+        console.print("  3. Generate an access token with instagram_content_publish permission")
+        console.print("  4. Create a Cloudinary account at https://cloudinary.com")
+        console.print("  5. Add credentials to your .env file")
+        raise typer.Exit(1)
+
+    # Try to auto-refresh token if needed
+    if not dry_run:
+        try:
+            from .instagram import TokenManager
+            token_manager = TokenManager.from_env()
+            if token_manager.can_refresh:
+                console.print("[dim]Checking token validity...[/dim]")
+                new_token = asyncio.run(token_manager.ensure_valid_token())
+                if new_token != config.access_token:
+                    config.access_token = new_token
+                    console.print("[green]Token refreshed successfully![/green]")
+        except Exception as e:
+            console.print(f"[yellow]Token auto-refresh unavailable: {e}[/yellow]")
+            console.print("[dim]Continuing with current token...[/dim]")
+
+    # Run async posting
+    asyncio.run(_post_reels_to_instagram(
+        profile_path=profile_path,
+        reel_id=reel_id,
+        config=config,
+        dry_run=dry_run,
+        post_all=all_reels,
+    ))
+
+
+async def _post_reels_to_instagram(
+    profile_path: Path,
+    reel_id: str | None,
+    config,
+    dry_run: bool,
+    post_all: bool = False,
+):
+    """Async Instagram Reels posting with progress display."""
+    from datetime import datetime
+    from .instagram import InstagramClient, CloudinaryUploader, InstagramProgress
+    import shutil
+
+    reels_dir = profile_path / "reels"
+
+    # Step 1: Check for reels in 'generated' folders and auto-move to 'pending-post'
+    generated_reels = []
+    for year_dir in reels_dir.glob("*"):
+        if year_dir.is_dir() and year_dir.name.isdigit():
+            for month_dir in year_dir.glob("*"):
+                if month_dir.is_dir() and month_dir.name.isdigit():
+                    generated_dir = month_dir / "generated"
+                    if generated_dir.exists():
+                        for reel_dir in generated_dir.iterdir():
+                            if reel_dir.is_dir() and (reel_dir / "metadata.json").exists():
+                                # Check for video file
+                                video_file = reel_dir / "final.mp4"
+                                if not video_file.exists():
+                                    # Try other common names
+                                    for alt_name in ["video.mp4", "reel.mp4", "output.mp4"]:
+                                        alt_path = reel_dir / alt_name
+                                        if alt_path.exists():
+                                            video_file = alt_path
+                                            break
+                                if video_file.exists():
+                                    generated_reels.append((reel_dir, month_dir))
+
+    # Auto-move generated reels to pending-post
+    if generated_reels:
+        console.print(f"\n[cyan]Found {len(generated_reels)} reel(s) in 'generated' folder(s)[/cyan]")
+        for reel_dir, month_dir in generated_reels:
+            pending_dir = month_dir / "pending-post"
+            pending_dir.mkdir(parents=True, exist_ok=True)
+            new_path = pending_dir / reel_dir.name
+            try:
+                shutil.move(str(reel_dir), str(new_path))
+                console.print(f"  [green][OK][/green] Moved to pending: {reel_dir.name}")
+            except Exception as e:
+                console.print(f"  [red][ERROR][/red] Failed to move {reel_dir.name}: {e}")
+
+    # Step 2: Find reels in pending-post folder
+    pending_reels = []
+    for year_dir in reels_dir.glob("*"):
+        if year_dir.is_dir() and year_dir.name.isdigit():
+            for month_dir in year_dir.glob("*"):
+                if month_dir.is_dir() and month_dir.name.isdigit():
+                    pending_dir = month_dir / "pending-post"
+                    if pending_dir.exists():
+                        for reel_dir in pending_dir.iterdir():
+                            if reel_dir.is_dir() and (reel_dir / "metadata.json").exists():
+                                pending_reels.append(reel_dir)
+
+    if not pending_reels:
+        console.print("[yellow]No reels ready to publish.[/yellow]")
+        console.print("\n[dim]Generate reels first:[/dim]")
+        console.print("  [cyan]python -m socials_automator.cli generate-reel <profile>[/cyan]")
+        console.print("\n[dim]Then move to pending-post folder or use this command to auto-move generated reels.[/dim]")
+        return
+
+    # Sort by folder name (date-number-slug) to get oldest first
+    pending_reels.sort(key=lambda p: p.name)
+
+    # Show queue summary
+    if post_all or len(pending_reels) > 1:
+        console.print(f"\n[bold cyan]Reels Queue ({len(pending_reels)} reels):[/bold cyan]")
+        for i, p in enumerate(pending_reels, 1):
+            try:
+                with open(p / "metadata.json", encoding="utf-8") as f:
+                    meta = json.load(f)
+                topic = meta.get("topic", meta.get("post", {}).get("topic", "Unknown"))[:40]
+            except Exception:
+                topic = "Unknown"
+            marker = "[yellow]>[/yellow]" if (post_all or i == 1) else " "
+            console.print(f"  {marker} {i}. {p.name} - {topic}")
+        console.print()
+
+    # Determine which reels to publish
+    if post_all:
+        reels_to_publish = pending_reels
+    elif reel_id:
+        # Find specific reel
+        reel_path = None
+        for p in pending_reels:
+            if reel_id in p.name or p.name.startswith(reel_id):
+                reel_path = p
+                break
+        if not reel_path:
+            console.print(f"[red]Reel not found in pending-post: {reel_id}[/red]")
+            console.print(f"[dim]Available: {[p.name for p in pending_reels]}[/dim]")
+            raise typer.Exit(1)
+        reels_to_publish = [reel_path]
+    else:
+        # Use oldest pending reel
+        reels_to_publish = [pending_reels[0]]
+
+    # Validate token once before posting any
+    if not dry_run:
+        temp_client = InstagramClient(config=config)
+        console.print("\n[dim]Validating Instagram access...[/dim]")
+        try:
+            account_info = await temp_client.validate_token()
+            console.print(f"[green]Connected as @{account_info.get('username', 'unknown')}[/green]\n")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not validate token ({e})[/yellow]")
+            console.print("[yellow]Proceeding with posting attempt...[/yellow]\n")
+
+    # Publish each reel
+    published_count = 0
+    failed_count = 0
+    skipped_count = 0
+
+    for reel_idx, reel_path in enumerate(reels_to_publish, 1):
+        if post_all:
+            console.print(f"\n{'='*60}")
+            console.print(f"[bold cyan]Publishing Reel {reel_idx}/{len(reels_to_publish)}: {reel_path.name}[/bold cyan]")
+            console.print(f"{'='*60}")
+
+        # Load reel metadata
+        metadata_path = reel_path / "metadata.json"
+        if not metadata_path.exists():
+            console.print(f"[red]Reel metadata not found: {metadata_path}[/red]")
+            failed_count += 1
+            continue
+
+        with open(metadata_path, encoding="utf-8") as f:
+            reel_metadata = json.load(f)
+
+        # Check for duplicates
+        print(f"\n  [Phase 0] Checking for duplicates...")
+        existing_instagram = reel_metadata.get("instagram", {})
+        if existing_instagram.get("media_id"):
+            existing_permalink = existing_instagram.get("permalink", "N/A")
+            console.print(f"  [yellow][SKIP] Already posted to Instagram![/yellow]")
+            console.print(f"  [dim]Media ID: {existing_instagram['media_id']}[/dim]")
+            console.print(f"  [dim]URL: {existing_permalink}[/dim]")
+
+            # Move to posted folder if still in pending
+            if "pending-post" in str(reel_path):
+                pending_parent = reel_path.parent
+                posted_dir = pending_parent.parent / "posted"
+                posted_dir.mkdir(parents=True, exist_ok=True)
+                new_reel_path = posted_dir / reel_path.name
+                try:
+                    if new_reel_path.exists():
+                        shutil.rmtree(str(new_reel_path))
+                    shutil.move(str(reel_path), str(new_reel_path))
+                    console.print(f"  [green]Moved duplicate to posted folder[/green]")
+                except Exception as e:
+                    console.print(f"  [yellow]Could not move: {e}[/yellow]")
+
+            skipped_count += 1
+            continue
+
+        print(f"  [OK] No duplicate found")
+
+        # Find video file
+        video_path = reel_path / "final.mp4"
+        if not video_path.exists():
+            for alt_name in ["video.mp4", "reel.mp4", "output.mp4"]:
+                alt_path = reel_path / alt_name
+                if alt_path.exists():
+                    video_path = alt_path
+                    break
+
+        if not video_path.exists():
+            console.print(f"[red]No video file found in {reel_path}[/red]")
+            console.print(f"[dim]Expected: final.mp4, video.mp4, reel.mp4, or output.mp4[/dim]")
+            failed_count += 1
+            continue
+
+        # Load caption
+        caption_path = reel_path / "caption.txt"
+        hashtags_path = reel_path / "hashtags.txt"
+        full_caption_path = reel_path / "caption+hashtags.txt"
+
+        if full_caption_path.exists():
+            caption = full_caption_path.read_text(encoding="utf-8")
+        elif caption_path.exists():
+            caption = caption_path.read_text(encoding="utf-8")
+            if hashtags_path.exists():
+                hashtags = hashtags_path.read_text(encoding="utf-8").strip()
+                if hashtags:
+                    caption = f"{caption}\n\n{hashtags}"
+        else:
+            # Try metadata
+            caption = reel_metadata.get("caption", "")
+
+        # Extract reel info
+        reel_topic = reel_metadata.get("topic", reel_metadata.get("post", {}).get("topic", "Unknown topic"))
+        reel_id_display = reel_metadata.get("id", reel_path.name)
+
+        # Show reel info
+        console.print(Panel(
+            f"[bold]Reel ID:[/] {reel_id_display}\n"
+            f"[bold]Topic:[/] {reel_topic}\n"
+            f"[bold]Video:[/] {video_path.name}\n"
+            f"[bold]Location:[/] {reel_path}",
+            title="Instagram Reel Posting",
+        ))
+
+        if dry_run:
+            import re
+            def safe_print_caption(text: str) -> str:
+                """Remove characters that can't be displayed in Windows console."""
+                try:
+                    return text.encode('cp1252', errors='ignore').decode('cp1252')
+                except Exception:
+                    return re.sub(r'[^\x00-\x7F]+', '', text)
+
+            console.print("\n[yellow]DRY RUN - Would upload this video:[/yellow]")
+            console.print(f"  - {video_path.name}")
+            console.print(f"\n[yellow]Caption ({len(caption)} chars):[/yellow]")
+            display_caption = caption[:500] + "..." if len(caption) > 500 else caption
+            console.print(safe_print_caption(display_caption))
+            published_count += 1
+            continue
+
+        # Initialize progress display
+        display = InstagramPostingDisplay()
+
+        async def progress_callback(progress: InstagramProgress):
+            display.update(progress)
+
+        # Create uploader and client
+        uploader = CloudinaryUploader(config=config)
+        client = InstagramClient(config=config, progress_callback=progress_callback)
+
+        result = None
+        video_url = None
+
+        try:
+            # Check for resume - if we already uploaded to Cloudinary
+            upload_state = reel_metadata.get("_upload_state", {})
+            existing_url = upload_state.get("cloudinary_url")
+
+            # Check if upload state is too old
+            upload_is_stale = False
+            if existing_url and upload_state.get("uploaded_at"):
+                try:
+                    uploaded_at = datetime.fromisoformat(upload_state["uploaded_at"])
+                    age_hours = (datetime.now() - uploaded_at).total_seconds() / 3600
+                    if age_hours > 24:
+                        upload_is_stale = True
+                        print(f"\n  [Warning] Cloudinary upload is {age_hours:.1f}h old - uploading fresh")
+                except Exception:
+                    pass
+
+            if existing_url and not upload_is_stale:
+                # Resume: use existing Cloudinary URL
+                print(f"\n  [Resume] Found existing Cloudinary upload")
+                video_url = existing_url
+                # Track for cleanup
+                if "cloudinary.com" in video_url:
+                    parts = video_url.split("/upload/")
+                    if len(parts) > 1:
+                        public_id = parts[1].rsplit(".", 1)[0]
+                        uploader._uploaded_public_ids.append((public_id, "video"))
+            else:
+                # Fresh upload to Cloudinary
+                print(f"\n  [Upload] Uploading video to Cloudinary...")
+
+                folder = f"socials-automator/{profile_path.name}/reels/{reel_id_display}"
+                video_url = await uploader.upload_video_async(video_path, folder=folder)
+
+                print(f"  [OK] Video uploaded: {video_url[:60]}...")
+
+                # Save upload state for resume capability
+                reel_metadata["_upload_state"] = {
+                    "cloudinary_url": video_url,
+                    "uploaded_at": datetime.now().isoformat(),
+                }
+                with open(metadata_path, "w", encoding="utf-8") as f:
+                    json.dump(reel_metadata, f, indent=2)
+
+            # Check for thumbnail and upload if exists
+            cover_url = None
+            thumbnail_path = reel_path / "thumbnail.jpg"
+            if thumbnail_path.exists():
+                print(f"  [Upload] Uploading thumbnail to Cloudinary...")
+                try:
+                    thumb_folder = f"socials-automator/{profile_path.name}/reels/{reel_id_display}/thumb"
+                    cover_url = uploader.upload_image(thumbnail_path, folder=thumb_folder)
+                    print(f"  [OK] Thumbnail uploaded: {cover_url[:50]}...")
+                except Exception as e:
+                    print(f"  [Warning] Thumbnail upload failed: {e} (using default)")
+
+            print(f"  [Publish] Publishing to Instagram Reels...")
+
+            # Publish to Instagram
+            result = await client.publish_reel(
+                video_url=video_url,
+                caption=caption,
+                cover_url=cover_url,
+            )
+
+            # Cleanup Cloudinary on success
+            if result.success:
+                deleted_count = await uploader.cleanup_async()
+                print(f"  [Cleanup] Removed {deleted_count} temporary Cloudinary video(s)")
+
+                # Remove upload state from metadata
+                if "_upload_state" in reel_metadata:
+                    del reel_metadata["_upload_state"]
+                    with open(metadata_path, "w", encoding="utf-8") as f:
+                        json.dump(reel_metadata, f, indent=2)
+
+        except Exception as e:
+            console.print(f"[red]Error publishing reel: {e}[/red]")
+            if video_url:
+                console.print(f"\n[yellow]Cloudinary upload saved - run the command again to resume.[/yellow]")
+            failed_count += 1
+            if not post_all:
+                raise typer.Exit(1)
+            continue
+
+        # Show result
+        if result and result.success:
+            console.print(Panel(
+                f"[bold green]Reel published successfully![/bold green]\n\n"
+                f"[bold]Media ID:[/] {result.media_id}\n"
+                f"[bold]URL:[/] {result.permalink or 'N/A'}",
+                title="Success",
+                border_style="green",
+            ))
+
+            # Update metadata with Instagram info
+            reel_metadata["instagram"] = result.to_dict()
+            with open(metadata_path, "w", encoding="utf-8") as f:
+                json.dump(reel_metadata, f, indent=2)
+
+            # Move from pending-post to posted folder
+            pending_parent = reel_path.parent
+            posted_dir = pending_parent.parent / "posted"
+            posted_dir.mkdir(parents=True, exist_ok=True)
+            new_reel_path = posted_dir / reel_path.name
+
+            try:
+                if new_reel_path.exists():
+                    shutil.rmtree(str(new_reel_path))
+                shutil.move(str(reel_path), str(new_reel_path))
+                console.print(f"\n[green]Reel moved to:[/green] {new_reel_path}")
+            except Exception as e:
+                console.print(f"\n[yellow]Warning: Could not move reel folder: {e}[/yellow]")
+
+            published_count += 1
+        else:
+            error_msg = result.error_message if result else "Unknown error"
+
+            # Check for daily limit
+            is_daily_limit = "[DAILY_POSTING_LIMIT]" in error_msg
+
+            if is_daily_limit:
+                console.print(Panel(
+                    "[bold red]DAILY POSTING LIMIT REACHED[/bold red]\n\n"
+                    "You've hit Instagram's Content Publishing API daily limit.\n\n"
+                    "[bold]What to do:[/bold]\n"
+                    "  - Wait until midnight UTC for the limit to reset\n"
+                    "  - Or try again tomorrow\n\n"
+                    "[dim]Your Cloudinary upload is saved - it'll be reused when you retry.[/dim]",
+                    title="[bold red]Instagram Daily Limit[/bold red]",
+                    border_style="red",
+                ))
+            else:
+                console.print(Panel(
+                    f"[bold red]Publishing failed[/bold red]\n\n"
+                    f"[bold]Error:[/] {error_msg}",
+                    title="Error",
+                    border_style="red",
+                ))
+
+            failed_count += 1
+            if not post_all:
+                raise typer.Exit(1)
+
+    # Show summary for batch posting
+    if post_all or dry_run:
+        console.print(f"\n{'='*60}")
+        console.print(f"[bold]Reels Publishing Summary[/bold]")
+        console.print(f"{'='*60}")
+        console.print(f"  [green]Published:[/green] {published_count}")
+        if skipped_count > 0:
+            console.print(f"  [yellow]Skipped (duplicates):[/yellow] {skipped_count}")
+        if failed_count > 0:
+            console.print(f"  [red]Failed:[/red] {failed_count}")
+        console.print(f"  [dim]Total:[/dim] {len(reels_to_publish)}")
+
+    if failed_count > 0:
+        raise typer.Exit(1)
 
 
 def main():

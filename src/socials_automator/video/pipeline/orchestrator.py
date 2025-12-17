@@ -34,6 +34,7 @@ from .cli_display import PipelineDisplay, setup_display
 from .debug_logger import PipelineDebugLogger
 from .script_planner import ScriptPlanner
 from .subtitle_renderer import SubtitleRenderer
+from .thumbnail_generator import ThumbnailGenerator
 from .topic_researcher import TopicResearcher
 from .topic_selector import TopicSelector
 from .video_assembler import VideoAssembler
@@ -55,6 +56,7 @@ STEP_DESCRIPTIONS = {
     "VideoDownloader": "Downloading video clips (with cache optimization)",
     "VideoAssembler": "Assembling clips into 9:16 vertical video",
     "SubtitleRenderer": "Rendering karaoke-style subtitles and adding audio",
+    "ThumbnailGenerator": "Generating thumbnail with hook text for Instagram",
     "CaptionGenerator": "Generating Instagram caption and hashtags with AI validation",
 }
 
@@ -136,9 +138,11 @@ class VideoPipeline:
         self.video_search_step = VideoSearcher(api_key=pexels_api_key, ai_client=ai_client)
         self.video_download_step = VideoDownloader()
 
-        # Sequential: Assembly -> Subtitles -> Caption (need results from both parallel branches)
+        # Sequential: Assembly -> Thumbnail -> Subtitles -> Caption (need results from both parallel branches)
+        # ThumbnailGenerator runs BEFORE SubtitleRenderer to get clean frames without text
         self.final_steps: list[PipelineStep] = [
             VideoAssembler(),  # Uses audio duration as source of truth
+            ThumbnailGenerator(font=subtitle_font, font_size=72),  # Thumbnail from clean video (no subtitles)
             SubtitleRenderer(font=subtitle_font, font_size=subtitle_size),
             CaptionGenerator(ai_client=ai_client),
         ]

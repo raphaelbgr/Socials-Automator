@@ -68,6 +68,55 @@ class CloudinaryUploader:
 
         return result["secure_url"]
 
+    def upload_video(self, video_path: Path, folder: str = "socials-automator") -> str:
+        """Upload a video to Cloudinary.
+
+        Args:
+            video_path: Path to the video file (MP4 recommended)
+            folder: Cloudinary folder to organize uploads
+
+        Returns:
+            Public URL of the uploaded video
+        """
+        result = cloudinary.uploader.upload(
+            str(video_path),
+            folder=folder,
+            resource_type="video",
+            overwrite=True,
+            # Use original filename as public_id for easier cleanup
+            public_id=f"{folder}/{video_path.stem}",
+        )
+
+        # Track for cleanup (need to specify resource_type for videos)
+        self._uploaded_public_ids.append((result["public_id"], "video"))
+
+        return result["secure_url"]
+
+    async def upload_video_async(
+        self,
+        video_path: Path,
+        folder: str = "socials-automator",
+    ) -> str:
+        """Upload a video asynchronously.
+
+        Args:
+            video_path: Path to the video file
+            folder: Cloudinary folder to organize uploads
+
+        Returns:
+            Public URL of the uploaded video
+        """
+        await self._report_progress("Uploading video to Cloudinary", 0, 1)
+
+        loop = asyncio.get_event_loop()
+        url = await loop.run_in_executor(
+            None,
+            lambda: self.upload_video(video_path, folder),
+        )
+
+        await self._report_progress("Uploading video to Cloudinary", 1, 1)
+        return url
+
     async def upload_batch(
         self,
         image_paths: list[Path],
@@ -102,20 +151,25 @@ class CloudinaryUploader:
         return urls
 
     def cleanup(self) -> int:
-        """Delete all uploaded images from Cloudinary.
+        """Delete all uploaded files from Cloudinary.
 
         Call this after successful Instagram posting to free up storage.
 
         Returns:
-            Number of images deleted
+            Number of files deleted
         """
         if not self._uploaded_public_ids:
             return 0
 
         deleted = 0
-        for public_id in self._uploaded_public_ids:
+        for item in self._uploaded_public_ids:
             try:
-                cloudinary.uploader.destroy(public_id)
+                # Handle both old format (just public_id) and new format (tuple with resource_type)
+                if isinstance(item, tuple):
+                    public_id, resource_type = item
+                    cloudinary.uploader.destroy(public_id, resource_type=resource_type)
+                else:
+                    cloudinary.uploader.destroy(item)
                 deleted += 1
             except Exception:
                 # Ignore cleanup errors

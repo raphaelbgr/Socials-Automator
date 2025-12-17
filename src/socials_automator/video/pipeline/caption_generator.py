@@ -88,7 +88,9 @@ class CaptionGenerator(PipelineStep):
         if not self.ai_client:
             raise CaptionGenerationError("AI client required for caption generation (no fallback)")
 
-        max_retries = 3
+        # High retry count to accommodate local LLMs (LM Studio, Ollama) which may need
+        # many attempts to generate valid captions with proper JSON format
+        max_retries = 50
         last_error = None
         last_caption = None
         last_feedback = None

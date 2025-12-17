@@ -79,17 +79,21 @@ Common libraries:
 
 ## CRITICAL: Instagram Posting
 
-**ALWAYS use `--dry-run` when testing the `post` command!**
+**ALWAYS use `--dry-run` when testing upload commands!**
 
 ```bash
-# CORRECT - for testing
-python -m socials_automator.cli post ai.for.mortals --dry-run
+# CORRECT - for testing carousel posts
+python -m socials_automator.cli upload-post ai.for.mortals --dry-run
 
-# DANGEROUS - only run when user explicitly wants to post
-python -m socials_automator.cli post ai.for.mortals
+# CORRECT - for testing reels
+python -m socials_automator.cli upload-reel ai.for.mortals --dry-run
+
+# DANGEROUS - only run when user explicitly wants to upload
+python -m socials_automator.cli upload-post ai.for.mortals
+python -m socials_automator.cli upload-reel ai.for.mortals
 ```
 
-Never run the post command without `--dry-run` unless the user explicitly asks to publish to Instagram.
+Never run upload commands without `--dry-run` unless the user explicitly asks to publish to Instagram.
 
 ### WARNING: Meta API Rate Limit Bug (Ghost Publish)
 
@@ -169,16 +173,28 @@ Instagram displays the first slide in a 4:3 container (cropped from 1:1). The ho
 
 ## Commands Overview
 
-- `generate` - Creates carousel content (safe to run)
+**Generation Commands (safe to run):**
+- `generate-post` - Generate carousel content
+- `generate-reel` - Generate video reel content
+
+**Upload Commands (USE --dry-run FOR TESTING):**
+- `upload-post` - Upload carousel to Instagram
+- `upload-reel` - Upload reel to Instagram
+
+**Other Commands:**
 - `schedule` - Moves posts to pending-post queue (safe to run)
-- `post` - Publishes to Instagram (USE --dry-run FOR TESTING)
-- `post --dry-run` - Validates without posting (SAFE)
+- `queue` - View pending queue
 
 ## Folder Structure
 
 ```
 profiles/<name>/posts/YYYY/MM/
-  generated/     - New content from generate command
+  generated/     - New content from generate-post command
   pending-post/  - Queued for Instagram (from schedule command)
-  posted/        - Published to Instagram (from post command)
+  posted/        - Published to Instagram (from upload-post command)
+
+profiles/<name>/reels/YYYY/MM/
+  generated/     - New content from generate-reel command
+  pending-post/  - Ready to publish
+  posted/        - Published to Instagram (from upload-reel command)
 ```
