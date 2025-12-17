@@ -186,7 +186,18 @@ class VideoSearcher(IVideoSearcher):
                     if video_id in self._used_video_ids:
                         self.log_detail(f"[WARNING] Video {video_id} already used but returned again!")
                     self._mark_video_used(video_id)
-                    self.log_detail(f"Segment {segment.index}: selected video {video_id} (duration: {video.get('duration', 0)}s)")
+
+                    # Log video details including dimensions
+                    video_files = video.get("video_files", [])
+                    if video_files:
+                        vf = video_files[0]
+                        width = vf.get("width", 0)
+                        height = vf.get("height", 0)
+                        ratio = f"{width}x{height}" if width and height else "unknown"
+                        is_9_16 = "9:16" if self._is_9_16(video) else "NOT 9:16"
+                        self.log_detail(f"Segment {segment.index}: video {video_id} ({ratio}, {is_9_16}, {video.get('duration', 0)}s)")
+                    else:
+                        self.log_detail(f"Segment {segment.index}: video {video_id} (duration: {video.get('duration', 0)}s)")
 
                 results.append({
                     "segment_index": segment.index,
@@ -382,7 +393,7 @@ Respond with ONLY valid JSON."""
             "query": query,
             "orientation": orientation,
             "size": "medium",  # 1080p
-            "per_page": 15,
+            "per_page": 30,  # Fetch more to find true 9:16 videos
         }
 
         response = await client.get(f"{self.PEXELS_API_URL}/search", params=params)
@@ -394,33 +405,51 @@ Respond with ONLY valid JSON."""
         if not videos:
             return None
 
-        # For portrait, prefer exact 9:16 ratio
+        # For portrait, ONLY accept true 9:16 videos (strict mode)
         if orientation == "portrait":
             perfect_matches = [v for v in videos if self._is_9_16(v)]
             if perfect_matches:
+                self.log_detail(f"  Found {len(perfect_matches)}/{len(videos)} true 9:16 videos")
                 return self._select_best_duration(perfect_matches, target_duration)
+            else:
+                # No true 9:16 found - log and return None to try other keywords/fallback
+                self.log_detail(f"  No true 9:16 videos in {len(videos)} portrait results")
+                return None
 
-        # Return best duration match
+        # For landscape, return best duration match (will be cropped to 9:16)
         return self._select_best_duration(videos, target_duration)
 
     async def _search_fallback(self) -> dict:
-        """Search for generic fallback video.
+        """Search for generic fallback video (prefers 9:16 vertical videos).
 
         Returns:
             Fallback video.
         """
         client = await self._get_client()
 
+        # Queries more likely to return vertical/portrait videos
         fallback_queries = [
+            "vertical abstract",
+            "phone screen recording",
+            "vertical gradient",
             "abstract technology",
             "digital background",
-            "blue abstract",
-            "gradient motion",
+            "neon lights vertical",
+            "particles motion",
         ]
 
         for query in fallback_queries:
+            self.log_detail(f"Fallback search: '{query}'")
             video = await self._search_query(client, query, 10.0)
             if video:
+                # Log what we're using as fallback
+                video_files = video.get("video_files", [])
+                if video_files:
+                    vf = video_files[0]
+                    width = vf.get("width", 0)
+                    height = vf.get("height", 0)
+                    is_9_16 = "9:16" if self._is_9_16(video) else "NOT 9:16"
+                    self.log_detail(f"  Fallback: {video.get('id')} ({width}x{height}, {is_9_16})")
                 return video
 
         raise VideoSearchError("Could not find any fallback videos")

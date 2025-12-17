@@ -2626,7 +2626,7 @@ async def _post_reels_to_instagram(
                         console.print(f"           [red]Upload error: {str(e)[:80]}[/red]")
 
                 log_step(1, total_steps, "OK", "Video uploaded to Cloudinary",
-                        f"{video_url[:50]}...")
+                        video_url)
 
                 # Save upload state for resume capability
                 reel_metadata["_upload_state"] = {
