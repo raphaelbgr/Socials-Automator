@@ -1,15 +1,16 @@
 """Thumbnail generator for Instagram Reels.
 
 Generates a cover image with hook text for Instagram Reels.
-The text is positioned within the 1:1 grid safe zone so it's
-visible in all Instagram views (grid, feed, full reel).
+The text is positioned within the 3:4 profile grid safe zone so it's
+visible when browsing the profile reels grid.
 
 Safe Zones:
     - Full Reel: 1080x1920 (9:16)
+    - Profile Grid: 1080x1440 (3:4) - centered crop of 9:16
     - Feed Preview: 1080x1350 (4:5) - centered
-    - Grid View: 1080x1080 (1:1) - center square (profile thumbnail)
 
-Text should be centered in the grid safe zone with margins.
+Text should be centered in the 3:4 safe zone with margins.
+Uses TextFitter utility for auto-fitting text within container.
 """
 
 from pathlib import Path
@@ -22,6 +23,7 @@ from socials_automator.constants import (
     VIDEO_HEIGHT,
     SUBTITLE_FONT_NAME,
 )
+from socials_automator.utils.text_fitting import TextFitter, FitResult
 from .base import (
     ArtifactStatus,
     PipelineContext,
@@ -30,20 +32,21 @@ from .base import (
 )
 
 
-# Safe zone dimensions
-GRID_SAFE_ZONE_SIZE = 1080  # 1:1 square
-FEED_PREVIEW_HEIGHT = 1350  # 4:5 aspect
+# Safe zone dimensions (3:4 profile grid = 1080x1440, centered in 9:16)
+GRID_SAFE_HEIGHT = 1440  # 3:4 aspect (1080 * 4/3)
+GRID_SAFE_TOP = (1920 - 1440) // 2  # 240px from top
+GRID_SAFE_BOTTOM = GRID_SAFE_TOP + GRID_SAFE_HEIGHT  # 1680px
 
 # Text styling
-DEFAULT_FONT_SIZE = 54  # Default size (use --font-size to customize)
+DEFAULT_FONT_SIZE = 90  # Default size for grid visibility (use --font-size to customize)
 DEFAULT_TEXT_COLOR = "#FFFFFF"
 DEFAULT_STROKE_COLOR = "#000000"
-DEFAULT_STROKE_WIDTH = 3  # Stroke width for text outline
-TEXT_HORIZONTAL_MARGIN = 0.08  # 8% margin on each side (reduced for larger text)
-TEXT_VERTICAL_MARGIN = 0.12  # 12% margin top/bottom within safe zone
-MAX_CHARS_PER_LINE = 18  # Force line breaks for readability
-MAX_WORDS = 10  # Maximum words in thumbnail title
-MAX_LINES = 3  # Maximum lines of text
+DEFAULT_STROKE_WIDTH = 4  # Stroke width for text outline (increased for larger font)
+TEXT_HORIZONTAL_MARGIN = 0.06  # 6% margin on each side
+TEXT_VERTICAL_MARGIN = 0.10  # 10% margin top/bottom within safe zone
+MAX_CHARS_PER_LINE = 14  # Shorter lines for larger font (was 18)
+MAX_WORDS = 8  # Maximum words in thumbnail title (was 10)
+MAX_LINES = 4  # Maximum lines of text (header + 3 stories for news teaser)
 
 
 class ThumbnailGenerator(PipelineStep):
@@ -141,6 +144,10 @@ class ThumbnailGenerator(PipelineStep):
     ) -> list[str]:
         """Wrap text into lines for better readability.
 
+        If the text already contains newlines (e.g., teaser list format),
+        splits on newlines and preserves that formatting.
+        Otherwise, wraps text by word count.
+
         Args:
             text: Text to wrap.
             max_chars: Maximum characters per line.
@@ -150,6 +157,12 @@ class ThumbnailGenerator(PipelineStep):
         Returns:
             List of lines.
         """
+        # If text already has newlines (teaser format), use that structure
+        if "\n" in text:
+            lines = [line.strip() for line in text.split("\n") if line.strip()]
+            return lines[:max_lines]
+
+        # Otherwise, wrap by word count
         words = text.split()
 
         # Limit to max_words
@@ -180,15 +193,90 @@ class ThumbnailGenerator(PipelineStep):
 
         return lines
 
+    def _is_teaser_format(self, text: str) -> bool:
+        """Check if text is in teaser format (header + bullet headlines).
+
+        Teaser format has:
+        - Newlines separating lines
+        - Lines starting with "-> " (except header)
+
+        Args:
+            text: Text to check.
+
+        Returns:
+            True if teaser format.
+        """
+        if "\n" not in text:
+            return False
+        lines = text.strip().split("\n")
+        if len(lines) < 2:
+            return False
+        # Check if any line has "-> " prefix
+        return any(line.strip().startswith("-> ") for line in lines)
+
+    def _fit_text(self, text: str) -> FitResult:
+        """Fit text using TextFitter utility.
+
+        Automatically detects teaser format vs regular text.
+
+        Args:
+            text: Text to fit (already uppercase).
+
+        Returns:
+            FitResult with fitted lines and font size.
+        """
+        font_path = self._get_font_path()
+
+        # Calculate max height for text (within safe zone margins)
+        margin_v = int(GRID_SAFE_HEIGHT * TEXT_VERTICAL_MARGIN)
+        max_text_height = GRID_SAFE_HEIGHT - (2 * margin_v)
+
+        fitter = TextFitter(
+            max_width=VIDEO_WIDTH,
+            max_height=max_text_height,
+            margin_percent=TEXT_HORIZONTAL_MARGIN,
+            font_path=font_path,
+            line_spacing_ratio=0.3,
+        )
+
+        if self._is_teaser_format(text):
+            # Parse teaser format: header + headlines
+            lines = [line.strip() for line in text.split("\n") if line.strip()]
+            header = lines[0]
+            headlines = [line[3:] if line.startswith("-> ") else line for line in lines[1:]]
+
+            return fitter.fit_teaser_text(
+                header=header,
+                headlines=headlines,
+                header_font_size=self.font_size,
+                headline_font_size=int(self.font_size * 0.75),  # 75% of header size
+                min_font_size=int(self.font_size * 0.5),  # 50% minimum
+                max_headlines=3,
+            )
+        else:
+            # Regular text (hook)
+            lines = self._wrap_text(text)
+            return fitter.fit_text(
+                lines=lines,
+                target_font_size=self.font_size,
+                min_font_size=int(self.font_size * 0.6),  # 60% minimum
+                max_lines=MAX_LINES,
+            )
+
     def _render_text_on_image(
         self,
         image: Image.Image,
         text: str,
     ) -> Image.Image:
-        """Render hook text centered in the grid safe zone.
+        """Render hook text centered in the 3:4 profile grid safe zone.
 
-        The grid safe zone is the center 1080x1080 square of the 1080x1920 video.
-        Text is centered within this zone with margins.
+        Uses TextFitter to auto-fit text within container:
+        - Detects teaser format vs regular text
+        - Truncates long lines with "..."
+        - Scales font if needed
+
+        The grid safe zone is the center 1080x1440 area (3:4) of the 1080x1920 video.
+        This is what's visible when viewing reels on an Instagram profile grid.
 
         Args:
             image: Base image (1080x1920).
@@ -201,45 +289,59 @@ class ThumbnailGenerator(PipelineStep):
         img = image.copy()
         draw = ImageDraw.Draw(img)
 
-        # Load font
+        # Uppercase for impact
+        text_upper = text.upper()
+
+        # Fit text using utility
+        fit_result = self._fit_text(text_upper)
+
+        if fit_result.truncated:
+            self.log_detail(f"Text truncated to fit (font: {fit_result.font_size}px)")
+
+        # Load font at fitted size
         font_path = self._get_font_path()
-        try:
-            font = ImageFont.truetype(str(font_path), self.font_size)
-        except Exception as e:
-            self.log_detail(f"Font load error: {e}, using default")
-            font = ImageFont.load_default()
+        is_teaser = self._is_teaser_format(text_upper)
+
+        # For teaser format, use different sizes for header vs headlines
+        if is_teaser:
+            header_font = ImageFont.truetype(str(font_path), self.font_size)
+            headline_font = ImageFont.truetype(str(font_path), fit_result.font_size)
+        else:
+            font = ImageFont.truetype(str(font_path), fit_result.font_size)
 
         # Calculate safe zone boundaries
-        # Grid safe zone: center 1080x1080 square
-        safe_zone_top = (VIDEO_HEIGHT - GRID_SAFE_ZONE_SIZE) // 2  # 420
-        safe_zone_bottom = safe_zone_top + GRID_SAFE_ZONE_SIZE  # 1500
+        safe_zone_top = GRID_SAFE_TOP  # 240px
+        safe_zone_bottom = GRID_SAFE_BOTTOM  # 1680px
 
         # Apply margins within safe zone
-        margin_h = int(VIDEO_WIDTH * TEXT_HORIZONTAL_MARGIN)
-        margin_v = int(GRID_SAFE_ZONE_SIZE * TEXT_VERTICAL_MARGIN)
-
-        text_area_left = margin_h
-        text_area_right = VIDEO_WIDTH - margin_h
+        margin_v = int(GRID_SAFE_HEIGHT * TEXT_VERTICAL_MARGIN)
         text_area_top = safe_zone_top + margin_v
         text_area_bottom = safe_zone_bottom - margin_v
-        text_area_width = text_area_right - text_area_left
+        text_area_height = text_area_bottom - text_area_top
 
-        # Wrap text into lines
-        lines = self._wrap_text(text.upper())  # Uppercase for impact
-
-        # Calculate total text height
+        # Calculate line dimensions
+        lines = fit_result.lines
         line_heights = []
         line_widths = []
-        for line in lines:
-            bbox = draw.textbbox((0, 0), line, font=font)
+
+        for i, line in enumerate(lines):
+            # Use header font for first line in teaser format
+            if is_teaser:
+                line_font = header_font if i == 0 else headline_font
+            else:
+                line_font = font
+
+            bbox = draw.textbbox((0, 0), line, font=line_font)
             line_widths.append(bbox[2] - bbox[0])
             line_heights.append(bbox[3] - bbox[1])
 
-        line_spacing = self.font_size * 0.3  # 30% of font size
+        # Calculate spacing based on font size
+        base_font_size = self.font_size if is_teaser else fit_result.font_size
+        line_spacing = base_font_size * 0.3
+
         total_height = sum(line_heights) + line_spacing * (len(lines) - 1)
 
-        # Calculate starting Y position (vertically centered in text area)
-        text_area_height = text_area_bottom - text_area_top
+        # Calculate starting Y position (vertically centered)
         start_y = text_area_top + (text_area_height - total_height) // 2
 
         # Draw each line centered
@@ -247,6 +349,12 @@ class ThumbnailGenerator(PipelineStep):
         for i, line in enumerate(lines):
             line_width = line_widths[i]
             line_height = line_heights[i]
+
+            # Use appropriate font
+            if is_teaser:
+                line_font = header_font if i == 0 else headline_font
+            else:
+                line_font = font
 
             # Center horizontally
             x = (VIDEO_WIDTH - line_width) // 2
@@ -258,7 +366,7 @@ class ThumbnailGenerator(PipelineStep):
                         draw.text(
                             (x + dx, current_y + dy),
                             line,
-                            font=font,
+                            font=line_font,
                             fill=self.stroke_color,
                         )
 
@@ -266,7 +374,7 @@ class ThumbnailGenerator(PipelineStep):
             draw.text(
                 (x, current_y),
                 line,
-                font=font,
+                font=line_font,
                 fill=self.text_color,
             )
 
@@ -307,8 +415,14 @@ class ThumbnailGenerator(PipelineStep):
                 self.frame_time,
             )
 
-            # Render hook text on frame
-            hook_text = context.script.hook
+            # Use thumbnail_text if available (for news reels with teaser list)
+            # Otherwise fall back to hook text
+            thumbnail_text = getattr(context, 'thumbnail_text', None)
+            if thumbnail_text:
+                hook_text = thumbnail_text
+                self.log_detail(f"Using thumbnail teaser text ({len(thumbnail_text)} chars)")
+            else:
+                hook_text = context.script.hook
             self.log_detail(f"Hook: {hook_text[:50]}...")
             thumbnail = self._render_text_on_image(frame_image, hook_text)
 

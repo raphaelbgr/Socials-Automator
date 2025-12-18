@@ -150,6 +150,41 @@ Press Ctrl+C to stop the loop.
 
 Generate video reels and post them to Instagram:
 
+### Workflow 7: News Briefings (Auto-Aggregated News Videos)
+
+Generate news briefing videos that automatically aggregate content from RSS feeds and web search:
+
+```bash
+# News profiles are auto-detected via 'news_sources' in metadata.json
+# Just run generate-reel on a news profile and it handles everything
+python -m socials_automator.cli generate-reel news.but.quick
+
+# Specify a news edition (morning, midday, evening, night)
+python -m socials_automator.cli generate-reel news.but.quick --edition morning
+
+# Customize number of stories per video (default 4)
+python -m socials_automator.cli generate-reel news.but.quick --stories 5
+
+# Generate multiple news briefings with upload
+python -m socials_automator.cli generate-reel news.but.quick -n 10 --upload
+
+# Full news pipeline with GPU acceleration
+py -X utf8 -m socials_automator.cli generate-reel news.but.quick --text-ai lmstudio -g --upload
+```
+
+**News Pipeline Flow:**
+1. Aggregate news from RSS feeds (TMZ, Variety, Rolling Stone, etc.)
+2. Search DuckDuckGo for additional entertainment news
+3. AI curates and ranks stories by relevance, virality, and usefulness
+4. Generate video script with hook, story segments, and CTA
+5. Match stock footage from Pexels for each story
+6. Generate voiceover and karaoke-style subtitles
+7. Output final news briefing video
+
+**Note:** Windows users should use `py -X utf8` to handle Unicode characters in news content.
+
+---
+
 ```bash
 # One-command: Generate AND upload in a single step
 python -m socials_automator.cli generate-reel ai.for.mortals --upload
@@ -270,7 +305,9 @@ python -m socials_automator.cli generate-post --help
 | `generate-post` | Generate carousel posts for a profile |
 | `generate-reel` | Generate video reels for Instagram/TikTok |
 | `upload-post` | Upload pending carousel posts to Instagram |
-| `upload-reel` | Upload pending video reels to Instagram |
+| `upload-reel` | Upload pending video reels to Instagram/TikTok |
+| `cleanup-reels` | Remove video files from posted reels to free disk space |
+| `migrate-platform-status` | Mark existing posted reels with platform status |
 | `queue` | List all posts in the publishing queue |
 | `schedule` | Move generated posts to pending queue |
 | `fix-thumbnails` | Generate missing thumbnails for existing reels |
@@ -375,7 +412,7 @@ python -m socials_automator.cli generate-reel <profile> [OPTIONS]
 | `--voice` | `-v` | Voice preset (see Available Voices below) | rvc_adam |
 | `--voice-rate` | | Speech rate adjustment (e.g., "+12%" faster, "-10%" slower) | +0% |
 | `--voice-pitch` | | Pitch adjustment (e.g., "+3Hz" higher, "-2Hz" lower) | +0Hz |
-| `--subtitle-size` | `-s` | Subtitle font size in pixels | 80 |
+| `--subtitle-size` | | Subtitle font size in pixels | 80 |
 | `--font` | | Subtitle font from /fonts folder | Montserrat-Bold.ttf |
 | `--length` | `-l` | Target video length (e.g., 30s, 1m, 90s) | 1m |
 | `--output` | `-o` | Output directory | Auto |
@@ -385,6 +422,10 @@ python -m socials_automator.cli generate-reel <profile> [OPTIONS]
 | `--loop-count` | `-n` | Generate exactly N videos then stop (implies --loop) | None |
 | `--gpu-accelerate` | `-g` | Enable GPU acceleration with NVENC (requires NVIDIA GPU) | False |
 | `--gpu` | | GPU index to use (0, 1, etc.). Auto-selects if not specified | Auto |
+| `--news` | | Force news mode (auto-detected for profiles with news_sources) | False |
+| `--edition` | `-e` | News edition: morning, midday, evening, night | Auto |
+| `--stories` | `-s` | Number of news stories per video | 4 |
+| `--news-age` | | Max age of news articles in hours | 24 |
 
 **Available Voices:**
 | Voice | Description |
@@ -470,9 +511,29 @@ python -m socials_automator.cli generate-reel ai.for.mortals -n 5 --upload
 
 # Full pipeline: GPU acceleration, custom voice, auto-upload
 python -m socials_automator.cli generate-reel ai.for.mortals --text-ai lmstudio -g --voice adam_excited --upload
+
+# --- News Briefing Examples ---
+
+# Generate news briefing (auto-detected for news profiles)
+python -m socials_automator.cli generate-reel news.but.quick
+
+# Force morning edition
+python -m socials_automator.cli generate-reel news.but.quick --edition morning
+
+# Include 5 stories instead of default 4
+python -m socials_automator.cli generate-reel news.but.quick --stories 5
+
+# Only use news from the last 12 hours
+python -m socials_automator.cli generate-reel news.but.quick --news-age 12
+
+# Full news pipeline with GPU and upload (Windows)
+py -X utf8 -m socials_automator.cli generate-reel news.but.quick --text-ai lmstudio -g --upload
+
+# Generate 25 news videos in a loop
+py -X utf8 -m socials_automator.cli generate-reel news.but.quick -n 25 -g --upload
 ```
 
-**Pipeline:**
+**Standard Pipeline:**
 1. [AI] Select topic from profile content pillars
 2. Research topic via web search
 3. [AI] Plan video script (targeting --length duration)
@@ -481,9 +542,25 @@ python -m socials_automator.cli generate-reel ai.for.mortals --text-ai lmstudio 
 6. Search Pexels for stock footage (with local cache)
 7. Download video clips
 8. Assemble into 9:16 vertical video (matches narration length)
-9. Add karaoke-style subtitles with moving watermark
-10. [AI] Generate caption and hashtags (with AI validation and retry)
-11. Output final.mp4
+9. Generate thumbnail with auto-fitted text (truncates long text to fit 3:4 container)
+10. Add karaoke-style subtitles with moving watermark
+11. [AI] Generate caption and hashtags (with AI validation and retry)
+12. Output final.mp4 + thumbnail.jpg
+
+**News Pipeline (for news profiles):**
+1. Aggregate news from RSS feeds (TMZ, Variety, E!, Rolling Stone, etc.)
+2. Search DuckDuckGo for additional entertainment news
+3. Deduplicate and filter by age (--news-age hours)
+4. [AI] Curate and rank stories (relevance, virality, usefulness scores)
+5. Select top N stories (--stories count)
+6. [AI] Generate news briefing script with hook and story segments
+7. Generate voiceover with news narration
+8. Search Pexels for stock footage matching story keywords
+9. Assemble 9:16 vertical video with all clips
+10. Generate thumbnail with teaser list (auto-fitted: "JUST IN -> Story 1 -> Story 2...")
+11. Add karaoke-style subtitles
+12. [AI] Generate caption with hashtags
+13. Output final.mp4 + thumbnail.jpg
 
 **Duration Validation:**
 - The AI generates scripts targeting your `--length` duration
@@ -573,7 +650,7 @@ python -m socials_automator.cli upload-post ai.for.mortals --dry-run
 
 ### upload-reel
 
-Upload pending video reels to Instagram. **By default, posts ALL pending reels** in chronological order. Requires Instagram API and Cloudinary credentials (see [Instagram Posting Setup](#instagram-posting-setup)).
+Upload pending video reels to Instagram and/or TikTok. **By default, posts ALL pending reels** in chronological order to Instagram. Supports multi-platform publishing with platform status tracking.
 
 ```bash
 python -m socials_automator.cli upload-reel <profile> [reel-id] [OPTIONS]
@@ -590,10 +667,13 @@ python -m socials_automator.cli upload-reel <profile> [reel-id] [OPTIONS]
 |--------|-------|-------------|---------|
 | `--one` | `-1` | Post only the oldest pending (instead of all) | False |
 | `--dry-run` | | Validate the reel without actually publishing | False |
+| `--instagram` | | Upload to Instagram only | True (default) |
+| `--tiktok` | | Upload to TikTok only | False |
+| `--all` | | Upload to all configured platforms | False |
 
 **Examples:**
 ```bash
-# Post ALL pending reels (default behavior)
+# Post ALL pending reels to Instagram (default behavior)
 python -m socials_automator.cli upload-reel ai.for.mortals
 
 # Post only the oldest pending reel
@@ -605,6 +685,15 @@ python -m socials_automator.cli upload-reel ai.for.mortals 16-001
 
 # Validate without posting
 python -m socials_automator.cli upload-reel ai.for.mortals --dry-run
+
+# Post to TikTok only
+python -m socials_automator.cli upload-reel ai.for.mortals --tiktok
+
+# Post to all platforms (Instagram + TikTok)
+python -m socials_automator.cli upload-reel ai.for.mortals --all
+
+# Post existing Instagram reels to TikTok (uploads from posted/ folder)
+python -m socials_automator.cli upload-reel ai.for.mortals --tiktok
 ```
 
 **Workflow:**
@@ -629,11 +718,208 @@ profiles/<profile>/reels/YYYY/MM/
 **Resume Capability:**
 If the Instagram publish fails after Cloudinary upload succeeds, the Cloudinary URL is saved. Running the command again will reuse the existing upload instead of re-uploading.
 
+**Full Upload Flow (Preflight -> Upload -> Postflight):**
+
+When you run `upload-reel` or `generate-reel --upload`, the system runs a comprehensive validation and repair flow:
+
+```
+>>> PRE-FLIGHT SCAN
+  Scanning generated/pending-post/posted folders...
+  Found: 28 reels across folders
+
+>>> DUPLICATE DETECTION
+  [OK] No duplicates found
+  (or merges duplicates by Instagram media_id/permalink)
+
+>>> FOLDER NORMALIZATION
+  [OK] All folder names valid
+  (or renames "18-003-reel" -> "18-003-evening-wrap-dec-18")
+
+>>> VALIDATION
+  18-004-my-topic-slug
+    [OK] All artifacts valid
+  (or [REPAIR] Regenerates missing caption/hashtags/thumbnail via AI)
+  (or [INVALID] Deletes folders missing final.mp4)
+
+>>> PRE-FLIGHT SUMMARY
+  Ready to upload: 1
+  Already posted:  27
+  Repaired:        0
+  Renamed:         0
+
+>>> UPLOAD
+  [1/1] 18-004-my-topic-slug
+    Uploading to Cloudinary...
+    Creating Instagram container...
+    Waiting for processing... (1-10 min)
+    Publishing...
+    [OK] instagram: https://instagram.com/reel/XXX
+
+>>> POST-FLIGHT VERIFICATION
+  Checking posted/ folders...
+  [FIX] 18-003-reel:
+        -> updated topic: Evening Wrap - 2025-12-18...
+        -> renamed: 18-003-reel -> 18-003-evening-wrap-2025-12-18
+        [OK] All issues fixed
+
+  Verified: 28 | Issues: 0 | Fixed: 1
+```
+
+**Preflight Checks:**
+| Check | Action |
+|-------|--------|
+| Duplicate detection | Merges folders with same Instagram media_id |
+| Folder normalization | Renames generic names (e.g., "reel") to topic slugs |
+| Artifact validation | Checks for final.mp4, caption.txt, thumbnail.jpg |
+| Artifact repair | AI regenerates missing captions/hashtags/thumbnails |
+| Invalid cleanup | Deletes folders without recoverable video |
+
+**Postflight Checks (on posted/ folder):**
+| Check | Action |
+|-------|--------|
+| Instagram metadata | Verifies media_id, permalink, uploaded_at |
+| Folder name | Auto-fixes generic names using metadata/script |
+| Topic extraction | Pulls topic from script.json, news_brief, or caption |
+| Missing artifacts | Regenerates caption/hashtags if missing |
+
+**Targeted Mode (--upload flag or specific reel_id):**
+When uploading a single reel (via `--upload` or `upload-reel <id>`), the system runs a lightweight preflight on just that reel, then full postflight on all posted folders.
+
 **Video Requirements:**
 - Format: MP4 (H.264 codec recommended)
 - Duration: 15-90 seconds via API
 - Aspect Ratio: 9:16 (portrait/vertical)
 - Resolution: 1080x1920 recommended
+
+**Platform Status Tracking:**
+
+The system tracks which platforms each reel has been uploaded to via `platform_status` in `metadata.json`:
+
+```json
+{
+  "platform_status": {
+    "instagram": {
+      "uploaded": true,
+      "uploaded_at": "2025-12-17T10:30:00",
+      "media_id": "17841234567890",
+      "permalink": "https://www.instagram.com/reel/..."
+    },
+    "tiktok": {
+      "uploaded": false
+    }
+  }
+}
+```
+
+This allows you to:
+- Upload existing Instagram reels to TikTok later
+- See exactly which platforms each reel was posted to
+- Avoid duplicate uploads to the same platform
+
+---
+
+### cleanup-reels
+
+Clean up posted reels by removing video files to free disk space. Keeps metadata, thumbnails, and captions for reference. Before deletion, fetches and saves the Instagram video URL to metadata.
+
+```bash
+python -m socials_automator.cli cleanup-reels <profile> [OPTIONS]
+```
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `profile` | Profile name (required) |
+
+**Options:**
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--older-than` | `-o` | Only clean reels older than N days | All |
+| `--dry-run` | | Preview what would be cleaned without deleting | False |
+| `--no-fetch-urls` | | Skip fetching Instagram video URLs (faster) | False |
+
+**Examples:**
+```bash
+# Preview what would be cleaned (no deletion)
+python -m socials_automator.cli cleanup-reels ai.for.mortals --dry-run
+
+# Clean all posted reels
+python -m socials_automator.cli cleanup-reels ai.for.mortals
+
+# Clean only reels older than 7 days
+python -m socials_automator.cli cleanup-reels ai.for.mortals --older-than 7
+
+# Skip fetching Instagram URLs (faster, but no video_url in metadata)
+python -m socials_automator.cli cleanup-reels ai.for.mortals --no-fetch-urls
+```
+
+**What gets deleted:**
+- `final.mp4` - The video file (20-55 MB each)
+- `debug_log.txt` - Debug logs (if present)
+
+**What gets kept:**
+- `metadata.json` - Enhanced with cleanup record and Instagram video URL
+- `thumbnail.jpg` - Visual reference
+- `caption.txt` - Original caption
+- `caption+hashtags.txt` - Full posted caption
+
+**Metadata after cleanup:**
+```json
+{
+  "cleanup": {
+    "cleaned_at": "2025-12-18T14:00:00",
+    "video_deleted": true,
+    "space_freed_mb": 45.2,
+    "files_removed": ["final.mp4", "debug_log.txt"]
+  },
+  "platform_status": {
+    "instagram": {
+      "permalink": "https://www.instagram.com/reel/XXX/",
+      "video_url": "https://scontent-xxx.cdninstagram.com/..."
+    }
+  }
+}
+```
+
+**Space Savings:**
+Typical cleanup results:
+- 20 reels = ~500 MB freed
+- 100 reels = ~4 GB freed
+- 150 reels = ~6 GB freed
+
+---
+
+### migrate-platform-status
+
+Migrate existing posted reels to the new platform status tracking format. This marks all reels in the `posted/` folder as uploaded to Instagram.
+
+```bash
+python -m socials_automator.cli migrate-platform-status <profile> [OPTIONS]
+```
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `profile` | Profile name (required) |
+
+**Options:**
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--dry-run` | Show what would be done without making changes | False |
+
+**Examples:**
+```bash
+# Migrate all posted reels to new format
+python -m socials_automator.cli migrate-platform-status ai.for.mortals
+
+# Preview what would be done
+python -m socials_automator.cli migrate-platform-status ai.for.mortals --dry-run
+```
+
+**When to use:**
+- After upgrading to support multi-platform uploads
+- Before uploading existing Instagram reels to TikTok
+- The command is idempotent (safe to run multiple times)
 
 ---
 
@@ -1341,6 +1627,143 @@ Socials-Automator/
 └── README.md
 ```
 
+## Internal Architecture (For Developers)
+
+This section documents the internal flow for developers and AI assistants working on the codebase.
+
+### CLI Architecture (Feature-Based)
+
+```
+src/socials_automator/cli/
+    app.py               # Typer app, logging, command registration
+    core/                # Shared utilities (pure functions)
+        types.py         # Result[T], Success, Failure, ProfileConfig
+        parsers.py       # parse_interval, parse_length, parse_voice_preset
+        validators.py    # validate_profile, validate_voice, validate_length
+        paths.py         # get_profile_path, get_output_dir, generate_post_id
+        console.py       # Rich console singleton
+    reel/                # Video reel feature (vertical slice)
+        params.py        # ReelGenerationParams, ReelUploadParams (frozen dataclasses)
+        validators.py    # validate_reel_generation_params
+        display.py       # show_reel_config, show_reel_result (pure functions)
+        service.py       # ReelGeneratorService, ReelUploaderService (stateless)
+        commands.py      # generate_reel, upload_reel (thin wrappers)
+        artifacts.py     # Artifact validation and regeneration
+        duplicates.py    # Duplicate detection and merging
+        validator.py     # ReelValidator with repair capabilities
+    post/                # Carousel post feature (same pattern)
+```
+
+### Key Design Patterns
+
+| Pattern | Implementation |
+|---------|---------------|
+| Immutable params | `@dataclass(frozen=True)` for all parameters |
+| Result type | `Result[T] = Success[T] \| Failure` for error handling |
+| Stateless services | All state passed via params, no instance variables |
+| Thin commands | Commands only orchestrate: params -> validate -> display -> service |
+
+### Upload Flow Architecture
+
+```
+upload-reel / generate-reel --upload
+         |
+         v
+    upload_all(params)                    # Single entry point
+         |
+         +-- params.reel_id set? ------+
+         |                              |
+         v                              v
+  _run_preflight()              _run_preflight_single()
+  (full scan/dedupe)            (targeted validation)
+         |                              |
+         +-------------+----------------+
+                       |
+                       v
+              _upload_single()           # Actual upload logic
+                       |
+                       v
+              _run_postflight()          # Verify & fix posted/
+```
+
+### Key Service Methods (reel/service.py)
+
+| Method | Purpose |
+|--------|---------|
+| `upload_all()` | Main entry point, runs full preflight/upload/postflight |
+| `upload_single()` | Delegates to upload_all() with reel_id filter |
+| `_run_preflight()` | Full scan, dedupe, normalize, validate all reels |
+| `_run_preflight_single()` | Targeted validation for one reel |
+| `_run_postflight()` | Verify posted/, auto-fix folder names and artifacts |
+| `_normalize_folder_name()` | Rename folders to DD-NNN-topic-slug format |
+| `_extract_better_topic()` | Find topic from script.json/news_brief/caption |
+
+### Utility Modules
+
+| Module | Purpose |
+|--------|---------|
+| `utils/text_fitting.py` | Auto-fit text in image containers (thumbnails) |
+| `video/pipeline/thumbnail_generator.py` | Generate thumbnails with fitted text |
+| `services/caption_service.py` | AI-powered caption/hashtag generation |
+| `news/aggregator.py` | RSS feed + web search news collection |
+| `news/curator.py` | AI-powered news ranking and selection |
+
+### Artifact Flow
+
+```
+generate-reel
+    |
+    v
+[generated/DD-NNN-topic-slug/]
+    final.mp4           # Required - video file
+    metadata.json       # Required - topic, duration, platform_status
+    caption.txt         # Required - plain caption
+    caption+hashtags.txt # Required - caption with hashtags
+    thumbnail.jpg       # Required - cover image (auto-fitted text)
+    script.json         # Optional - full script for reference
+    voiceover.mp3       # Optional - audio file
+```
+
+### Validation States (ReelStatus)
+
+| Status | Meaning | Action |
+|--------|---------|--------|
+| `VALID` | All artifacts present | Ready to upload |
+| `ALREADY_POSTED` | Has Instagram media_id | Skip (move to posted/) |
+| `REPAIRABLE` | Missing caption/hashtags/thumbnail | AI regeneration |
+| `INVALID` | Missing final.mp4 | Delete folder |
+
+### Folder Naming Convention
+
+```
+DD-NNN-topic-slug
+ |  |      |
+ |  |      +-- Slugified topic (lowercase, hyphens, max 50 chars)
+ |  +--------- Sequential number (001-999)
+ +------------ Day of month (01-31)
+
+Examples:
+  18-001-5-ai-tools-for-productivity
+  18-002-evening-wrap-2025-12-18
+  18-003-netflix-acquires-warner
+```
+
+### News Pipeline Context
+
+```python
+class NewsPipelineContext(PipelineContext):
+    news_brief: Optional[NewsBrief]      # Curated stories
+    thumbnail_text: Optional[str]         # Teaser list for thumbnail
+```
+
+The `thumbnail_text` is auto-generated from `news_brief.get_thumbnail_text()`:
+```
+JUST IN
+-> Netflix acquires...
+-> GNR announces tour...
+-> Emily in Paris S5...
+```
+
 ## Troubleshooting
 
 ### "No providers available"
@@ -1381,7 +1804,7 @@ Features that are **NOT included** in this project:
 | **Video/Reels** | **Included!** | Use `generate-reel` command to generate video reels |
 | **Stories** | Not included | Instagram Stories not supported |
 | **Scheduled posting** | Not included | No built-in scheduler (use cron/Task Scheduler with `--loop-each`) |
-| **Multiple platforms** | Not included | Instagram only (no Twitter/X, LinkedIn, TikTok) |
+| **Multiple platforms** | Partial | Instagram + TikTok for reels (no Twitter/X, LinkedIn) |
 | **Analytics** | Not included | No engagement tracking or analytics |
 | **Comment management** | Not included | No auto-replies or comment moderation |
 | **Direct messages** | Not included | No DM automation |
@@ -1412,7 +1835,8 @@ Features that are **NOT included** in this project:
 - [x] Video/Reels generation (`generate-reel` command with stock footage)
 - [x] Instagram Reels posting (`upload-reel` command)
 - [ ] Scheduled posting (`--schedule "2025-12-11 10:00"`)
-- [ ] Multiple social platforms (Twitter/X, LinkedIn, TikTok)
+- [x] TikTok reel uploads (`upload-reel --tiktok`)
+- [ ] Multiple social platforms (Twitter/X, LinkedIn)
 - [ ] A/B testing for hooks
 
 ## License

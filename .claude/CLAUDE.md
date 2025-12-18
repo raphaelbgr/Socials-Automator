@@ -92,6 +92,20 @@ src/socials_automator/cli/
 - `metadata.json` - Post metadata
 - `slide_01.jpg`, etc. - Slide images
 
+### Required Artifacts for Reel Upload
+
+All files are REQUIRED for upload to succeed:
+
+| File | Required | Notes |
+|------|----------|-------|
+| `final.mp4` | Yes | The video file |
+| `metadata.json` | Yes | Must have content |
+| `caption.txt` | Yes | Min 10 chars |
+| `caption+hashtags.txt` | Yes | Min 10 chars, used for Instagram |
+| `thumbnail.jpg/png` | Yes | Cover image for Instagram |
+
+The uploader runs a pre-flight checklist and will attempt to regenerate missing files automatically.
+
 ## CRITICAL: No Emojis & ASCII Only
 
 **NEVER use emojis in code or output!** Always use ASCII-compatible characters.
@@ -127,6 +141,41 @@ Common libraries:
 ## CRITICAL: Git Commits
 
 **NEVER commit or push automatically!** Only commit when the user explicitly asks.
+
+## Adding New Instagram Profiles
+
+See `docs/INSTAGRAM_API_CHEATSHEET.md` for the complete setup guide including:
+- Creating Facebook App
+- Getting access tokens (must be EAA... type, NOT IG...)
+- Getting Instagram Business Account ID (17841... format)
+- Configuring environment variables
+- Troubleshooting common errors
+
+Quick steps:
+
+1. **Get Instagram User ID** (quick method - no API needed):
+   - Go to [commentpicker.com/instagram-user-id.php](https://commentpicker.com/instagram-user-id.php)
+   - Enter username, copy the numeric ID
+
+2. **Add to .env**:
+   ```bash
+   INSTAGRAM_USER_ID_YOUR_PROFILE=<numeric-id>
+   ```
+
+3. **Add platforms section to profile metadata.json**:
+   ```json
+   "platforms": {
+     "instagram": {
+       "enabled": true,
+       "user_id": "ENV:INSTAGRAM_USER_ID_YOUR_PROFILE",
+       "access_token": "ENV:INSTAGRAM_ACCESS_TOKEN"
+     }
+   }
+   ```
+
+4. **Test**: `python -m socials_automator.cli upload-reel your-profile --dry-run`
+
+**Note:** Rate limits are shared at the APP level, not per account. All profiles using the same Facebook App share the same quota.
 
 ## CRITICAL: Instagram Posting
 

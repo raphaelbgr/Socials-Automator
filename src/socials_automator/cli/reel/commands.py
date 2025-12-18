@@ -43,10 +43,25 @@ def generate_reel(
     loop_count: Optional[int] = typer.Option(None, "--loop-count", "-n", help="Number of videos to generate"),
     gpu_accelerate: bool = typer.Option(False, "--gpu-accelerate", "-g", help="Use GPU acceleration"),
     gpu: Optional[int] = typer.Option(None, "--gpu", help="Specific GPU index"),
+    # News-specific options
+    news: bool = typer.Option(False, "--news", help="Force news mode (auto-detected for news profiles)"),
+    edition: Optional[str] = typer.Option(None, "--edition", "-e", help="News edition: morning, midday, evening, night"),
+    story_count: int = typer.Option(4, "--stories", "-s", help="Number of news stories per video"),
+    news_max_age: int = typer.Option(24, "--news-age", help="Max news age in hours"),
 ) -> None:
     """Generate a video reel for a profile.
 
     Use --upload to automatically upload to Instagram after generation.
+
+    For news profiles (auto-detected via 'news_sources' in metadata.json):
+    - Uses RSS feeds and web search to aggregate news
+    - AI curates and ranks stories
+    - Generates news briefing video
+
+    News options:
+    - --edition: Force specific edition (morning/midday/evening/night)
+    - --stories: Number of stories per video (default 4)
+    - --news-age: Max article age in hours (default 24)
     """
     # Build immutable params from CLI args
     params = ReelGenerationParams.from_cli(
@@ -67,6 +82,11 @@ def generate_reel(
         loop_count=loop_count,
         gpu_accelerate=gpu_accelerate,
         gpu=gpu,
+        # News options
+        news=news,
+        edition=edition,
+        story_count=story_count,
+        news_max_age=news_max_age,
     )
 
     # Validate params
@@ -134,31 +154,39 @@ def _run_single_generation(
 
 
 def _upload_generated_reel(params: ReelGenerationParams, reel_path: Path) -> bool:
-    """Upload a generated reel to Instagram. Returns True on success."""
+    """Upload a generated reel using the same flow as upload-reel command.
+
+    Uses upload_all() with reel_id filter for consistent behavior:
+    - Targeted preflight (validation, repair)
+    - Upload
+    - Postflight (verify and fix posted folders)
+
+    Returns True on success.
+    """
     console.print("\n[bold cyan]Uploading to Instagram...[/bold cyan]")
 
     # Get the reel folder - handle both file and folder paths
     reel_folder = reel_path.parent if reel_path.is_file() else reel_path
     reel_id = reel_folder.name
 
-    # Build upload params
+    # Build upload params with reel_id filter
     upload_params = ReelUploadParams.from_cli(
         profile=params.profile,
-        reel_id=reel_id,
+        reel_id=reel_id,  # This triggers targeted preflight mode
         one=True,
         dry_run=False,
     )
 
-    # Execute upload
+    # Execute upload - uses same flow as upload-reel command
     service = ReelUploaderService()
-    result = asyncio.run(service.upload_single(upload_params))
+    result = asyncio.run(service.upload_all(upload_params))
 
     if isinstance(result, Failure):
         show_reel_error(console, result.error, result.details)
         return False
 
     # Show result
-    results = [result.value]
+    results = result.value if isinstance(result.value, list) else [result.value]
     success_count = sum(1 for r in results if r.get("success"))
     failed_count = len(results) - success_count
     show_upload_result(console, success_count, failed_count, results)
@@ -208,18 +236,27 @@ def _run_loop_mode(params: ReelGenerationParams) -> None:
 def upload_reel(
     profile: str = typer.Argument(..., help="Profile name"),
     reel_id: Optional[str] = typer.Argument(None, help="Reel ID to upload (uploads only this one if specified)"),
+    # Platform flags
+    instagram: bool = typer.Option(False, "--instagram", "-I", help="Upload to Instagram"),
+    tiktok: bool = typer.Option(False, "--tiktok", "-T", help="Upload to TikTok"),
+    all_platforms: bool = typer.Option(False, "--all", "-a", help="Upload to all enabled platforms"),
+    # Other options
     dry_run: bool = typer.Option(False, "--dry-run", help="Simulate upload"),
     one: bool = typer.Option(False, "--one", "-1", help="Upload only the oldest pending"),
 ) -> None:
-    """Upload reel(s) to Instagram.
+    """Upload reel(s) to social platforms.
 
-    By default, uploads ALL pending reels in chronological order.
+    By default, uploads to Instagram only (backwards compatible).
+    Use --tiktok to upload to TikTok, --all for all enabled platforms.
     Use --one to upload only the oldest pending reel.
     """
     # Build immutable params
     params = ReelUploadParams.from_cli(
         profile=profile,
         reel_id=reel_id,
+        instagram=instagram,
+        tiktok=tiktok,
+        all_platforms=all_platforms,
         one=one,
         dry_run=dry_run,
     )

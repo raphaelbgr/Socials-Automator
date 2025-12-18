@@ -38,6 +38,20 @@ def show_reel_config(console: Console, params: ReelGenerationParams) -> None:
 
     gpu_style = "green" if params.gpu_accelerate else "dim"
 
+    # Format news info
+    news_info = ""
+    if params.is_news_profile:
+        edition = params.news_edition or "auto"
+        news_info = (
+            f"\n[bold magenta]News Mode:[/bold magenta] Enabled\n"
+            f"Edition: [magenta]{edition}[/magenta]\n"
+            f"Stories: [magenta]{params.news_story_count}[/magenta]\n"
+            f"Max Age: [magenta]{params.news_max_age_hours}h[/magenta]"
+        )
+
+    # Choose title based on mode
+    title = "News Briefing Generation" if params.is_news_profile else "Video Reel Generation"
+
     console.print(Panel(
         f"Generating video reel for [cyan]{params.profile}[/cyan]\n"
         f"Text AI: [yellow]{params.text_ai or 'default'}[/yellow]\n"
@@ -48,8 +62,9 @@ def show_reel_config(console: Console, params: ReelGenerationParams) -> None:
         f"Target Length: [yellow]{format_duration(params.target_duration)}[/yellow]\n"
         f"GPU Acceleration: [{gpu_style}]{gpu_info}[/{gpu_style}]\n"
         f"Topic: [green]{params.topic or 'Auto-generated'}[/green]"
-        f"{loop_info}",
-        title="Video Reel Generation",
+        f"{loop_info}"
+        f"{news_info}",
+        title=title,
     ))
 
 
@@ -94,8 +109,12 @@ def show_upload_config(console: Console, params: ReelUploadParams) -> None:
     if params.reel_id:
         mode = f"Specific reel: {params.reel_id}"
 
+    # Format platforms list
+    platforms_str = ", ".join(params.platforms) if params.platforms else "instagram"
+
     console.print(Panel(
         f"Uploading reels for [cyan]{params.profile}[/cyan]\n"
+        f"Platforms: [magenta]{platforms_str}[/magenta]\n"
         f"Mode: [yellow]{mode}[/yellow]\n"
         f"Dry Run: [{'yellow' if params.dry_run else 'dim'}]{params.dry_run}[/]",
         title="Reel Upload",

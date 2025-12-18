@@ -63,8 +63,8 @@ def audit_reel_artifacts(reel_path: Path) -> AuditResult:
     - final.mp4 (required)
     - metadata.json (required)
     - caption.txt (required, must have content)
-    - caption+hashtags.txt (optional, should have content)
-    - thumbnail.jpg (optional)
+    - caption+hashtags.txt (required, must have content)
+    - thumbnail.jpg or thumbnail.png (required)
 
     Args:
         reel_path: Path to reel folder
@@ -74,13 +74,12 @@ def audit_reel_artifacts(reel_path: Path) -> AuditResult:
     """
     result = AuditResult(reel_path=reel_path)
 
-    # Define artifacts to check
+    # Define artifacts to check - ALL are required for upload
     artifacts_to_check = [
         ("final.mp4", True),  # (filename, required)
         ("metadata.json", True),
         ("caption.txt", True),
-        ("caption+hashtags.txt", False),
-        ("thumbnail.jpg", False),
+        ("caption+hashtags.txt", True),  # Required - Instagram needs hashtags
     ]
 
     for filename, required in artifacts_to_check:
@@ -110,7 +109,37 @@ def audit_reel_artifacts(reel_path: Path) -> AuditResult:
             has_content=has_content,
         ))
 
+    # Check for thumbnail (jpg or png) - REQUIRED for Instagram cover image
+    thumbnail_jpg = reel_path / "thumbnail.jpg"
+    thumbnail_png = reel_path / "thumbnail.png"
+    thumbnail_exists = thumbnail_jpg.exists() or thumbnail_png.exists()
+    thumbnail_path = thumbnail_jpg if thumbnail_jpg.exists() else thumbnail_png
+
+    result.artifacts.append(ArtifactStatus(
+        name="thumbnail.jpg/png",
+        path=thumbnail_path,
+        required=True,  # Required - Instagram cover image
+        exists=thumbnail_exists,
+        has_content=thumbnail_exists,
+    ))
+
     return result
+
+
+def get_thumbnail_path(reel_path: Path) -> Optional[Path]:
+    """Get the thumbnail path, checking for both jpg and png.
+
+    Args:
+        reel_path: Path to reel folder
+
+    Returns:
+        Path to thumbnail if exists, None otherwise
+    """
+    for ext in ["jpg", "png", "jpeg"]:
+        path = reel_path / f"thumbnail.{ext}"
+        if path.exists():
+            return path
+    return None
 
 
 def regenerate_missing_artifacts(
@@ -183,10 +212,19 @@ def regenerate_missing_artifacts(
     return audit_result
 
 
-def _regenerate_caption(reel_path: Path) -> bool:
-    """Regenerate caption.txt from metadata or script."""
+def _regenerate_caption(reel_path: Path, use_ai: bool = True) -> bool:
+    """Regenerate caption.txt from metadata, script, or AI.
+
+    Args:
+        reel_path: Path to reel folder
+        use_ai: If True and simpler methods fail, use AI to generate caption
+
+    Returns:
+        True if caption was regenerated successfully
+    """
     # Try to get caption from metadata
     metadata_path = reel_path / "metadata.json"
+    metadata = {}
     if metadata_path.exists():
         try:
             with open(metadata_path, encoding="utf-8") as f:
@@ -227,23 +265,86 @@ def _regenerate_caption(reel_path: Path) -> bool:
         except Exception:
             pass
 
+    # If simpler methods failed and we have topic/narration, use AI
+    if use_ai:
+        topic = metadata.get("topic", "")
+        narration = metadata.get("narration", "")
+
+        if topic or narration:
+            try:
+                caption = _generate_caption_with_ai(topic, narration)
+                if caption and len(caption) > 10:
+                    caption_path = reel_path / "caption.txt"
+                    caption_path.write_text(caption, encoding="utf-8")
+                    console.print(f"      [cyan][AI][/cyan] Generated new caption ({len(caption)} chars)")
+                    return True
+            except Exception as e:
+                console.print(f"      [dim]AI caption generation failed: {e}[/dim]")
+
     return False
+
+
+def _generate_caption_with_ai(topic: str, narration: str = "") -> str:
+    """Generate caption using AI based on topic and narration.
+
+    Uses CaptionService for consistent caption generation.
+
+    Args:
+        topic: The video topic
+        narration: Optional narration text for context
+
+    Returns:
+        Generated caption string
+    """
+    import asyncio
+    from socials_automator.services.caption_service import CaptionService
+
+    service = CaptionService()
+
+    # Run async in sync context
+    loop = asyncio.new_event_loop()
+    try:
+        result = loop.run_until_complete(service.generate_caption(
+            topic=topic,
+            narration=narration,
+        ))
+        if result.success:
+            return result.caption
+        else:
+            raise Exception(result.error or "Caption generation failed")
+    finally:
+        loop.close()
 
 
 def _regenerate_caption_with_hashtags(
     reel_path: Path,
     profile_path: Optional[Path] = None,
 ) -> bool:
-    """Regenerate caption+hashtags.txt from caption and profile hashtags."""
+    """Regenerate caption+hashtags.txt from caption and profile hashtags.
+
+    If caption.txt doesn't exist or is empty, uses AI to generate one.
+    If no hashtags are configured, uses AI to generate relevant hashtags.
+    """
     # First ensure caption.txt exists
     caption_path = reel_path / "caption.txt"
-    if not caption_path.exists():
-        if not _regenerate_caption(reel_path):
+    if not caption_path.exists() or caption_path.stat().st_size < 10:
+        if not _regenerate_caption(reel_path, use_ai=True):
             return False
 
     caption = caption_path.read_text(encoding="utf-8").strip()
-    if not caption:
+    if not caption or len(caption) < 10:
         return False
+
+    # Get topic from metadata for hashtag generation
+    topic = ""
+    metadata_path = reel_path / "metadata.json"
+    if metadata_path.exists():
+        try:
+            with open(metadata_path, encoding="utf-8") as f:
+                metadata = json.load(f)
+            topic = metadata.get("topic", "")
+        except Exception:
+            pass
 
     # Get hashtags from profile or metadata
     hashtags = []
@@ -261,7 +362,6 @@ def _regenerate_caption_with_hashtags(
 
     # Try reel metadata
     if not hashtags:
-        metadata_path = reel_path / "metadata.json"
         if metadata_path.exists():
             try:
                 with open(metadata_path, encoding="utf-8") as f:
@@ -269,6 +369,15 @@ def _regenerate_caption_with_hashtags(
                 hashtags = metadata.get("hashtags", [])
             except Exception:
                 pass
+
+    # If still no hashtags and we have topic, generate with AI
+    if not hashtags and topic:
+        try:
+            hashtags = _generate_hashtags_with_ai(topic, caption)
+            if hashtags:
+                console.print(f"      [cyan][AI][/cyan] Generated {len(hashtags)} hashtags")
+        except Exception as e:
+            console.print(f"      [dim]AI hashtag generation failed: {e}[/dim]")
 
     # Build caption with hashtags
     if hashtags:
@@ -281,6 +390,37 @@ def _regenerate_caption_with_hashtags(
     output_path = reel_path / "caption+hashtags.txt"
     output_path.write_text(full_caption, encoding="utf-8")
     return True
+
+
+def _generate_hashtags_with_ai(topic: str, caption: str = "") -> list[str]:
+    """Generate relevant hashtags using AI.
+
+    Uses CaptionService for consistent hashtag generation.
+
+    Args:
+        topic: The video topic
+        caption: Optional caption for more context
+
+    Returns:
+        List of hashtag strings (without # prefix)
+    """
+    import asyncio
+    from socials_automator.services.caption_service import CaptionService
+
+    service = CaptionService()
+
+    loop = asyncio.new_event_loop()
+    try:
+        result = loop.run_until_complete(service.generate_hashtags(
+            topic=topic,
+            caption=caption,
+        ))
+        if result.success:
+            return result.hashtags
+        else:
+            return []
+    finally:
+        loop.close()
 
 
 def _regenerate_thumbnail(reel_path: Path) -> bool:
