@@ -204,18 +204,14 @@ class InstagramMediaMatcher:
 
         try:
             from socials_automator.platforms import PlatformRegistry
+            from socials_automator.instagram.client import InstagramClient
 
             # Load Instagram config from profile
             config = PlatformRegistry.load_config("instagram", self.profile_path)
 
-            # Create client directly
-            from socials_automator.instagram.client import InstagramAPIConfig, InstagramClient
-
-            api_config = InstagramAPIConfig(
-                access_token=config.access_token,
-                instagram_user_id=config.user_id,
-            )
-            client = InstagramClient(api_config)
+            # Convert to legacy config format for InstagramClient
+            legacy_config = config.to_legacy_config()
+            client = InstagramClient(legacy_config)
 
             # Fetch media
             media = await client.get_recent_media(limit=limit)
