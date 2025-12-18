@@ -693,6 +693,7 @@ class ReelUploaderService:
         - All required artifacts present
 
         Auto-fixes issues when possible:
+        - Matches missing media_id by fetching Instagram media and comparing timestamps
         - Extracts topic from script.json or news_brief if metadata has generic topic
         - Renames folders to proper format
         - Regenerates missing artifacts
@@ -709,6 +710,7 @@ class ReelUploaderService:
         from ..core.console import console
         from .validator import ReelValidator, ReelStatus
         from .duplicates import DuplicateResolver
+        from .media_matcher import InstagramMediaMatcher
 
         result = {
             "verified": 0,
@@ -732,6 +734,14 @@ class ReelUploaderService:
             console.print(f"  [dim]No posted reels to verify[/dim]")
             return result
 
+        # =================================================================
+        # Step 1: Auto-fix missing media_ids using Instagram API
+        # =================================================================
+        media_id_fixes = {}
+        if not params.dry_run:
+            matcher = InstagramMediaMatcher(params.profile_path, console)
+            media_id_fixes = await matcher.fix_missing_media_ids(posted_reels)
+
         issues_count = 0
 
         for reel_info in posted_reels:
@@ -742,6 +752,18 @@ class ReelUploaderService:
 
             # Check 1: Instagram metadata present
             ig_status = reel_info.metadata.get("platform_status", {}).get("instagram", {})
+
+            # Check if we just fixed this folder's media_id (already reported by matcher)
+            if folder_name in media_id_fixes:
+                result["fixed"].append(f"Recovered media_id: {folder_name}")
+                # Reload ig_status after fix
+                try:
+                    with open(reel_path / "metadata.json", encoding="utf-8") as f:
+                        updated_meta = json.load(f)
+                    ig_status = updated_meta.get("platform_status", {}).get("instagram", {})
+                except Exception:
+                    pass
+
             if not ig_status.get("uploaded"):
                 issues.append("missing Instagram upload status")
             elif not ig_status.get("media_id"):
