@@ -5,6 +5,10 @@ Assembles downloaded clips into a video with:
 - 1080x1920 resolution
 - Duration matching the narration audio (source of truth)
 - Metadata output (SRT-like structure)
+
+Supports two modes:
+1. Segment-based: Traditional flow where segments define video boundaries
+2. Video-first: Videos define boundaries, only last video is trimmed
 """
 
 import json
@@ -85,6 +89,10 @@ class VideoAssembler(IVideoAssembler):
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """Execute video assembly step.
 
+        Automatically detects video-first mode by checking for _selected_videos
+        in the context. In video-first mode, uses assemble_video_first which
+        guarantees no video repetition.
+
         Args:
             context: Pipeline context with clips, script, and audio.
 
@@ -93,8 +101,6 @@ class VideoAssembler(IVideoAssembler):
         """
         if not context.clips:
             raise VideoAssemblyError("No clips available for assembly")
-        if not context.script:
-            raise VideoAssemblyError("No script available for assembly")
         if not context.audio_path:
             raise VideoAssemblyError("No audio available - narration is source of truth for duration")
 
@@ -102,17 +108,42 @@ class VideoAssembler(IVideoAssembler):
         audio_duration = self._get_audio_duration(context.audio_path)
         self.log_progress(f"Audio duration: {audio_duration:.1f}s (source of truth)")
 
-        self.log_start(f"Assembling {len(context.clips)} clips to match {audio_duration:.1f}s narration")
+        # Check for video-first mode
+        selected_videos = getattr(context, '_selected_videos', None)
+        video_first_mode = selected_videos is not None and len(selected_videos) > 0
+
+        if video_first_mode:
+            self.log_start(f"Assembling {len(context.clips)} clips (video-first mode, no repetition)")
+        else:
+            if not context.script:
+                raise VideoAssemblyError("No script available for assembly")
+            self.log_start(f"Assembling {len(context.clips)} clips to match {audio_duration:.1f}s narration")
 
         try:
             output_path = context.temp_dir / "assembled.mp4"
 
-            assembled_path, metadata = await self.assemble(
-                context.clips,
-                context.script,
-                output_path,
-                audio_duration,
-            )
+            if video_first_mode:
+                # Video-first mode: use video-driven assembly
+                clip_paths = [clip.path for clip in context.clips]
+                title = context.script.title if context.script else ""
+                narration = context.script.full_narration if context.script else ""
+
+                assembled_path, metadata = await self.assemble_video_first(
+                    clip_paths=clip_paths,
+                    selected_videos=selected_videos,
+                    output_path=output_path,
+                    target_duration=audio_duration,
+                    title=title,
+                    narration=narration,
+                )
+            else:
+                # Legacy mode: segment-based assembly
+                assembled_path, metadata = await self.assemble(
+                    context.clips,
+                    context.script,
+                    output_path,
+                    audio_duration,
+                )
 
             context.assembled_video_path = assembled_path
             context.metadata = metadata
@@ -363,6 +394,164 @@ class VideoAssembler(IVideoAssembler):
             artifacts=artifacts,
         )
 
+        return output_path, metadata
+
+    async def assemble_video_first(
+        self,
+        clip_paths: list[Path],
+        selected_videos: list[dict],
+        output_path: Path,
+        target_duration: float,
+        title: str = "",
+        narration: str = "",
+    ) -> tuple[Path, VideoMetadata]:
+        """Assemble clips using video-first approach (no repetition).
+
+        Each video is used exactly once. Only the last video is trimmed
+        to match the target duration exactly.
+
+        Args:
+            clip_paths: List of downloaded clip paths in order.
+            selected_videos: List of selected video info from VideoSelector.
+            output_path: Output video path.
+            target_duration: Target video duration (from audio).
+            title: Video title for metadata.
+            narration: Full narration text for metadata.
+
+        Returns:
+            Tuple of (video_path, metadata).
+        """
+        try:
+            from moviepy import VideoFileClip, concatenate_videoclips
+        except ImportError:
+            from moviepy.editor import VideoFileClip, concatenate_videoclips
+
+        if len(clip_paths) != len(selected_videos):
+            raise VideoAssemblyError(
+                f"Mismatch: {len(clip_paths)} clips vs {len(selected_videos)} selected videos"
+            )
+
+        self.log_start(f"Assembling {len(clip_paths)} clips (video-first mode)")
+        self.log_detail(f"Target duration: {target_duration:.1f}s")
+
+        video_clips = []
+        segment_metadata = []
+        current_time = 0.0
+
+        for i, (clip_path, video_info) in enumerate(zip(clip_paths, selected_videos)):
+            self.log_detail(f"Processing clip {i + 1}/{len(clip_paths)}: {clip_path.name}")
+
+            clip = VideoFileClip(str(clip_path))
+            original_duration = clip.duration
+
+            # Crop to 9:16
+            clip = self._crop_to_9_16(clip)
+
+            # Resize to target resolution
+            if hasattr(clip, 'resized'):
+                clip = clip.resized((self.WIDTH, self.HEIGHT))
+            else:
+                clip = clip.resize((self.WIDTH, self.HEIGHT))
+
+            # Determine clip duration
+            is_last = (i == len(clip_paths) - 1)
+            if is_last:
+                # Last clip: trim to exactly fill remaining time
+                remaining = target_duration - current_time
+                if clip.duration > remaining:
+                    self.log_detail(f"  Trimming last clip: {clip.duration:.1f}s -> {remaining:.1f}s")
+                    if hasattr(clip, 'subclipped'):
+                        clip = clip.subclipped(0, remaining)
+                    else:
+                        clip = clip.subclip(0, remaining)
+                    clip_duration = remaining
+                else:
+                    clip_duration = clip.duration
+                    if clip_duration < remaining:
+                        self.log_detail(f"  [!] Last clip short by {remaining - clip_duration:.1f}s")
+            else:
+                # Non-last clips: use full duration
+                clip_duration = clip.duration
+
+            video_clips.append(clip)
+
+            # Build segment metadata
+            segment_metadata.append({
+                "index": i + 1,
+                "start_time": current_time,
+                "end_time": current_time + clip_duration,
+                "duration": clip_duration,
+                "pexels_id": video_info.get("id"),
+                "source_url": video_info.get("url", ""),
+                "description": video_info.get("description", ""),
+                "trimmed": is_last and video_info.get("trimmed", False),
+            })
+
+            current_time += clip_duration
+            self.log_detail(f"  Duration: {clip_duration:.1f}s | Total: {current_time:.1f}s / {target_duration:.1f}s")
+
+        self.log_progress(f"Concatenating {len(video_clips)} clips...")
+
+        # Concatenate all clips
+        final_video = concatenate_videoclips(video_clips, method="compose")
+
+        # Final trim if needed (shouldn't be necessary with correct logic above)
+        if final_video.duration > target_duration + 0.1:
+            self.log_detail(f"Final trim: {final_video.duration:.1f}s -> {target_duration:.1f}s")
+            if hasattr(final_video, 'subclipped'):
+                final_video = final_video.subclipped(0, target_duration)
+            else:
+                final_video = final_video.subclip(0, target_duration)
+
+        self.log_progress(f"Exporting {final_video.duration:.1f}s video...")
+
+        # Export without audio
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        final_video.write_videofile(
+            str(output_path),
+            fps=self.FPS,
+            codec="libx264",
+            audio=False,
+            preset="medium",
+            logger=None,
+            ffmpeg_params=["-crf", "18"],
+        )
+
+        # Cleanup
+        final_video.close()
+        for clip in video_clips:
+            clip.close()
+
+        # Create metadata
+        artifacts = ArtifactsInfo(
+            video=ArtifactStatus(status="ok", file=str(output_path.name)),
+            voiceover=ArtifactStatus(status="pending"),
+            subtitles=ArtifactStatus(status="pending"),
+            thumbnail=ArtifactStatus(status="pending"),
+            caption=ArtifactStatus(status="pending"),
+            hashtags=ArtifactStatus(status="pending"),
+        )
+
+        metadata = VideoMetadata(
+            post_id=output_path.parent.name,
+            title=title,
+            topic=title,
+            duration_seconds=target_duration,
+            segments=segment_metadata,
+            clips_used=[
+                {
+                    "segment_index": i + 1,
+                    "pexels_id": v.get("id"),
+                    "source_url": v.get("url", ""),
+                    "description": v.get("description", ""),
+                }
+                for i, v in enumerate(selected_videos)
+            ],
+            narration=narration,
+            artifacts=artifacts,
+        )
+
+        self.log_success(f"Assembled video: {output_path} ({current_time:.1f}s, {len(clip_paths)} unique clips)")
         return output_path, metadata
 
     def _detect_black_bars(self, clip, threshold: int = 30, min_bar_ratio: float = 0.02) -> tuple[int, int, int, int]:

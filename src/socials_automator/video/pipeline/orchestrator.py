@@ -41,6 +41,7 @@ from .topic_selector import TopicSelector
 from .video_assembler import VideoAssembler
 from .video_downloader import VideoDownloader
 from .video_searcher import VideoSearcher
+from .video_selector import VideoSelector
 from .voice_generator import VoiceGenerator
 
 # GPU-accelerated renderers (optional)
@@ -123,6 +124,7 @@ class VideoPipeline:
         verbose: bool = False,
         gpu_accelerate: bool = False,
         gpu_index: Optional[int] = None,
+        video_first: bool = True,
     ):
         """Initialize video pipeline.
 
@@ -142,8 +144,12 @@ class VideoPipeline:
             verbose: Whether to show debug messages.
             gpu_accelerate: Enable GPU acceleration with NVENC (requires NVIDIA GPU).
             gpu_index: GPU index to use (0, 1, etc.). Auto-selects if not specified.
+            video_first: Use video-first mode where videos define segment boundaries.
+                When True (default), selects videos to fill audio duration without repetition.
+                When False, uses legacy segment-based mode where segments define video boundaries.
         """
         self.logger = logging.getLogger("video.pipeline")
+        self.video_first = video_first
         self.progress_callback = progress_callback
         self.text_ai = text_ai
         self.video_matcher = video_matcher
@@ -203,6 +209,9 @@ class VideoPipeline:
         # Parallel branch B: Video search and download
         self.video_search_step = VideoSearcher(api_key=pexels_api_key, ai_client=self.ai_client)
         self.video_download_step = VideoDownloader()
+
+        # Video-first mode components
+        self.video_selector = VideoSelector(ai_client=self.ai_client) if video_first else None
 
         # Sequential: Assembly -> Thumbnail -> Subtitles -> Caption (need results from both parallel branches)
         # ThumbnailGenerator runs BEFORE SubtitleRenderer to get clean frames without text
@@ -485,11 +494,117 @@ class VideoPipeline:
 
             step_counter += 1  # For voice step
 
-            # Phase 2: Video search/download with validation loop
-            self.display.info("Running video search and download...")
+            # Phase 2: Video search/download
+            if self.video_first:
+                self.display.info("Running video search (video-first mode)...")
+            else:
+                self.display.info("Running video search and download...")
 
-            async def video_branch(ctx: PipelineContext) -> PipelineContext:
-                """Search and download video clips until we have enough unique coverage.
+            async def video_branch_video_first(ctx: PipelineContext) -> PipelineContext:
+                """Video-first approach: select videos to fill audio duration, no repetition.
+
+                Strategy:
+                1. Get candidate pool from Pexels API + local index
+                2. Use AI to select optimal video sequence for target duration
+                3. Download only the selected videos
+                4. Only the last video is trimmed to fit exactly
+                """
+                # Get audio duration
+                audio_duration = self._get_audio_duration(ctx.audio_path) if ctx.audio_path else 60.0
+
+                # Step 1: Get candidate pool
+                self.display.start_step("VideoSearcher", "Building candidate video pool from Pexels + local index")
+                self.debug_logger.start_step("VideoSearcher")
+
+                keywords = []
+                if ctx.topic:
+                    keywords = ctx.topic.keywords[:5] if ctx.topic.keywords else []
+                    if ctx.topic.topic:
+                        keywords = [ctx.topic.topic] + keywords
+                if ctx.script:
+                    # Add keywords from first few segments
+                    for seg in ctx.script.segments[:3]:
+                        keywords.extend(seg.keywords[:2])
+
+                candidates = await self.video_search_step.get_candidate_pool(
+                    keywords=keywords,
+                    target_duration=audio_duration,
+                    max_candidates=40,
+                )
+
+                self.debug_logger.end_step("VideoSearcher", {"candidates": len(candidates)})
+
+                if not candidates:
+                    raise PipelineError("No candidate videos found")
+
+                # Step 2: Select video sequence with AI
+                self.display.start_step("VideoSelector", "AI selecting optimal video sequence")
+                self.debug_logger.start_step("VideoSelector")
+
+                narration = ctx.script.full_narration if ctx.script else ""
+                topic = ctx.topic.topic if ctx.topic else ""
+
+                selected_videos = await self.video_selector.select_video_sequence(
+                    candidates=candidates,
+                    target_duration=audio_duration,
+                    narration=narration,
+                    topic=topic,
+                )
+
+                # Log selection
+                total_selected_duration = sum(
+                    v.get("trim_to", v["duration"]) for v in selected_videos
+                )
+                self.display.info(
+                    f"Selected {len(selected_videos)} videos: {total_selected_duration:.1f}s for {audio_duration:.1f}s audio"
+                )
+                self.debug_logger.end_step("VideoSelector", {
+                    "selected": len(selected_videos),
+                    "duration": f"{total_selected_duration:.1f}s",
+                })
+
+                # Step 3: Download selected videos
+                self.display.start_step("VideoDownloader", "Downloading selected videos")
+                self.debug_logger.start_step("VideoDownloader")
+
+                # Build search results format for downloader
+                search_results = []
+                for i, video in enumerate(selected_videos):
+                    search_results.append({
+                        "segment_index": i + 1,
+                        "video": {
+                            "id": video["id"],
+                            "url": video.get("url", ""),
+                            "duration": video["duration"],
+                            "video_files": video.get("video_files", []),
+                            "user": {"name": video.get("description", ""), "url": ""},
+                        },
+                        "keywords_used": keywords[:3],
+                        "duration_needed": video.get("trim_to", video["duration"]),
+                    })
+
+                ctx._search_results = search_results
+                ctx = await self.video_download_step.execute(ctx)
+
+                # Mark videos as used
+                used_ids = [v["id"] for v in selected_videos]
+                self.video_search_step.mark_videos_used(used_ids)
+
+                if hasattr(self.video_download_step, '_cache_hits'):
+                    hits = getattr(self.video_download_step, '_cache_hits', 0)
+                    misses = getattr(self.video_download_step, '_cache_misses', 0)
+                    self.display.show_cache_stats(hits, misses)
+                    self.debug_logger.log_cache_stats(hits, misses)
+
+                self.debug_logger.end_step("VideoDownloader")
+
+                # Store selected videos for assembler
+                ctx._selected_videos = selected_videos
+
+                return ctx
+
+            async def video_branch_legacy(ctx: PipelineContext) -> PipelineContext:
+                """Legacy segment-based approach: search and download video clips.
 
                 Strategy:
                 1. Deduplicate all clips by pexels_id
@@ -628,7 +743,12 @@ Return ONLY the keywords, one per line, no numbers or bullets."""
                 return ctx
 
             # Run video branch (voice already done in duration loop above)
-            video_ctx = await video_branch(context)
+            if self.video_first:
+                video_ctx = await video_branch_video_first(context)
+                # Store selected videos for video-first assembly
+                context._selected_videos = getattr(video_ctx, '_selected_videos', [])
+            else:
+                video_ctx = await video_branch_legacy(context)
 
             # Merge video results into context (audio already set in duration loop)
             context.clips = video_ctx.clips
@@ -636,6 +756,7 @@ Return ONLY the keywords, one per line, no numbers or bullets."""
             step_counter += 2  # search + download
 
             # Phase 3: Sequential final steps (Assembly, Subtitles, Caption)
+            # For video-first mode, use the video-first assembler
             for step in self.final_steps:
                 step_name = step.name
                 progress = step_counter / total_steps

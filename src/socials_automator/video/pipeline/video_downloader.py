@@ -171,7 +171,8 @@ class VideoDownloader(IVideoDownloader):
             if self._cache.copy_to_destination(pexels_id, output_path):
                 self._cache_hits += 1
                 cached_meta = self._cache.get_metadata(pexels_id)
-                self.log_progress(f"  [{segment_index}] CACHE -> {output_path.name}")
+                duration = cached_meta.get("duration_seconds", video_data.get("duration", 0))
+                self.log_progress(f"  [{segment_index}] CACHE -> {output_path.name} ({duration:.0f}s)")
 
                 # Get video file info from cache or video_data
                 video_file = self._select_video_file(video_data)
@@ -210,7 +211,8 @@ class VideoDownloader(IVideoDownloader):
                 async for chunk in response.aiter_bytes(8192):
                     f.write(chunk)
 
-        self.log_progress(f"  [{segment_index}] DOWNLOAD -> {output_path.name}")
+        duration = video_data.get("duration", 0)
+        self.log_progress(f"  [{segment_index}] DOWNLOAD -> {output_path.name} ({duration:.0f}s)")
 
         # Add to cache
         self._cache.add_video(pexels_id, output_path, video_data, keywords)

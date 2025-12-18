@@ -78,6 +78,7 @@ from .topic_selector import TopicSelector
 from .video_assembler import VideoAssembler
 from .video_downloader import VideoDownloader
 from .video_searcher import VideoSearcher
+from .video_selector import VideoSelector
 from .voice_generator import VOICE_PRESETS, VoiceGenerator
 
 __all__ = [
@@ -97,6 +98,7 @@ __all__ = [
     "TopicResearcher",
     "ScriptPlanner",
     "VideoSearcher",
+    "VideoSelector",
     "VideoDownloader",
     "VideoAssembler",
     "VoiceGenerator",

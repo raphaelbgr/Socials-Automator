@@ -782,3 +782,113 @@ Respond with ONLY the video number (1-{len(candidate_info)}), nothing else."""
                 available_videos,
                 key=lambda v: v.get("duration", 0),
             )
+
+    async def get_candidate_pool(
+        self,
+        keywords: list[str],
+        target_duration: float,
+        max_candidates: int = 40,
+    ) -> list[dict]:
+        """Get a pool of candidate videos for video-first selection.
+
+        Searches Pexels API and local index to build a large pool of
+        candidates for the VideoSelector to choose from.
+
+        Args:
+            keywords: Search keywords for the topic.
+            target_duration: Target total duration (for reference).
+            max_candidates: Maximum candidates to return.
+
+        Returns:
+            List of candidate videos with id, duration, description, etc.
+        """
+        self.log_start(f"Building candidate pool for {target_duration:.0f}s video")
+
+        # Load fresh history
+        self._load_video_history()
+
+        client = await self._get_client()
+        candidates = []
+
+        # Source 1: Fresh Pexels API searches
+        for keyword in keywords[:5]:  # Top 5 keywords
+            self.log_detail(f"Searching: '{keyword}'")
+            fresh_videos = await self._search_with_orientation(
+                client, keyword, "portrait", target_duration, return_all=True
+            )
+            if fresh_videos:
+                candidates.extend(fresh_videos)
+                self.log_detail(f"  Found {len(fresh_videos)} videos")
+
+        # Source 2: Local metadata index
+        index_results = self._metadata_index.search(
+            keywords=keywords,
+            limit=30,
+            only_portrait=self.prefer_portrait,
+            only_9_16=True,
+            min_duration=3.0,
+            max_duration=25.0,
+        )
+        self.log_detail(f"Local index: {len(index_results)} matches")
+
+        # Convert index results to consistent format
+        for idx_result in index_results:
+            pexels_id = idx_result.get("pexels_id")
+            if pexels_id and not any(c.get("id") == pexels_id for c in candidates):
+                candidates.append({
+                    "id": pexels_id,
+                    "url": idx_result.get("pexels_url", ""),
+                    "duration": idx_result.get("duration_seconds", 0),
+                    "width": idx_result.get("width", 0),
+                    "height": idx_result.get("height", 0),
+                    "video_files": [{
+                        "link": idx_result.get("video_file_url", ""),
+                        "quality": idx_result.get("video_quality", "hd"),
+                        "width": idx_result.get("video_file_width", 0),
+                        "height": idx_result.get("video_file_height", 0),
+                    }],
+                    "user": {"name": idx_result.get("author", ""), "url": idx_result.get("author_url", "")},
+                    "image": idx_result.get("thumbnail_url", ""),
+                    "description": idx_result.get("description", ""),
+                    "_from_index": True,
+                })
+
+        # Deduplicate by video ID
+        seen_ids = set()
+        unique_candidates = []
+        for c in candidates:
+            vid = c.get("id")
+            if vid and vid not in seen_ids:
+                seen_ids.add(vid)
+                # Add description from index if not present
+                if not c.get("description"):
+                    meta = self._metadata_index.get(vid)
+                    if meta:
+                        c["description"] = meta.get("description", "")
+                unique_candidates.append(c)
+
+        # Filter out recently used videos
+        available = [
+            c for c in unique_candidates
+            if c.get("id") not in self._used_video_ids
+        ]
+
+        if len(available) < len(unique_candidates):
+            filtered_count = len(unique_candidates) - len(available)
+            self.log_detail(f"Filtered {filtered_count} recently-used videos")
+
+        # Limit to max_candidates
+        result = available[:max_candidates]
+
+        self.log_success(f"Candidate pool: {len(result)} videos")
+        return result
+
+    def mark_videos_used(self, video_ids: list[int]) -> None:
+        """Mark multiple videos as used.
+
+        Args:
+            video_ids: List of Pexels video IDs to mark as used.
+        """
+        for vid in video_ids:
+            self._mark_video_used(vid)
+        self._save_video_history()
