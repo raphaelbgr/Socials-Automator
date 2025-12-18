@@ -260,20 +260,22 @@ class InstagramMediaMatcher:
             return None
 
         try:
-            # Parse ISO format timestamp
-            folder_upload_time = datetime.fromisoformat(
-                uploaded_at_str.replace("Z", "+00:00")
+            from socials_automator.utils.timestamps import (
+                parse_timestamp,
+                to_utc_naive,
+                format_local,
             )
-            # Remove timezone for comparison (assume local time)
-            if folder_upload_time.tzinfo:
-                folder_upload_time = folder_upload_time.replace(tzinfo=None)
+
+            # Parse and convert to UTC (assumes local time if no timezone)
+            folder_upload_time = parse_timestamp(uploaded_at_str, assume_local=True)
+            folder_upload_utc = to_utc_naive(folder_upload_time)
         except Exception as e:
             if debug:
                 self.console.print(f"    [dim]Cannot parse timestamp: {e}[/dim]")
             return None
 
         if debug:
-            self.console.print(f"    [dim]Folder upload time: {folder_upload_time}[/dim]")
+            self.console.print(f"    [dim]Folder upload: {format_local(folder_upload_time)} -> UTC: {folder_upload_utc}[/dim]")
 
         # Find matching media
         candidates = []
@@ -297,16 +299,14 @@ class InstagramMediaMatcher:
                 continue
 
             try:
-                media_timestamp = datetime.fromisoformat(
-                    media_timestamp_str.replace("Z", "+00:00")
-                )
-                if media_timestamp.tzinfo:
-                    media_timestamp = media_timestamp.replace(tzinfo=None)
+                # Instagram timestamps are always UTC
+                media_timestamp = parse_timestamp(media_timestamp_str, assume_local=False)
+                media_timestamp_utc = to_utc_naive(media_timestamp)
             except Exception:
                 continue
 
-            # Calculate time difference
-            time_diff = abs((folder_upload_time - media_timestamp).total_seconds())
+            # Calculate time difference (both in UTC now)
+            time_diff = abs((folder_upload_utc - media_timestamp_utc).total_seconds())
 
             # Track closest for debug
             if time_diff < closest_diff:
@@ -318,9 +318,9 @@ class InstagramMediaMatcher:
                 candidates.append(MatchCandidate(
                     folder_name=reel_info.path.name,
                     folder_path=reel_info.path,
-                    folder_upload_time=folder_upload_time,
+                    folder_upload_time=folder_upload_utc,  # UTC for consistency
                     media_id=media_id,
-                    media_timestamp=media_timestamp,
+                    media_timestamp=media_timestamp_utc,  # UTC for consistency
                     media_permalink=media.get("permalink"),
                     time_diff_seconds=time_diff,
                 ))

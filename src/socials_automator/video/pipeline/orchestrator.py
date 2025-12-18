@@ -246,7 +246,14 @@ class VideoPipeline:
         try:
             # Import from socials_automator.providers (go up 3 levels: pipeline -> video -> socials_automator)
             from socials_automator.providers.text import TextProvider
-            return TextProvider(provider_override=provider)
+
+            # Pass the display's event callback for AI progress tracking
+            event_callback = self.display.ai_event_callback
+
+            return TextProvider(
+                provider_override=provider,
+                event_callback=event_callback,
+            )
         except ImportError as e:
             self.logger.warning(
                 f"Could not import TextProvider for {provider}: {e}. "
@@ -662,6 +669,9 @@ Return ONLY the keywords, one per line, no numbers or bullets."""
                 self.debug_logger.end(success=True, output_path=context.final_video_path)
                 debug_log_path = self.debug_logger.save(output_dir)
                 self.display.info(f"Debug log saved: {debug_log_path.name}")
+
+                # Show AI summary before completion
+                self.display.show_ai_summary()
 
                 self.display.end_pipeline(context.final_video_path, success=True)
                 return context.final_video_path

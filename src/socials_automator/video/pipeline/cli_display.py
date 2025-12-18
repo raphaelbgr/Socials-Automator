@@ -273,6 +273,153 @@ class PipelineDisplay:
         hit_rate = (hits / total * 100) if total > 0 else 0
         self.info(f"Cache: {hits} hits, {misses} downloads ({hit_rate:.0f}% cached)")
 
+    # =========================================================================
+    # AI Progress Display
+    # =========================================================================
+
+    def _init_ai_tracking(self) -> None:
+        """Initialize AI call tracking."""
+        if not hasattr(self, "_ai_calls"):
+            self._ai_calls: int = 0
+            self._ai_duration: float = 0.0
+            self._ai_cost: float = 0.0
+            self._ai_providers: set[str] = set()
+            self._ai_failed: list[str] = []
+            self._ai_header_shown: bool = False
+
+    async def ai_event_callback(self, event: dict) -> None:
+        """Handle AI events from TextProvider.
+
+        This is passed to TextProvider as the event_callback parameter.
+
+        Args:
+            event: Event dict with type and data.
+        """
+        import time as time_module  # Avoid shadowing
+        self._init_ai_tracking()
+
+        event_type = event.get("type", "")
+
+        if event_type == "text_call":
+            await self._handle_ai_call(event)
+        elif event_type == "text_response":
+            await self._handle_ai_response(event)
+        elif event_type == "text_skip":
+            await self._handle_ai_skip(event)
+        elif event_type == "text_error":
+            await self._handle_ai_error(event)
+
+    async def _handle_ai_call(self, event: dict) -> None:
+        """Handle AI call starting."""
+        if not self._ai_header_shown:
+            self.console.print()
+            self.console.print("[bold]>>> AI CALLS[/bold]")
+            self._ai_header_shown = True
+
+        provider = event.get("provider", "unknown")
+        model = event.get("model", "unknown")
+        task = event.get("task", "")
+        failed = event.get("failed_providers", [])
+
+        # Show skipped providers (if any)
+        if failed:
+            self._ai_failed.extend(failed)
+            failed_str = ", ".join(failed)
+            self.console.print(f"  [dim]Skipped: {failed_str}[/dim]")
+
+        # Show call info
+        task_str = f" ({task})" if task else ""
+        model_short = self._shorten_model_name(model)
+
+        self.console.print(
+            f"  [cyan][AI][/cyan] {provider}/{model_short}{task_str}...",
+            end="",
+        )
+        self._log_to_file(LogLevel.DEBUG, f"AI call: {provider}/{model} - {task}")
+
+    async def _handle_ai_response(self, event: dict) -> None:
+        """Handle AI response received."""
+        provider = event.get("provider", "unknown")
+        model = event.get("model", "unknown")
+        duration = event.get("duration_seconds", 0.0)
+        cost = event.get("cost_usd", 0.0)
+
+        # Update stats
+        self._ai_calls += 1
+        self._ai_duration += duration
+        self._ai_cost += cost
+        self._ai_providers.add(provider)
+
+        # Format duration
+        if duration < 1:
+            duration_str = f"{duration*1000:.0f}ms"
+        else:
+            duration_str = f"{duration:.1f}s"
+
+        # Complete the line
+        self.console.print(f" [green][OK][/green] {duration_str}")
+        self._log_to_file(
+            LogLevel.DEBUG,
+            f"AI response: {provider}/{model} - {duration:.2f}s, ${cost:.4f}"
+        )
+
+    async def _handle_ai_skip(self, event: dict) -> None:
+        """Handle provider skipped."""
+        provider = event.get("provider", "unknown")
+        reason = event.get("reason", "unknown")
+        self._ai_failed.append(f"{provider}({reason})")
+
+    async def _handle_ai_error(self, event: dict) -> None:
+        """Handle AI call error."""
+        provider = event.get("provider", "unknown")
+        error = event.get("error", "unknown error")
+
+        self.console.print(f" [red][FAIL][/red]")
+        self.console.print(f"        [red]{error}[/red]")
+        self._log_to_file(LogLevel.ERROR, f"AI error: {provider} - {error}")
+
+    def _shorten_model_name(self, model: str) -> str:
+        """Shorten model name for display."""
+        replacements = {
+            "llama-3.3-70b-versatile": "llama-3.3-70b",
+            "llama-3.1-8b-instant": "llama-3.1-8b",
+            "gemini-2.0-flash-exp": "gemini-2.0-flash",
+            "gpt-4o-mini": "gpt-4o-mini",
+            "local-model": "local",
+        }
+        for long, short in replacements.items():
+            if long in model:
+                return short
+        if len(model) > 25:
+            return model[:22] + "..."
+        return model
+
+    def show_ai_summary(self) -> None:
+        """Show summary of AI calls at end of pipeline."""
+        self._init_ai_tracking()
+
+        if self._ai_calls == 0:
+            return
+
+        self.console.print()
+        self.console.print("[bold]>>> AI SUMMARY[/bold]")
+
+        providers = ", ".join(sorted(self._ai_providers))
+        self.console.print(f"  Providers: [cyan]{providers}[/cyan]")
+        self.console.print(f"  Calls: [green]{self._ai_calls}[/green]")
+
+        if self._ai_duration < 60:
+            duration_str = f"{self._ai_duration:.1f}s"
+        else:
+            mins = int(self._ai_duration // 60)
+            secs = self._ai_duration % 60
+            duration_str = f"{mins}m {secs:.0f}s"
+
+        self.console.print(f"  Total AI time: [yellow]{duration_str}[/yellow]")
+
+        if self._ai_cost > 0:
+            self.console.print(f"  Est. cost: [yellow]${self._ai_cost:.4f}[/yellow]")
+
 
 # Global display instance
 _display: Optional[PipelineDisplay] = None
