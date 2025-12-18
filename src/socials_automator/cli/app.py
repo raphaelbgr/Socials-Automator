@@ -135,8 +135,10 @@ def register_commands() -> None:
 
     # Import and register maintenance commands
     from .maintenance.commands import (
+        cleanup_posted_reels,
         init,
         list_niches,
+        migrate_platform_status,
         new_profile,
         status,
         token,
@@ -149,6 +151,8 @@ def register_commands() -> None:
     app.command(name="new-profile")(new_profile)
     app.command(name="list-niches")(list_niches)
     app.command(name="update-artifacts")(update_artifacts)
+    app.command(name="migrate-platform-status")(migrate_platform_status)
+    app.command(name="cleanup-reels")(cleanup_posted_reels)
 
 
 def setup_logging() -> None:

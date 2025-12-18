@@ -365,8 +365,105 @@ class VideoAssembler(IVideoAssembler):
 
         return output_path, metadata
 
+    def _detect_black_bars(self, clip, threshold: int = 30, min_bar_ratio: float = 0.02) -> tuple[int, int, int, int]:
+        """Detect black bars in video by sampling frames.
+
+        Analyzes edges of frames to find consistent black bars (pillarbox or letterbox).
+
+        Args:
+            clip: MoviePy VideoFileClip.
+            threshold: Maximum pixel value to consider "black" (0-255).
+            min_bar_ratio: Minimum bar size as ratio of dimension to detect.
+
+        Returns:
+            Tuple of (left, top, right, bottom) crop values in pixels.
+            Values represent how much to crop from each edge.
+        """
+        import numpy as np
+
+        w, h = clip.size
+
+        # Sample frames at 25%, 50%, 75% of video duration
+        sample_times = [clip.duration * p for p in [0.25, 0.5, 0.75]]
+        sample_times = [min(t, clip.duration - 0.1) for t in sample_times]
+
+        # Collect bar measurements from each sample
+        left_bars = []
+        right_bars = []
+        top_bars = []
+        bottom_bars = []
+
+        for t in sample_times:
+            try:
+                frame = clip.get_frame(t)
+            except Exception:
+                continue
+
+            # Convert to grayscale for simpler analysis
+            if len(frame.shape) == 3:
+                gray = np.mean(frame, axis=2)
+            else:
+                gray = frame
+
+            # Detect left black bar
+            left = 0
+            for x in range(w // 4):  # Check up to 25% of width
+                col_mean = np.mean(gray[:, x])
+                if col_mean > threshold:
+                    break
+                left = x + 1
+            left_bars.append(left)
+
+            # Detect right black bar
+            right = 0
+            for x in range(w - 1, w - w // 4 - 1, -1):
+                col_mean = np.mean(gray[:, x])
+                if col_mean > threshold:
+                    break
+                right = w - x
+            right_bars.append(right)
+
+            # Detect top black bar
+            top = 0
+            for y in range(h // 4):  # Check up to 25% of height
+                row_mean = np.mean(gray[y, :])
+                if row_mean > threshold:
+                    break
+                top = y + 1
+            top_bars.append(top)
+
+            # Detect bottom black bar
+            bottom = 0
+            for y in range(h - 1, h - h // 4 - 1, -1):
+                row_mean = np.mean(gray[y, :])
+                if row_mean > threshold:
+                    break
+                bottom = h - y
+            bottom_bars.append(bottom)
+
+        if not left_bars:
+            return (0, 0, 0, 0)
+
+        # Use minimum detected bar size (most conservative)
+        # This avoids cropping actual content
+        left = min(left_bars)
+        right = min(right_bars)
+        top = min(top_bars)
+        bottom = min(bottom_bars)
+
+        # Only return bar values that exceed minimum ratio
+        min_horizontal = int(w * min_bar_ratio)
+        min_vertical = int(h * min_bar_ratio)
+
+        left = left if left >= min_horizontal else 0
+        right = right if right >= min_horizontal else 0
+        top = top if top >= min_vertical else 0
+        bottom = bottom if bottom >= min_vertical else 0
+
+        return (left, top, right, bottom)
+
     def _crop_to_9_16(self, clip):
-        """Center crop video to 9:16 aspect ratio.
+        """Center crop video to 9:16 aspect ratio, removing black bars first.
 
         Args:
             clip: MoviePy VideoFileClip.
@@ -375,14 +472,31 @@ class VideoAssembler(IVideoAssembler):
             Cropped clip.
         """
         w, h = clip.size
+
+        # Use cropped for MoviePy 2.x, crop for 1.x
+        crop_method = clip.cropped if hasattr(clip, 'cropped') else clip.crop
+
+        # Step 1: Detect and remove black bars
+        left, top, right, bottom = self._detect_black_bars(clip)
+
+        if left > 0 or top > 0 or right > 0 or bottom > 0:
+            self.log_detail(f"  Removing black bars: L={left} T={top} R={right} B={bottom}")
+            clip = crop_method(
+                x1=left,
+                y1=top,
+                x2=w - right,
+                y2=h - bottom,
+            )
+            w, h = clip.size
+            # Need to refresh crop_method after modification
+            crop_method = clip.cropped if hasattr(clip, 'cropped') else clip.crop
+
+        # Step 2: Crop to 9:16 aspect ratio
         current_ratio = w / h
         target_ratio = 9 / 16
 
         if abs(current_ratio - target_ratio) < 0.01:
             return clip
-
-        # Use cropped for MoviePy 2.x, crop for 1.x
-        crop_method = clip.cropped if hasattr(clip, 'cropped') else clip.crop
 
         if current_ratio > target_ratio:
             # Video is too wide, crop width

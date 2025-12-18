@@ -211,14 +211,14 @@ class VideoPipeline:
             self.display.info("Using GPU-accelerated video assembly and subtitle rendering (NVENC)")
             self.final_steps: list[PipelineStep] = [
                 GPUVideoAssembler(gpu=self.gpu_info),  # GPU NVENC assembly
-                ThumbnailGenerator(font=subtitle_font, font_size=72),  # Thumbnail from clean video (no subtitles)
+                ThumbnailGenerator(font=subtitle_font, font_size=90),  # Thumbnail from clean video (90px for grid visibility)
                 GPUSubtitleRenderer(gpu=self.gpu_info, font=subtitle_font, font_size=subtitle_size),  # GPU with ASS karaoke
                 CaptionGenerator(ai_client=self.ai_client),
             ]
         else:
             self.final_steps: list[PipelineStep] = [
                 VideoAssembler(),  # Uses audio duration as source of truth
-                ThumbnailGenerator(font=subtitle_font, font_size=72),  # Thumbnail from clean video (no subtitles)
+                ThumbnailGenerator(font=subtitle_font, font_size=90),  # Thumbnail from clean video (90px for grid visibility)
                 SubtitleRenderer(font=subtitle_font, font_size=subtitle_size),
                 CaptionGenerator(ai_client=self.ai_client),
             ]

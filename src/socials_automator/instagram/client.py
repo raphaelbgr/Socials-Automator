@@ -403,6 +403,80 @@ class InstagramClient:
 
         return False
 
+    async def wait_for_container_with_progress(
+        self,
+        container_id: str,
+        max_wait_seconds: int = 600,
+        poll_interval: float = 15.0,
+    ) -> bool:
+        """Wait for a container with progress reporting.
+
+        Same as wait_for_container but emits progress updates.
+
+        Args:
+            container_id: The container ID to wait for
+            max_wait_seconds: Maximum time to wait
+            poll_interval: Seconds between status checks
+
+        Returns:
+            True if container is ready, False if timeout
+
+        Raises:
+            InstagramAPIError: If container processing failed
+        """
+        import re
+
+        elapsed = 0.0
+        check_count = 0
+        while elapsed < max_wait_seconds:
+            status = await self.check_container_status(container_id)
+            status_code = status.get("status_code", "").upper()
+            check_count += 1
+
+            # Calculate progress (30% to 75% during processing)
+            progress = 30.0 + (45.0 * min(elapsed / max_wait_seconds, 1.0))
+
+            if status_code == "FINISHED":
+                return True
+            elif status_code == "ERROR":
+                status_msg = status.get("status", "Unknown error")
+                error_code = None
+
+                match = re.search(r"error code (\d+)", status_msg, re.IGNORECASE)
+                if match:
+                    error_code = int(match.group(1))
+
+                error_info = get_error_info(error_code)
+                raise InstagramAPIError(
+                    f"Container processing failed: {status_msg}",
+                    error_code=error_code,
+                    is_retryable=error_info.get("is_retryable", False),
+                )
+            elif status_code == "EXPIRED":
+                raise InstagramAPIError(
+                    "Container expired before publishing",
+                    is_retryable=True,
+                )
+            elif status_code == "IN_PROGRESS":
+                # Show progress with elapsed time
+                await self._report_progress(
+                    InstagramPostStatus.CREATING_CONTAINERS,
+                    f"Processing... ({int(elapsed)}s elapsed, check #{check_count})",
+                    progress,
+                )
+            else:
+                # Unknown status - show it
+                await self._report_progress(
+                    InstagramPostStatus.CREATING_CONTAINERS,
+                    f"Status: {status_code} ({int(elapsed)}s elapsed)",
+                    progress,
+                )
+
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+
+        return False
+
     async def publish_container(self, creation_id: str) -> str:
         """Publish a container to Instagram.
 
@@ -814,7 +888,7 @@ class InstagramClient:
                 if container_id is None:
                     await self._report_progress(
                         InstagramPostStatus.CREATING_CONTAINERS,
-                        "Creating Reel container...",
+                        "Creating Reel container on Instagram...",
                         10.0,
                     )
                     container_id = await self.create_reel_container(
@@ -824,14 +898,19 @@ class InstagramClient:
                         cover_url=cover_url,
                     )
                     _api_logger.info(f"Reel container created: {container_id}")
+                    await self._report_progress(
+                        InstagramPostStatus.CREATING_CONTAINERS,
+                        f"Container created: {container_id[:20]}...",
+                        20.0,
+                    )
 
                 # Step 2: Wait for video processing (longer than images)
                 await self._report_progress(
                     InstagramPostStatus.CREATING_CONTAINERS,
-                    "Processing video (this may take a few minutes)...",
+                    "Waiting for Instagram to process video (up to 10 min)...",
                     30.0,
                 )
-                ready = await self.wait_for_container(
+                ready = await self.wait_for_container_with_progress(
                     container_id,
                     max_wait_seconds=600,  # 10 minutes max for video
                     poll_interval=15.0,  # Check every 15s
@@ -839,14 +918,20 @@ class InstagramClient:
 
                 if not ready:
                     raise InstagramAPIError(
-                        "Video processing timed out",
+                        "Video processing timed out after 10 minutes",
                         is_retryable=True,
                     )
+
+                await self._report_progress(
+                    InstagramPostStatus.CREATING_CONTAINERS,
+                    "Video processing complete!",
+                    75.0,
+                )
 
                 # Step 3: Publish
                 await self._report_progress(
                     InstagramPostStatus.PUBLISHING,
-                    "Publishing Reel...",
+                    "Publishing Reel to feed...",
                     80.0,
                 )
 

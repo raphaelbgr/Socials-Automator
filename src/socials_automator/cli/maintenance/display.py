@@ -141,3 +141,115 @@ def show_artifacts_update_result(
             title="Complete",
             border_style="green",
         ))
+
+
+def show_platform_migration_result(
+    console: Console,
+    updated: int,
+    skipped: int,
+    errors: int,
+    dry_run: bool,
+) -> None:
+    """Display platform status migration result."""
+    if dry_run:
+        console.print(Panel(
+            f"[yellow]Dry run complete[/yellow]\n\n"
+            f"Would update: [green]{updated}[/green]\n"
+            f"Already migrated: [dim]{skipped}[/dim]\n"
+            f"Errors: [{'red' if errors else 'dim'}]{errors}[/]",
+            title="Migration Preview",
+            border_style="yellow",
+        ))
+    else:
+        border = "green" if errors == 0 else "yellow"
+        console.print(Panel(
+            f"[bold green]Migration complete![/bold green]\n\n"
+            f"Updated: [green]{updated}[/green]\n"
+            f"Already migrated: [dim]{skipped}[/dim]\n"
+            f"Errors: [{'red' if errors else 'dim'}]{errors}[/]",
+            title="Platform Status Migration",
+            border_style=border,
+        ))
+
+
+def show_cleanup_header(
+    console: Console,
+    profile: str,
+    total_reels: int,
+    older_than_days: Optional[int],
+    dry_run: bool,
+) -> None:
+    """Display cleanup operation header."""
+    mode = "[yellow]DRY RUN[/yellow] - " if dry_run else ""
+    age_info = f" older than {older_than_days} days" if older_than_days else ""
+
+    console.print()
+    console.print(Panel(
+        f"{mode}[bold]Cleanup Reels[/bold]\n\n"
+        f"Profile: [cyan]{profile}[/cyan]\n"
+        f"Reels to process: [white]{total_reels}[/white]{age_info}",
+        title=">>> CLEANUP",
+        border_style="cyan",
+    ))
+    console.print()
+
+
+def show_cleanup_progress(
+    console: Console,
+    current: int,
+    total: int,
+    reel_name: str,
+    status: str,
+    space_mb: float,
+    video_url: Optional[str] = None,
+) -> None:
+    """Display cleanup progress for a single reel."""
+    status_icon = {
+        "cleaned": "[green][OK][/green]",
+        "would_clean": "[yellow][DRY][/yellow]",
+        "skipped": "[dim][--][/dim]",
+        "already_cleaned": "[dim][OK][/dim]",
+        "error": "[red][X][/red]",
+    }.get(status, "[?]")
+
+    space_info = f" ({space_mb:.1f} MB)" if space_mb > 0 else ""
+    url_info = f" [dim]+URL[/dim]" if video_url else ""
+
+    console.print(f"  [{current:3d}/{total}] {status_icon} {reel_name[:50]}{space_info}{url_info}")
+
+
+def show_cleanup_result(
+    console: Console,
+    cleaned: int,
+    skipped: int,
+    already_cleaned: int,
+    errors: int,
+    total_space_mb: float,
+    dry_run: bool,
+) -> None:
+    """Display cleanup operation result."""
+    if dry_run:
+        console.print()
+        console.print(Panel(
+            f"[yellow]Dry run complete[/yellow]\n\n"
+            f"Would clean: [green]{cleaned}[/green] reels\n"
+            f"Already cleaned: [dim]{already_cleaned}[/dim]\n"
+            f"Skipped: [dim]{skipped}[/dim]\n"
+            f"Errors: [{'red' if errors else 'dim'}]{errors}[/]\n\n"
+            f"Space to free: [bold cyan]{total_space_mb:.1f} MB[/bold cyan] ({total_space_mb/1024:.2f} GB)",
+            title="Dry Run Results",
+            border_style="yellow",
+        ))
+    else:
+        border = "green" if errors == 0 else "yellow"
+        console.print()
+        console.print(Panel(
+            f"[bold green]Cleanup complete![/bold green]\n\n"
+            f"Cleaned: [green]{cleaned}[/green] reels\n"
+            f"Already cleaned: [dim]{already_cleaned}[/dim]\n"
+            f"Skipped: [dim]{skipped}[/dim]\n"
+            f"Errors: [{'red' if errors else 'dim'}]{errors}[/]\n\n"
+            f"Space freed: [bold cyan]{total_space_mb:.1f} MB[/bold cyan] ({total_space_mb/1024:.2f} GB)",
+            title="Cleanup Complete",
+            border_style=border,
+        ))

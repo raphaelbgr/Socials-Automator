@@ -9,6 +9,7 @@ This keeps ThumbnailGenerator working between passes (needs video without subtit
 """
 
 import json
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -297,6 +298,19 @@ class GPUVideoAssembler(IVideoAssembler):
         audio_duration = self._get_audio_duration(context.audio_path)
         self.log_progress(f"Audio duration: {audio_duration:.1f}s (source of truth)")
 
+        # Deduplicate clips by pexels_id BEFORE assembly (matching CPU assembler)
+        seen_pexels_ids = set()
+        unique_clips = []
+        for clip in sorted(context.clips, key=lambda c: c.segment_index):
+            if clip.pexels_id not in seen_pexels_ids:
+                seen_pexels_ids.add(clip.pexels_id)
+                unique_clips.append(clip)
+            else:
+                self.log_detail(f"Skipping duplicate pexels_id={clip.pexels_id} for segment {clip.segment_index}")
+
+        if len(unique_clips) < len(context.clips):
+            self.log_progress(f"Deduplicated: {len(context.clips)} clips -> {len(unique_clips)} unique clips")
+
         # Get output path
         if context.temp_dir:
             output_path = context.temp_dir / "assembled.mp4"
@@ -304,18 +318,17 @@ class GPUVideoAssembler(IVideoAssembler):
             output_path = get_temp_dir() / "assembled.mp4"
 
         try:
-            # Assemble with GPU
+            # Assemble with GPU using deduplicated clips
             result_path = await self._assemble_with_gpu(
-                clips=context.clips,
+                clips=unique_clips,
                 output_path=output_path,
                 target_duration=audio_duration,
             )
 
             context.assembled_video_path = result_path
 
-            # Create metadata (matching CPU assembler behavior)
-            # Sort clips by segment index for consistent ordering
-            sorted_clips = sorted(context.clips, key=lambda c: c.segment_index)
+            # Create metadata using deduplicated clips (matching CPU assembler behavior)
+            sorted_clips = unique_clips  # Already sorted and deduplicated
 
             # Calculate segment timing based on clip distribution
             num_clips = len(sorted_clips)
@@ -389,6 +402,93 @@ class GPUVideoAssembler(IVideoAssembler):
             self.log_error(f"GPU assembly failed: {e}")
             raise VideoAssemblyError(f"GPU assembly failed: {e}") from e
 
+    def _detect_black_bars(self, clip_path: Path) -> tuple[int, int, int, int]:
+        """Detect black bars in a video using FFmpeg cropdetect.
+
+        Runs a quick analysis to find embedded black bars (pillarboxing/letterboxing).
+
+        Args:
+            clip_path: Path to video file.
+
+        Returns:
+            Tuple of (left, top, right, bottom) pixels to crop.
+            Returns (0, 0, 0, 0) if no bars detected or on error.
+        """
+        try:
+            # Run cropdetect on first 2 seconds of video
+            result = subprocess.run(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-i", str(clip_path),
+                    "-t", "2",  # Analyze first 2 seconds
+                    "-vf", "cropdetect=limit=24:round=2:reset=0",
+                    "-f", "null",
+                    "-"
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            # Parse cropdetect output from stderr
+            # Format: [Parsed_cropdetect_0 @ ...] x1:0 x2:1919 y1:140 y2:939 w:1920 h:800 ...
+            # Or: crop=W:H:X:Y
+            lines = result.stderr.split('\n')
+
+            # Find the last crop= line (most stable detection)
+            crop_values = None
+            for line in reversed(lines):
+                match = re.search(r'crop=(\d+):(\d+):(\d+):(\d+)', line)
+                if match:
+                    w, h, x, y = map(int, match.groups())
+                    crop_values = (w, h, x, y)
+                    break
+
+            if crop_values:
+                w, h, x, y = crop_values
+
+                # Get original dimensions using ffprobe
+                probe_result = subprocess.run(
+                    [
+                        "ffprobe",
+                        "-v", "error",
+                        "-select_streams", "v:0",
+                        "-show_entries", "stream=width,height",
+                        "-of", "csv=p=0",
+                        str(clip_path),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                orig_w, orig_h = map(int, probe_result.stdout.strip().split(','))
+
+                # Calculate crop amounts from each edge
+                left = x
+                top = y
+                right = orig_w - (x + w)
+                bottom = orig_h - (y + h)
+
+                # Only return if bars are significant (> 2% of dimension)
+                min_bar_h = int(orig_w * 0.02)
+                min_bar_v = int(orig_h * 0.02)
+
+                left = left if left >= min_bar_h else 0
+                right = right if right >= min_bar_h else 0
+                top = top if top >= min_bar_v else 0
+                bottom = bottom if bottom >= min_bar_v else 0
+
+                if left > 0 or top > 0 or right > 0 or bottom > 0:
+                    self.log_detail(f"  Black bars detected: L={left} T={top} R={right} B={bottom}")
+
+                return (left, top, right, bottom)
+
+        except Exception as e:
+            self.log_detail(f"  Black bar detection failed: {e}")
+
+        return (0, 0, 0, 0)
+
     async def _assemble_with_gpu(
         self,
         clips: list,
@@ -410,11 +510,38 @@ class GPUVideoAssembler(IVideoAssembler):
         """
         gpu_index = self.gpu.index if self.gpu else 0
 
-        # Sort clips by segment index
+        # Clips should already be deduplicated by execute()
+        # Just sort by segment index for consistent ordering
         sorted_clips = sorted(clips, key=lambda c: c.segment_index)
         num_clips = len(sorted_clips)
 
-        # Calculate segment durations (evenly distributed)
+        # =================================================================
+        # STEP 1: Black Bar Detection
+        # =================================================================
+        self.log_progress(">>> PREPROCESSING")
+        clip_crops = []
+        for idx, clip in enumerate(sorted_clips):
+            clip_path = clip.path if hasattr(clip, 'path') else None
+            clip_num = f"[{idx + 1}/{num_clips}]"
+
+            if clip_path:
+                self.log_detail(f"  {clip_num} Analyzing {clip_path.name}...")
+                crop = self._detect_black_bars(clip_path)
+                left, top, right, bottom = crop
+
+                if left > 0 or top > 0 or right > 0 or bottom > 0:
+                    self.log_progress(f"  {clip_num} [CROP] Removing bars: L={left} T={top} R={right} B={bottom}")
+                else:
+                    self.log_detail(f"  {clip_num} [OK] No black bars")
+
+                clip_crops.append(crop)
+            else:
+                clip_crops.append((0, 0, 0, 0))
+
+        # =================================================================
+        # STEP 2: Calculate Segment Durations
+        # =================================================================
+        self.log_progress(">>> TIMING")
         base_duration = target_duration / num_clips
         segment_durations = []
         remaining = target_duration
@@ -425,11 +552,14 @@ class GPUVideoAssembler(IVideoAssembler):
                 segment_durations.append(base_duration)
                 remaining -= base_duration
 
-        self.log_detail(f"Assembling {num_clips} clips to {target_duration:.1f}s")
+        for idx, dur in enumerate(segment_durations):
+            self.log_detail(f"  [{idx + 1}/{num_clips}] {dur:.1f}s")
 
-        # Build FFmpeg command with filter_complex for proper clip looping
-        # Each clip gets: loop -> trim -> scale -> fps
-        # Then all are concatenated
+        # =================================================================
+        # STEP 3: Build FFmpeg Filter Chain
+        # =================================================================
+        self.log_progress(">>> FILTER CHAIN")
+        self.log_detail(f"  Building {num_clips}-input filter graph...")
 
         cmd = ["ffmpeg", "-y"]
 
@@ -443,25 +573,42 @@ class GPUVideoAssembler(IVideoAssembler):
                 cmd.extend(["-i", str(clip_path)])
 
         # Build filter_complex
-        # For each input: loop infinitely, trim to segment duration, scale, set fps
         filter_parts = []
         concat_inputs = []
 
         for i, (clip, seg_dur) in enumerate(zip(sorted_clips, segment_durations)):
-            # Loop filter: loop=-1 loops infinitely, size=32767 is max frames per loop
-            # Then trim to exact segment duration and reset timestamps
-            # Scale to target resolution with padding for aspect ratio
-            filter_part = (
-                f"[{i}:v]"
-                f"loop=loop=-1:size=32767:start=0,"
-                f"trim=0:{seg_dur:.3f},"
-                f"setpts=PTS-STARTPTS,"
-                f"scale={self.WIDTH}:{self.HEIGHT}:force_original_aspect_ratio=decrease,"
-                f"pad={self.WIDTH}:{self.HEIGHT}:(ow-iw)/2:(oh-ih)/2,"
-                f"setsar=1,"
-                f"fps={self.FPS}"
-                f"[v{i}]"
-            )
+            left, top, right, bottom = clip_crops[i]
+
+            # Build filter chain for this clip
+            # FILTER CHAIN (matches CPU assembler's _detect_black_bars + _crop_to_9_16):
+            # 1. Loop/trim for duration
+            # 2. Remove detected black bars (if any)
+            # 3. Scale to COVER target resolution
+            # 4. Center crop to exact 9:16 dimensions
+            filters = [
+                f"[{i}:v]",
+                f"loop=loop=-1:size=32767:start=0",
+                f"trim=0:{seg_dur:.3f}",
+                f"setpts=PTS-STARTPTS",
+            ]
+
+            # Add black bar removal crop if detected
+            if left > 0 or top > 0 or right > 0 or bottom > 0:
+                # crop=out_w:out_h:x:y
+                filters.append(f"crop=iw-{left}-{right}:ih-{top}-{bottom}:{left}:{top}")
+
+            # Scale to cover and center crop to 9:16
+            filters.extend([
+                f"scale={self.WIDTH}:{self.HEIGHT}:force_original_aspect_ratio=increase",
+                f"crop={self.WIDTH}:{self.HEIGHT}:(iw-{self.WIDTH})/2:(ih-{self.HEIGHT})/2",
+                f"setsar=1",
+                f"fps={self.FPS}",
+                f"[v{i}]",
+            ])
+
+            filter_part = ",".join(filters[1:-1])  # Skip first [i:v] and last [vi]
+            filter_part = f"{filters[0]}{filter_part}{filters[-1]}"
+
             filter_parts.append(filter_part)
             concat_inputs.append(f"[v{i}]")
 
@@ -473,6 +620,17 @@ class GPUVideoAssembler(IVideoAssembler):
 
         cmd.extend(["-filter_complex", filter_complex])
         cmd.extend(["-map", "[outv]"])
+
+        # Log filter summary
+        bars_removed = sum(1 for c in clip_crops if any(c))
+        self.log_detail(f"  Clips with bars removed: {bars_removed}/{num_clips}")
+        self.log_detail(f"  Output: loop -> crop bars -> scale 9:16 -> center crop -> concat")
+
+        # =================================================================
+        # STEP 4: GPU Encoding (NVENC)
+        # =================================================================
+        self.log_progress(">>> ENCODING")
+        self.log_progress(f"  GPU {gpu_index} (h264_nvenc) | {target_duration:.1f}s | 1080x1920")
 
         # Output encoding settings (NVENC)
         cmd.extend([
@@ -489,9 +647,6 @@ class GPUVideoAssembler(IVideoAssembler):
             str(output_path),
         ])
 
-        self.log_detail(f"Running FFmpeg GPU assembly on GPU {gpu_index}...")
-        self.log_detail(f"Filter: {num_clips} clips -> loop -> trim -> scale -> concat")
-
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -501,10 +656,14 @@ class GPUVideoAssembler(IVideoAssembler):
 
         if result.returncode != 0:
             # Log error details
+            self.log_progress(f"  [X] FFmpeg failed!")
             self.log_detail(f"FFmpeg stderr: {result.stderr[:1000]}")
             raise VideoAssemblyError(f"FFmpeg failed: {result.stderr[:300]}")
 
-        self.log_detail(f"Assembly complete: {output_path}")
+        # =================================================================
+        # COMPLETE
+        # =================================================================
+        self.log_progress(f"  [OK] Assembled: {output_path.name}")
         return output_path
 
 
