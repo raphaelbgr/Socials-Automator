@@ -141,12 +141,24 @@ class InstagramMediaMatcher:
             self.console.print(f"  [dim]No reels found to match[/dim]")
             return {}
 
+        # Show sample of Instagram media timestamps for debugging
+        if reels_only:
+            sample = reels_only[:3]
+            self.console.print(f"  [dim]Sample IG timestamps: {[m.get('timestamp') for m in sample]}[/dim]")
+
         # Match folders to media
         fixes = {}
         unmatched = []
+        debug_count = 0
 
         for reel_info in folders_missing:
-            match = self._find_best_match(reel_info, instagram_media)
+            # Enable debug for first 3 folders
+            debug = debug_count < 3
+            if debug:
+                self.console.print(f"  [dim]Checking: {reel_info.path.name[:40]}...[/dim]")
+                debug_count += 1
+
+            match = self._find_best_match(reel_info, instagram_media, debug=debug)
 
             if match and match.confidence in ("high", "medium"):
                 if auto_apply:
@@ -226,12 +238,14 @@ class InstagramMediaMatcher:
         self,
         reel_info: Any,
         instagram_media: list[dict],
+        debug: bool = False,
     ) -> Optional[MatchCandidate]:
         """Find the best matching Instagram media for a folder.
 
         Args:
             reel_info: ReelInfo object with path and metadata.
             instagram_media: List of Instagram media items.
+            debug: If True, print debug info for first few folders.
 
         Returns:
             Best MatchCandidate if found, None otherwise.
@@ -241,6 +255,8 @@ class InstagramMediaMatcher:
         uploaded_at_str = ig_status.get("uploaded_at")
 
         if not uploaded_at_str:
+            if debug:
+                self.console.print(f"    [dim]No uploaded_at timestamp[/dim]")
             return None
 
         try:
@@ -251,11 +267,19 @@ class InstagramMediaMatcher:
             # Remove timezone for comparison (assume local time)
             if folder_upload_time.tzinfo:
                 folder_upload_time = folder_upload_time.replace(tzinfo=None)
-        except Exception:
+        except Exception as e:
+            if debug:
+                self.console.print(f"    [dim]Cannot parse timestamp: {e}[/dim]")
             return None
+
+        if debug:
+            self.console.print(f"    [dim]Folder upload time: {folder_upload_time}[/dim]")
 
         # Find matching media
         candidates = []
+        closest_diff = float('inf')
+        closest_media = None
+
         for media in instagram_media:
             # Only match VIDEO/REELS type
             media_type = media.get("media_type", "")
@@ -284,6 +308,11 @@ class InstagramMediaMatcher:
             # Calculate time difference
             time_diff = abs((folder_upload_time - media_timestamp).total_seconds())
 
+            # Track closest for debug
+            if time_diff < closest_diff:
+                closest_diff = time_diff
+                closest_media = media
+
             # Only consider if within max window
             if time_diff <= self.MAX_TIME_DIFF_SUGGEST:
                 candidates.append(MatchCandidate(
@@ -295,6 +324,12 @@ class InstagramMediaMatcher:
                     media_permalink=media.get("permalink"),
                     time_diff_seconds=time_diff,
                 ))
+
+        if debug and closest_media:
+            self.console.print(
+                f"    [dim]Closest IG media: {closest_media.get('timestamp')} "
+                f"(diff: {closest_diff/3600:.1f}h)[/dim]"
+            )
 
         if not candidates:
             return None
