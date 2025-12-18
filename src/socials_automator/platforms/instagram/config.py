@@ -54,15 +54,42 @@ class InstagramConfig(PlatformConfig):
     ) -> "InstagramConfig":
         """Load configuration from profile metadata.
 
-        Falls back to environment variables if not specified in profile.
+        IMPORTANT: Only falls back to generic environment variables if the
+        profile does NOT define the credential at all. If a profile defines
+        a credential (even as ENV:VAR_NAME that resolves to empty), we do NOT
+        fall back - this prevents cross-account contamination.
+
+        Falls back to environment variables only if not specified in profile.
         """
         # Resolve any ENV: references in the platform data
         resolved = cls.resolve_dict(platform_data)
 
-        # Get values from profile or fall back to env vars
-        user_id = resolved.get("user_id") or os.getenv("INSTAGRAM_USER_ID", "")
-        access_token = resolved.get("access_token") or os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
+        # Helper to get value with safe fallback
+        # Only falls back to generic env var if key is NOT defined in profile
+        def get_credential(key: str, fallback_env: str) -> str:
+            if key in platform_data:
+                # Profile explicitly defines this key - use resolved value, NO fallback
+                # This prevents cross-account contamination when profile-specific
+                # env vars are not set (they would fall back to wrong account)
+                value = resolved.get(key, "")
+                if not value:
+                    # Profile defines the key but it's empty - this is an error
+                    # Don't silently use another account's credentials!
+                    import logging
+                    logging.warning(
+                        f"Instagram credential '{key}' is defined in profile but empty. "
+                        f"Check that the environment variable is set correctly."
+                    )
+                return value
+            else:
+                # Profile doesn't define this key - fall back to generic env var
+                return os.getenv(fallback_env, "")
 
+        user_id = get_credential("user_id", "INSTAGRAM_USER_ID")
+        access_token = get_credential("access_token", "INSTAGRAM_ACCESS_TOKEN")
+
+        # Cloudinary credentials can be shared across profiles (same account)
+        # so we use simpler fallback logic for these
         cloudinary_cloud_name = (
             resolved.get("cloudinary_cloud_name")
             or os.getenv("CLOUDINARY_CLOUD_NAME", "")

@@ -500,6 +500,14 @@
     ]
   },
 
+  "platforms": {
+    "instagram": {
+      "enabled": true,
+      "user_id": "ENV:INSTAGRAM_USER_ID_AI_FOR_MORTALS",
+      "access_token": "ENV:INSTAGRAM_ACCESS_TOKEN_AI_FOR_MORTALS"
+    }
+  },
+
   "metadata": {
     "created_at": "2024-12-10T12:00:00Z",
     "updated_at": "2024-12-10T12:00:00Z",
