@@ -489,6 +489,32 @@ class GPUVideoAssembler(IVideoAssembler):
 
         return (0, 0, 0, 0)
 
+    def _get_video_duration(self, clip_path: Path) -> float:
+        """Get actual duration of a video file using ffprobe.
+
+        Args:
+            clip_path: Path to video file.
+
+        Returns:
+            Duration in seconds.
+        """
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    str(clip_path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            return float(result.stdout.strip())
+        except Exception:
+            return 0.0
+
     async def _assemble_with_gpu(
         self,
         clips: list,
@@ -497,8 +523,9 @@ class GPUVideoAssembler(IVideoAssembler):
     ) -> Path:
         """Assemble clips using FFmpeg with NVENC.
 
-        Uses filter_complex to properly loop clips to fill the target duration,
-        matching the behavior of the CPU assembler.
+        Video-first approach: Uses each video's actual duration, only trimming
+        the LAST video to match the target audio duration exactly.
+        No looping/repetition - each video is used exactly once.
 
         Args:
             clips: List of VideoClipInfo objects.
@@ -516,16 +543,22 @@ class GPUVideoAssembler(IVideoAssembler):
         num_clips = len(sorted_clips)
 
         # =================================================================
-        # STEP 1: Black Bar Detection
+        # STEP 1: Black Bar Detection + Duration Probing
         # =================================================================
         self.log_progress(">>> PREPROCESSING")
         clip_crops = []
+        clip_actual_durations = []
+
         for idx, clip in enumerate(sorted_clips):
             clip_path = clip.path if hasattr(clip, 'path') else None
             clip_num = f"[{idx + 1}/{num_clips}]"
 
             if clip_path:
-                self.log_detail(f"  {clip_num} Analyzing {clip_path.name}...")
+                # Get actual video duration
+                actual_dur = self._get_video_duration(clip_path)
+                clip_actual_durations.append(actual_dur)
+
+                self.log_detail(f"  {clip_num} Analyzing {clip_path.name} ({actual_dur:.1f}s)...")
                 crop = self._detect_black_bars(clip_path)
                 left, top, right, bottom = crop
 
@@ -537,29 +570,48 @@ class GPUVideoAssembler(IVideoAssembler):
                 clip_crops.append(crop)
             else:
                 clip_crops.append((0, 0, 0, 0))
+                clip_actual_durations.append(0.0)
 
         # =================================================================
-        # STEP 2: Calculate Segment Durations
+        # STEP 2: Calculate Segment Durations (VIDEO-FIRST)
         # =================================================================
-        self.log_progress(">>> TIMING")
-        base_duration = target_duration / num_clips
+        # Use actual video durations - only trim the LAST video to fit audio
+        self.log_progress(">>> TIMING (video-first mode)")
+
         segment_durations = []
-        remaining = target_duration
-        for i in range(num_clips):
-            if i == num_clips - 1:
-                segment_durations.append(remaining)
-            else:
-                segment_durations.append(base_duration)
-                remaining -= base_duration
+        cumulative = 0.0
 
-        for idx, dur in enumerate(segment_durations):
-            self.log_detail(f"  [{idx + 1}/{num_clips}] {dur:.1f}s")
+        for i, actual_dur in enumerate(clip_actual_durations):
+            is_last = (i == num_clips - 1)
+            remaining_needed = target_duration - cumulative
+
+            if is_last:
+                # Last video: trim to fill remaining time exactly
+                use_duration = min(actual_dur, remaining_needed)
+                trimmed = actual_dur > remaining_needed
+            else:
+                # Non-last: use full duration (no looping, no trimming)
+                use_duration = actual_dur
+                trimmed = False
+
+            segment_durations.append(use_duration)
+            cumulative += use_duration
+
+            # Log the plan
+            pexels_id = sorted_clips[i].pexels_id
+            if is_last and trimmed:
+                self.log_progress(f"  [{i + 1}/{num_clips}] ID:{pexels_id} -> {use_duration:.1f}s (trimmed from {actual_dur:.1f}s) [LAST]")
+            else:
+                self.log_progress(f"  [{i + 1}/{num_clips}] ID:{pexels_id} -> {use_duration:.1f}s (full)")
+
+        total_planned = sum(segment_durations)
+        self.log_progress(f"  TOTAL: {total_planned:.1f}s / {target_duration:.1f}s target")
 
         # =================================================================
-        # STEP 3: Build FFmpeg Filter Chain
+        # STEP 3: Build FFmpeg Filter Chain (VIDEO-FIRST: NO LOOPING)
         # =================================================================
         self.log_progress(">>> FILTER CHAIN")
-        self.log_detail(f"  Building {num_clips}-input filter graph...")
+        self.log_detail(f"  Building {num_clips}-input filter graph (no loop)...")
 
         cmd = ["ffmpeg", "-y"]
 
@@ -580,15 +632,14 @@ class GPUVideoAssembler(IVideoAssembler):
             left, top, right, bottom = clip_crops[i]
 
             # Build filter chain for this clip
-            # FILTER CHAIN (matches CPU assembler's _detect_black_bars + _crop_to_9_16):
-            # 1. Loop/trim for duration
+            # VIDEO-FIRST MODE: NO looping - each video used exactly once
+            # 1. Trim to segment duration (only trims last clip significantly)
             # 2. Remove detected black bars (if any)
             # 3. Scale to COVER target resolution
             # 4. Center crop to exact 9:16 dimensions
             filters = [
                 f"[{i}:v]",
-                f"loop=loop=-1:size=32767:start=0",
-                f"trim=0:{seg_dur:.3f}",
+                f"trim=0:{seg_dur:.3f}",  # NO loop - just trim
                 f"setpts=PTS-STARTPTS",
             ]
 
@@ -624,7 +675,7 @@ class GPUVideoAssembler(IVideoAssembler):
         # Log filter summary
         bars_removed = sum(1 for c in clip_crops if any(c))
         self.log_detail(f"  Clips with bars removed: {bars_removed}/{num_clips}")
-        self.log_detail(f"  Output: loop -> crop bars -> scale 9:16 -> center crop -> concat")
+        self.log_detail(f"  Output: trim -> crop bars -> scale 9:16 -> center crop -> concat")
 
         # =================================================================
         # STEP 4: GPU Encoding (NVENC)

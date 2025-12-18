@@ -1,0 +1,354 @@
+{
+  "version": "1.0.0",
+  "profile": {
+    "id": "news.but.quick",
+    "name": "news.but.quick",
+    "display_name": "News But Quick",
+    "instagram_handle": "@news.but.quick",
+    "niche_id": "entertainment-news",
+    "tagline": "Entertainment news in 60 seconds",
+    "bio": "Your daily entertainment catch-up. What's trending, what dropped, what matters. News you can actually use.",
+    "description": "A daily entertainment news digest that curates and summarizes the most important stories from celebrity, movies, TV, music, and streaming. Delivered in quick, easy-to-digest video format 4x daily. Focus on practical news - what to watch, who to follow, what everyone's talking about.",
+    "language": "en",
+    "target_audience": {
+      "demographics": {
+        "age_range": ["18-35"],
+        "occupations": ["young_professionals", "students", "content_consumers", "pop_culture_enthusiasts"],
+        "tech_level": "all_levels",
+        "locations": ["global", "english_speaking"]
+      },
+      "psychographics": {
+        "interests": ["entertainment", "pop_culture", "celebrities", "movies", "tv_shows", "music", "streaming"],
+        "values": ["staying_informed", "conversation_ready", "cultural_awareness", "time_efficiency"],
+        "personality": ["curious", "social", "busy", "trend_aware"]
+      },
+      "pain_points": [
+        "Don't have time to scroll through multiple news sites",
+        "Miss trending topics and feel out of the loop in conversations",
+        "Entertainment news is scattered across too many sources",
+        "Hard to know what's actually worth watching or listening to",
+        "FOMO on viral moments and cultural events"
+      ],
+      "desires": [
+        "Stay culturally relevant with minimal effort",
+        "Know what everyone's talking about",
+        "Get quick recommendations on what to watch/listen to",
+        "Never miss a major entertainment story",
+        "Be the one who shares news first in friend groups"
+      ]
+    }
+  },
+
+  "content_strategy": {
+    "mission": "Deliver entertainment news that matters, fast. No fluff, no clickbait - just what you need to stay in the loop.",
+    "tone": {
+      "primary": "casual_informed",
+      "attributes": ["conversational", "quick", "slightly_witty", "informative", "relatable"],
+      "avoid": ["formal", "gossipy", "judgmental", "clickbait", "sensationalized"]
+    },
+    "voice_guidelines": {
+      "sentence_style": "Short, punchy, conversational. Like texting a friend the news.",
+      "vocabulary": "Casual but informed. Pop culture references welcome.",
+      "perspective": "Your friend who always knows what's happening.",
+      "examples": [
+        "Good: 'Taylor just dropped a surprise album and the internet is losing it'",
+        "Bad: 'Pop star Taylor Swift has released an unexpected new studio album'",
+        "Good: 'Netflix is raising prices again - here's what it means for your wallet'",
+        "Bad: 'Streaming giant Netflix announces subscription fee increase'"
+      ]
+    },
+    "content_pillars": [
+      {
+        "id": "daily_briefing",
+        "name": "Daily Briefing",
+        "description": "The top 3-5 entertainment stories of the day, quickly summarized",
+        "frequency_percent": 50,
+        "examples": ["3 things you missed today", "Today's entertainment buzz", "What's trending right now"]
+      },
+      {
+        "id": "what_to_watch",
+        "name": "What to Watch",
+        "description": "New releases, recommendations, and what's leaving streaming soon",
+        "frequency_percent": 20,
+        "examples": ["New on Netflix this week", "Movies to watch this weekend", "Shows everyone's binging"]
+      },
+      {
+        "id": "music_drops",
+        "name": "Music Drops",
+        "description": "New album releases, tour announcements, music industry news",
+        "frequency_percent": 15,
+        "examples": ["Albums dropping this Friday", "Tour dates announced", "Music news roundup"]
+      },
+      {
+        "id": "viral_moments",
+        "name": "Viral Moments",
+        "description": "The memes, moments, and drama everyone's talking about",
+        "frequency_percent": 15,
+        "examples": ["Why everyone's talking about...", "The moment that broke the internet", "Drama explained"]
+      }
+    ],
+    "posting_schedule": {
+      "posts_per_day": 4,
+      "posting_times_utc": ["12:00", "17:00", "22:00", "02:00"],
+      "editions": {
+        "morning": {
+          "time_utc": "12:00",
+          "theme": "Morning Briefing",
+          "focus": "Overnight news, what to expect today"
+        },
+        "midday": {
+          "time_utc": "17:00",
+          "theme": "Midday Pulse",
+          "focus": "Breaking stories, trending topics"
+        },
+        "evening": {
+          "time_utc": "22:00",
+          "theme": "Evening Wrap",
+          "focus": "Day's biggest stories summarized"
+        },
+        "night": {
+          "time_utc": "02:00",
+          "theme": "Night Edition",
+          "focus": "Entertainment, lighter stories, tomorrow preview"
+        }
+      }
+    },
+    "content_rules": {
+      "always": [
+        "Include 'why it matters' angle for each story",
+        "Keep total video under 60 seconds",
+        "Cite sources (TMZ reports, Variety confirms, etc.)",
+        "Focus on actionable info (when to watch, where to listen)",
+        "End with CTA to follow for daily updates"
+      ],
+      "never": [
+        "Spread unverified rumors as fact",
+        "Use clickbait hooks that don't deliver",
+        "Take sides in celebrity drama",
+        "Include news older than 24 hours (unless major)",
+        "Get political unless directly entertainment-related"
+      ],
+      "avoid_topics": [
+        "Political commentary",
+        "Unverified gossip",
+        "Tragedy exploitation",
+        "Personal attacks on celebrities",
+        "Controversial takes without facts"
+      ]
+    }
+  },
+
+  "hook_strategies": {
+    "primary_types": [
+      {
+        "type": "number_briefing",
+        "description": "Numbered list of stories to expect",
+        "templates": [
+          "{Number} things in entertainment you need to know today",
+          "{Number} stories everyone's talking about right now",
+          "Your {time_of_day} entertainment briefing in 60 seconds"
+        ],
+        "frequency_percent": 40
+      },
+      {
+        "type": "breaking_news",
+        "description": "Lead with the biggest story",
+        "templates": [
+          "{Celebrity} just {action} and the internet is losing it",
+          "Breaking: {headline}. Here's what we know.",
+          "{Platform} just announced {news}. Here's what it means for you."
+        ],
+        "frequency_percent": 30
+      },
+      {
+        "type": "curiosity",
+        "description": "Tease what's coming",
+        "templates": [
+          "The {category} news you missed while sleeping",
+          "Why everyone's talking about {topic} today",
+          "The story that's about to blow up"
+        ],
+        "frequency_percent": 30
+      }
+    ],
+    "hook_rules": {
+      "max_words": 15,
+      "must_include": ["timeliness", "specificity"],
+      "formatting": ["conversational", "urgent_but_not_clickbait"]
+    }
+  },
+
+  "design": {
+    "brand_identity": {
+      "style": "bold_news_modern",
+      "mood": ["urgent", "trustworthy", "contemporary", "clean"],
+      "inspiration": ["Morning Brew", "Now This", "Complex", "Pop Crave"]
+    },
+    "colors": {
+      "primary": {
+        "dark_bg": "#0f0f0f",
+        "light_bg": "#ffffff",
+        "accent": "#ff3b30"
+      },
+      "secondary": {
+        "yellow": "#ffcc00",
+        "blue": "#007aff",
+        "purple": "#af52de",
+        "teal": "#5ac8fa"
+      },
+      "gradients": {
+        "primary": "linear-gradient(135deg, #ff3b30 0%, #ff9500 100%)",
+        "accent": "linear-gradient(135deg, #007aff 0%, #5ac8fa 100%)"
+      },
+      "text": {
+        "primary": "#ffffff",
+        "secondary": "#8e8e93",
+        "on_light": "#1c1c1e"
+      }
+    },
+    "typography": {
+      "heading_font": "Inter-Black",
+      "body_font": "Inter-Medium",
+      "accent_font": "Inter-Bold",
+      "sizes": {
+        "hook_text": 68,
+        "slide_heading": 52,
+        "body_text": 34,
+        "source_tag": 24
+      }
+    }
+  },
+
+  "hashtag_strategy": {
+    "total_count": 20,
+    "distribution": {
+      "high_volume": 6,
+      "medium_volume": 8,
+      "low_volume_niche": 4,
+      "branded": 2
+    },
+    "hashtag_sets": {
+      "primary": [
+        "#Entertainment", "#CelebrityNews", "#PopCulture", "#Trending", "#BreakingNews",
+        "#Hollywood", "#Netflix", "#Streaming", "#Music", "#Movies"
+      ],
+      "secondary": [
+        "#EntertainmentNews", "#DailyNews", "#NewsUpdate", "#WhatToWatch", "#NewMusic",
+        "#TVShows", "#Celebrities", "#ViralNews", "#TrendingNow", "#PopCultureNews"
+      ],
+      "niche": [
+        "#QuickNews", "#NewsIn60", "#DailyCatchUp", "#EntertainmentBriefing",
+        "#CultureUpdate", "#StreamingNews", "#MusicNews", "#MovieNews"
+      ],
+      "branded": [
+        "#NewsButQuick", "#QuickBriefing"
+      ]
+    }
+  },
+
+  "news_sources": {
+    "rss_feeds": {
+      "celebrity": [
+        {"name": "TMZ", "url": "https://www.tmz.com/rss.xml", "priority": 1},
+        {"name": "E! News", "url": "https://www.eonline.com/syndication/feeds/rssfeeds/topstories.xml", "priority": 2},
+        {"name": "People", "url": "https://people.com/feed/", "priority": 2},
+        {"name": "Page Six", "url": "https://pagesix.com/feed/", "priority": 3}
+      ],
+      "movies_tv": [
+        {"name": "Variety", "url": "https://variety.com/feed/", "priority": 1},
+        {"name": "Deadline", "url": "https://deadline.com/feed/", "priority": 1},
+        {"name": "Hollywood Reporter", "url": "https://www.hollywoodreporter.com/feed/", "priority": 2},
+        {"name": "Entertainment Weekly", "url": "https://ew.com/feed/", "priority": 2}
+      ],
+      "music": [
+        {"name": "Rolling Stone", "url": "https://www.rollingstone.com/feed/", "priority": 1},
+        {"name": "Billboard", "url": "https://www.billboard.com/feed/", "priority": 1},
+        {"name": "Pitchfork", "url": "https://pitchfork.com/feed/feed-news/rss", "priority": 2}
+      ],
+      "streaming": [
+        {"name": "What's on Netflix", "url": "https://www.whats-on-netflix.com/feed/", "priority": 2},
+        {"name": "Decider", "url": "https://decider.com/feed/", "priority": 2}
+      ],
+      "general": [
+        {"name": "The Verge Entertainment", "url": "https://www.theverge.com/entertainment/rss/index.xml", "priority": 2},
+        {"name": "Mashable Entertainment", "url": "https://mashable.com/feeds/rss/entertainment", "priority": 3}
+      ]
+    },
+    "duckduckgo_queries": [
+      "celebrity news today",
+      "entertainment news breaking",
+      "new movie releases this week",
+      "streaming news netflix disney plus",
+      "new music releases this week",
+      "concert tour announcement 2025",
+      "viral celebrity moment today",
+      "tv show premiere this week",
+      "celebrity drama today"
+    ],
+    "freshness": {
+      "max_age_hours": 24,
+      "prefer_last_hours": 12,
+      "breaking_news_window_hours": 6
+    }
+  },
+
+  "ai_generation": {
+    "providers": {
+      "text_priority": ["groq", "openai", "anthropic"],
+      "task_overrides": {
+        "news_curation": {
+          "provider": "groq",
+          "model": "llama-3.3-70b-versatile",
+          "reason": "Fast inference for news ranking"
+        },
+        "script_generation": {
+          "provider": "openai",
+          "model": "gpt-4o",
+          "reason": "Best for casual, witty news writing"
+        }
+      }
+    },
+    "prompts": {
+      "system_context": "You are the voice behind @news.but.quick, a fast-paced entertainment news account. Your job is to make entertainment news feel relevant and useful. Write like you're texting a friend the top stories - casual, quick, slightly witty, but always accurate. Focus on 'why it matters' and 'what to do about it' angles. Never be gossipy or mean-spirited. Always cite your sources. Keep it snappy - you have 60 seconds to inform and entertain.",
+      "curation_guidelines": [
+        "Prioritize stories with practical impact (new releases, price changes, tour dates)",
+        "Balance celebrity news with streaming/music news",
+        "Include at least one 'useful' story per briefing (what to watch, etc.)",
+        "Skip drama without substance - need facts not just rumors",
+        "Verify breaking news before including"
+      ],
+      "script_guidelines": [
+        "Hook: State how many stories and set expectations",
+        "Each story: Headline -> 2 sentence summary -> why it matters",
+        "Transitions: Quick and natural (Meanwhile... In other news... And finally...)",
+        "CTA: Simple follow reminder",
+        "Total: Must fit in 60 seconds (~150 words)"
+      ]
+    }
+  },
+
+  "output_settings": {
+    "folder_structure": "reels/{year}/{month}/{status}/{day}-{post_number}-{edition}",
+    "editions_per_day": 4,
+    "video_settings": {
+      "target_duration_seconds": 60,
+      "max_duration_seconds": 75,
+      "stories_per_video": [3, 5]
+    }
+  },
+
+  "platforms": {
+    "instagram": {
+      "enabled": true,
+      "user_id": "ENV:INSTAGRAM_USER_ID_NEWS_BUT_QUICK",
+      "access_token": "ENV:INSTAGRAM_ACCESS_TOKEN_NEWS_BUT_QUICK"
+    }
+  },
+
+  "metadata": {
+    "created_at": "2025-12-17T00:00:00Z",
+    "updated_at": "2025-12-17T00:00:00Z",
+    "created_by": "system",
+    "status": "active"
+  }
+}
