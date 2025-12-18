@@ -161,13 +161,20 @@ class PexelsCache:
         if not best_file and video_files:
             best_file = video_files[0]
 
+        # Extract description from URL slug (e.g., "happy-woman-writing-in-journal")
+        pexels_url = video_data.get("url", "")
+        description, description_keywords = self._extract_description_from_url(pexels_url)
+
         # Build comprehensive metadata
         metadata = {
             "pexels_id": pexels_id,
             "filename": filename,
             "title": video_data.get("user", {}).get("name", "Unknown"),
-            "pexels_url": video_data.get("url", ""),
+            "pexels_url": pexels_url,
             "video_page_url": f"https://www.pexels.com/video/{pexels_id}/",
+            # Video description extracted from URL slug
+            "description": description,
+            "description_keywords": description_keywords,
             "duration_seconds": video_data.get("duration", 0),
             "width": video_data.get("width", 0),
             "height": video_data.get("height", 0),
@@ -175,6 +182,8 @@ class PexelsCache:
             "author": video_data.get("user", {}).get("name", "Unknown"),
             "author_url": video_data.get("user", {}).get("url", ""),
             "keywords_matched": keywords_matched,
+            # Combined keywords for better searching
+            "all_keywords": list(set(keywords_matched + description_keywords)),
             "video_file_url": best_file.get("link", "") if best_file else "",
             "video_quality": best_file.get("quality", "") if best_file else "",
             "video_file_type": best_file.get("file_type", "") if best_file else "",
@@ -201,6 +210,52 @@ class PexelsCache:
         self._save_index()
 
         return cache_path
+
+    def _extract_description_from_url(self, url: str) -> tuple[str, list[str]]:
+        """Extract description and keywords from Pexels URL slug.
+
+        Pexels URLs contain descriptive slugs like:
+        https://www.pexels.com/video/happy-woman-writing-in-journal-6951182/
+
+        Args:
+            url: Pexels video URL.
+
+        Returns:
+            Tuple of (human-readable description, list of keywords).
+        """
+        import re
+
+        if not url:
+            return "", []
+
+        # Extract slug from URL: /video/slug-with-words-12345/
+        match = re.search(r"/video/([^/]+)-(\d+)/?$", url)
+        if not match:
+            # Try without ID at end
+            match = re.search(r"/video/([^/]+)/?$", url)
+            if not match:
+                return "", []
+
+        slug = match.group(1)
+
+        # Convert slug to readable description
+        # "happy-woman-writing-in-journal" -> "happy woman writing in journal"
+        description = slug.replace("-", " ")
+
+        # Extract meaningful keywords (filter out common words)
+        stop_words = {
+            "a", "an", "the", "in", "on", "at", "to", "for", "of", "with",
+            "and", "or", "is", "are", "was", "were", "be", "been", "being",
+            "video", "footage", "clip", "stock", "free", "hd", "4k",
+        }
+
+        words = slug.split("-")
+        keywords = [
+            word.lower() for word in words
+            if word.lower() not in stop_words and len(word) > 2
+        ]
+
+        return description, keywords
 
     def _get_orientation(self, video_data: dict) -> str:
         """Determine video orientation."""
@@ -278,32 +333,90 @@ class PexelsCache:
     def search_by_keywords(self, keywords: list[str], limit: int = 10) -> list[dict]:
         """Search cached videos by keywords.
 
+        Searches across all keywords including those extracted from URL descriptions.
+
         Args:
             keywords: Keywords to search for.
             limit: Maximum results to return.
 
         Returns:
-            List of matching video metadata.
+            List of matching video metadata with match scores.
         """
         results = []
         keywords_lower = [k.lower() for k in keywords]
 
         for metadata in self._index.values():
-            cached_keywords = metadata.get("keywords_matched", [])
+            # Use all_keywords if available (includes description keywords)
+            # Fall back to keywords_matched for older entries
+            cached_keywords = metadata.get("all_keywords", metadata.get("keywords_matched", []))
             cached_keywords_lower = [k.lower() for k in cached_keywords]
 
-            # Check for keyword overlap
-            matches = sum(1 for k in keywords_lower if any(k in ck for ck in cached_keywords_lower))
-            if matches > 0:
+            # Also search in description text
+            description = metadata.get("description", "").lower()
+
+            # Calculate match score
+            keyword_matches = sum(
+                1 for k in keywords_lower
+                if any(k in ck for ck in cached_keywords_lower)
+            )
+
+            # Bonus for exact description match
+            description_matches = sum(
+                1 for k in keywords_lower
+                if k in description
+            )
+
+            total_score = keyword_matches + (description_matches * 0.5)
+
+            if total_score > 0:
                 results.append({
                     **metadata,
-                    "_match_score": matches,
+                    "_match_score": total_score,
+                    "_keyword_matches": keyword_matches,
+                    "_description_matches": description_matches,
                 })
 
         # Sort by match score
         results.sort(key=lambda x: x.get("_match_score", 0), reverse=True)
 
         return results[:limit]
+
+    def upgrade_descriptions(self) -> int:
+        """Upgrade existing cache entries with descriptions from URLs.
+
+        Extracts descriptions and keywords from pexels_url for entries
+        that don't have them yet.
+
+        Returns:
+            Number of entries upgraded.
+        """
+        upgraded = 0
+
+        for str_id, metadata in self._index.items():
+            # Skip if already has description
+            if metadata.get("description"):
+                continue
+
+            pexels_url = metadata.get("pexels_url", "")
+            if not pexels_url:
+                continue
+
+            description, description_keywords = self._extract_description_from_url(pexels_url)
+
+            if description:
+                metadata["description"] = description
+                metadata["description_keywords"] = description_keywords
+
+                # Update all_keywords to include description keywords
+                existing_keywords = metadata.get("keywords_matched", [])
+                metadata["all_keywords"] = list(set(existing_keywords + description_keywords))
+
+                upgraded += 1
+
+        if upgraded > 0:
+            self._save_index()
+
+        return upgraded
 
     def clear_old_entries(self, days: int = 30) -> int:
         """Remove entries older than specified days.
