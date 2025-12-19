@@ -317,6 +317,8 @@ python -m socials_automator.cli generate-post --help
 | `list-profiles` | List all available profiles |
 | `list-niches` | List available niches from niches.json |
 | `status` | Show profile status and recent posts |
+| `sync-captions` | Sync actual Instagram captions to local metadata (reels only) |
+| `audit-captions` | Audit captions for potential issues (reels only) |
 | `init` | Initialize project structure |
 
 ---
@@ -1171,6 +1173,103 @@ python -m socials_automator.cli status ai.for.mortals
 
 ---
 
+### sync-captions
+
+Sync actual Instagram captions to local metadata for **reels only**. Fetches the current caption from Instagram for each posted reel and stores it in `metadata.json`. This helps detect reels with empty captions (caused by rate limit errors during upload).
+
+**Note:** This command works with reels only, not carousel posts.
+
+```bash
+python -m socials_automator.cli sync-captions <profile> [OPTIONS]
+```
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `profile` | Profile name (required) |
+
+**Options:**
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--no-report` | | Skip generating markdown report | False |
+| `--only-empty` | `-e` | Only sync reels with previously synced empty captions (faster) | False |
+
+**Examples:**
+```bash
+# Full sync - fetch all captions from Instagram
+python -m socials_automator.cli sync-captions ai.for.mortals
+
+# Quick re-check - only sync previously empty captions
+python -m socials_automator.cli sync-captions ai.for.mortals --only-empty
+
+# Sync without generating a markdown report
+python -m socials_automator.cli sync-captions ai.for.mortals --no-report
+```
+
+**Output:**
+```
+Syncing Instagram captions for ai.for.mortals...
+
+  [1/50] 16-001-ai-productivity-tips
+         [MATCHED] Caption matches local
+
+  [2/50] 16-002-chatgpt-secrets
+         [EMPTY] Caption is empty on Instagram!
+
+  ...
+
+Sync complete!
+  Synced: 50
+  Empty captions: 2
+  Mismatched: 0
+  Errors: 0
+
+Report saved to: docs/empty_captions/ai.for.mortals.md
+```
+
+**What gets stored in metadata.json:**
+```json
+{
+  "instagram": {
+    "actual_caption": "The caption from Instagram...",
+    "synced_at": "2025-12-19T10:30:00"
+  }
+}
+```
+
+**Use with fix_empty_captions.py:**
+After syncing, run the Chrome automation script to fix empty captions (see [Caption Fixing Scripts](#caption-fixing-scripts) below).
+
+---
+
+### audit-captions
+
+Audit captions for potential issues like missing hashtags, too short/long, or missing CTA. Works with **reels only**.
+
+```bash
+python -m socials_automator.cli audit-captions <profile>
+```
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `profile` | Profile name (required) |
+
+**Examples:**
+```bash
+# Audit all reels for caption issues
+python -m socials_automator.cli audit-captions ai.for.mortals
+```
+
+**Checks performed:**
+- Empty caption
+- Missing hashtags
+- Caption too short (<50 chars)
+- Caption too long (>2000 chars)
+- Missing CTA (no "follow", "save", or "share")
+
+---
+
 ### list-profiles
 
 List all available profiles.
@@ -1198,6 +1297,106 @@ Initialize project structure (creates config and profiles directories).
 ```bash
 python -m socials_automator.cli init
 ```
+
+---
+
+## Caption Fixing Scripts
+
+When reels are uploaded during Instagram rate limiting, they may be published with empty captions ("ghost publish"). These scripts help detect and fix this issue.
+
+### Workflow
+
+```
+1. sync-captions      Fetch actual captions from Instagram
+                      -> Stores in metadata.json
+                      -> Generates docs/empty_captions/<profile>.md
+
+2. fix_empty_captions.py   Chrome automation to edit captions
+                           -> Uses Selenium with your logged-in Chrome
+                           -> Retries without hashtags on failure
+
+3. sync-captions --only-empty   Quick re-check after fixing
+```
+
+### fix_empty_captions.py
+
+Chrome automation script that edits reel captions using your logged-in Instagram session.
+
+**Setup:**
+1. Close ALL Chrome windows completely
+2. Start Chrome with remote debugging:
+   ```bash
+   # Windows
+   chrome.exe --remote-debugging-port=9222 --user-data-dir=ChromeDebug
+
+   # Mac
+   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=ChromeDebug
+
+   # Linux
+   google-chrome --remote-debugging-port=9222 --user-data-dir=ChromeDebug
+   ```
+3. Log in to Instagram in that Chrome window
+4. Run the script
+
+**Usage:**
+```bash
+# Fix all empty captions for a profile
+py scripts/fix_empty_captions.py ai.for.mortals
+```
+
+**What the script does (6 steps per reel):**
+1. Load the reel page
+2. Click "..." (more options)
+3. Click "Manage"
+4. Click "Edit"
+5. Set caption text (with proper newlines)
+6. Click "Done"
+
+**Retry logic:**
+- If Instagram shows "Something went wrong", retries WITHOUT hashtags
+- Failed reels are removed from tracking (can be re-run)
+- 5-second delay after clicking Done for Instagram to save
+
+**Output:**
+```
+[1/10] 18-001-ai-tips
+    [Step 1/6] Loading reel page...
+    [Step 2/6] Clicking more options (...)...
+    [Step 3/6] Clicking Manage...
+    [Step 4/6] Clicking Edit...
+    [Step 5/6] Setting caption text...
+    [..] Waiting for autocomplete to settle...
+    [Step 6/6] Clicking Done...
+    [OK] Caption updated and marked as fixed!
+```
+
+**After fixing, verify:**
+```bash
+# Re-sync only previously empty captions
+python -m socials_automator.cli sync-captions ai.for.mortals --only-empty
+
+# If any still empty, run the script again
+py scripts/fix_empty_captions.py ai.for.mortals
+```
+
+**Requirements:**
+- `pip install selenium pyperclip`
+- Chrome browser
+
+### generate_empty_captions_report.py
+
+Generate markdown reports with clickable links and captions for manual fixing.
+
+```bash
+py scripts/generate_empty_captions_report.py
+```
+
+Creates reports in `docs/empty_captions/<profile>.md` with:
+- Direct reel URLs (clickable)
+- Full caption text in code blocks (easy to copy)
+- Organized by profile
+
+Useful if you prefer to fix captions manually via Instagram's web interface.
 
 ## Output
 
@@ -1618,6 +1817,8 @@ Instagram has these posting limits:
 
 **Ghost Publish Issue:** Meta's API can return a rate limit error AFTER successfully publishing your post. The system automatically detects this by checking your recent Instagram posts. If you see a rate limit error, don't panic - check Instagram first before retrying.
 
+**Empty Caption Issue:** During ghost publish, the caption may be lost. Use `sync-captions` to detect empty captions and `fix_empty_captions.py` to fix them. See [Caption Fixing Scripts](#caption-fixing-scripts).
+
 **Rate Limit Error Codes:**
 - Error 4: Application daily limit reached
 - Error 9: Application-level throttling (wait 5+ minutes)
@@ -1679,6 +1880,11 @@ Socials-Automator/
 │       ├── ai_tools_registry.py  # Singleton registry for tool lookup
 │       ├── ai_tools_store.py     # ChromaDB store + usage tracking
 │       └── models.py             # AITool, VideoIdea, ToolCategory models
+├── scripts/
+│   ├── fix_empty_captions.py        # Chrome automation to fix empty captions
+│   └── generate_empty_captions_report.py  # Generate markdown reports
+├── docs/
+│   └── empty_captions/              # Markdown reports of empty captions
 ├── .env.example            # Example environment file
 ├── pyproject.toml          # Python package config
 └── README.md

@@ -433,6 +433,7 @@ def audit_captions_cmd(
 def sync_captions_cmd(
     profile: str = typer.Argument(..., help="Profile name"),
     no_report: bool = typer.Option(False, "--no-report", help="Skip generating fix_captions.md report"),
+    only_empty: bool = typer.Option(False, "--only-empty", "-e", help="Only sync reels with empty captions (faster re-check)"),
 ) -> None:
     """Sync actual Instagram captions to local metadata.
 
@@ -448,6 +449,9 @@ def sync_captions_cmd(
 
         # Sync without generating report
         sync-captions ai.for.mortals --no-report
+
+        # Re-sync only empty captions (faster)
+        sync-captions ai.for.mortals --only-empty
     """
     import asyncio
     import os
@@ -472,8 +476,28 @@ def sync_captions_cmd(
     # Create syncer
     syncer = CaptionSyncer(access_token=access_token)
 
-    # Find total reels first for header
+    # Find reels to sync
     posted_reels = syncer._find_posted_reels(profile_path)
+
+    if only_empty:
+        # Filter to only reels that were previously synced and have empty captions
+        import json
+        empty_reels = []
+        for reel_path in posted_reels:
+            metadata_path = reel_path / "metadata.json"
+            if metadata_path.exists():
+                try:
+                    with open(metadata_path, encoding="utf-8") as f:
+                        metadata = json.load(f)
+                    actual_caption = metadata.get("instagram", {}).get("actual_caption")
+                    # Include if previously synced AND empty
+                    if actual_caption is not None and actual_caption == "":
+                        empty_reels.append(reel_path)
+                except Exception:
+                    pass
+        posted_reels = empty_reels
+        console.print(f"[dim]Filtering to {len(posted_reels)} previously empty reels[/dim]")
+
     total_reels = len(posted_reels)
 
     if total_reels == 0:
@@ -483,16 +507,45 @@ def sync_captions_cmd(
     # Show header
     show_sync_header(console, profile, total_reels)
 
-    # Progress callback
-    def progress_callback(current: int, total: int, reel_name: str) -> None:
-        # We'll show progress after each reel in the result loop
-        pass
+    # Run sync - either filtered or full
+    if only_empty and posted_reels:
+        # Sync only the filtered reels
+        from socials_automator.utils.caption_audit import SyncResult
 
-    # Run sync
-    result = asyncio.run(syncer.sync_profile(
-        profile_name=profile,
-        progress_callback=progress_callback,
-    ))
+        async def sync_filtered():
+            reels = []
+            for idx, reel_path in enumerate(posted_reels, 1):
+                console.print(f"  [{idx:3d}/{total_reels}] Syncing {reel_path.name[:50]}...")
+                status = await syncer.sync_reel(reel_path)
+                reels.append(status)
+
+            synced = sum(1 for r in reels if r.status == "synced")
+            empty_captions = sum(1 for r in reels if r.status == "empty")
+            mismatched = sum(1 for r in reels if r.status == "mismatch")
+            errors = sum(1 for r in reels if r.status == "error")
+            skipped = sum(1 for r in reels if r.status == "skipped")
+
+            return SyncResult(
+                profile=profile,
+                total_reels=total_reels,
+                synced=synced,
+                empty_captions=empty_captions,
+                mismatched=mismatched,
+                errors=errors,
+                skipped=skipped,
+                reels=reels,
+            )
+
+        result = asyncio.run(sync_filtered())
+    else:
+        # Full sync
+        def progress_callback(current: int, total: int, reel_name: str) -> None:
+            pass
+
+        result = asyncio.run(syncer.sync_profile(
+            profile_name=profile,
+            progress_callback=progress_callback,
+        ))
 
     # Show individual results
     for idx, reel in enumerate(result.reels, 1):

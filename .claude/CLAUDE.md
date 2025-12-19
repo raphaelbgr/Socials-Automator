@@ -341,6 +341,83 @@ See Phase 2 prompt in `planner.py` for IMAGE STYLE REQUIREMENTS.
 **Hook Slide Layout:**
 Instagram displays the first slide in a 4:3 container (cropped from 1:1). The hook slide subtext has extra horizontal padding to prevent text being cut off at the edges.
 
+## Caption Sync & Audit Tools (Reels Only)
+
+When reels are uploaded during Instagram rate limiting, captions may fail to save ("ghost publish" with empty caption). The caption sync tools help detect and fix these issues.
+
+**Note:** These tools work with **reels only**, not carousel posts.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `utils/caption_audit.py` | CaptionAuditor (log-based), CaptionSyncer (API-based) |
+| `cli/maintenance/commands.py` | sync-captions, audit-captions commands |
+| `scripts/fix_empty_captions.py` | Chrome automation to fix captions |
+| `docs/empty_captions/` | Generated markdown reports with clickable URLs |
+
+### Workflow: Detecting and Fixing Empty Captions
+
+```bash
+# Step 1: Sync actual Instagram captions to local metadata
+py -m socials_automator.cli sync-captions ai.for.mortals
+
+# Step 2: Re-sync only empty ones (faster for re-checking)
+py -m socials_automator.cli sync-captions ai.for.mortals --only-empty
+
+# Step 3: Fix empty captions via Chrome automation
+py scripts/fix_empty_captions.py ai.for.mortals
+```
+
+### How sync-captions Works
+
+1. Fetches actual caption from Instagram API for each posted reel
+2. Stores in `metadata.json` under `instagram.actual_caption`
+3. Compares with local `caption+hashtags.txt`
+4. Classifies: `synced` (match), `empty` (IG has no caption), `mismatch` (differs)
+5. Generates `fix_captions.md` report with URLs and captions to paste
+
+### Chrome Automation Script (fix_empty_captions.py)
+
+Automates fixing empty captions using your logged-in Chrome browser:
+
+**Setup:**
+```bash
+# 1. Start Chrome with remote debugging (session persists)
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\Users\rbgnr\ChromeDebug"
+
+# 2. Log in to Instagram (one-time, session persists)
+
+# 3. Run the fix script
+py scripts/fix_empty_captions.py ai.for.mortals
+```
+
+**What it does (6 steps per reel):**
+1. Load reel page
+2. Click "..." (more options)
+3. Click "Manage"
+4. Click "Edit"
+5. Set caption text (with Shift+Enter for newlines, 4s wait for autocomplete)
+6. Click "Done" (5s wait, check for errors)
+
+**Retry logic:**
+- First attempt: with hashtags
+- If fails: retry WITHOUT hashtags (starts from step 1)
+- Failed reels are removed from tracking, listed at end with errors
+
+**Tracking:**
+- Fixed reels saved to `docs/empty_captions/fixed_captions.json`
+- Script uses synced `actual_caption` as source of truth
+- After re-sync, only truly empty reels remain
+
+### Common Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| "Something went wrong" | Instagram error during save | Script auto-retries without hashtags |
+| Empty captions after upload | Rate limiting during ghost publish | Use sync-captions to detect, fix script to repair |
+| Newlines not showing | Instagram's Lexical editor | Script uses Shift+Enter for line breaks |
+
 ## Commands Overview
 
 **Generation Commands (safe to run):**

@@ -75,7 +75,7 @@ class AIToolsRegistry:
             config: Parsed configuration object.
         """
         self._config = config
-        self._loaded_at = datetime.utcnow()
+        self._loaded_at = datetime.now()
 
         # Build category lookup
         self._categories_by_id: dict[str, AIToolCategory] = {
