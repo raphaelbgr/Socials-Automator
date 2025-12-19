@@ -503,8 +503,8 @@
   "platforms": {
     "instagram": {
       "enabled": true,
-      "user_id": "ENV:INSTAGRAM_USER_ID_AI_FOR_MORTALS",
-      "access_token": "ENV:INSTAGRAM_ACCESS_TOKEN_AI_FOR_MORTALS"
+      "user_id": "ENV:INSTAGRAM_USER_ID",
+      "access_token": "ENV:INSTAGRAM_ACCESS_TOKEN"
     }
   },
 
