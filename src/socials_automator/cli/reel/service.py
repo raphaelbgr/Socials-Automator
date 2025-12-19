@@ -290,6 +290,7 @@ class ReelGeneratorService:
             story_count=params.news_story_count,
             max_news_age_hours=params.news_max_age_hours,
             profile_name=params.profile,  # For theme history tracking
+            profile_path=params.profile_path,  # For profile-scoped data storage
         )
 
     def _create_output_dir(self, params: ReelGenerationParams) -> Path:

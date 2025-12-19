@@ -322,7 +322,11 @@ class VoiceGenerator(IVoiceGenerator):
         Uses sandboxed Python 3.12 environment to run RVC.
         This is FREE and UNLIMITED - runs entirely locally!
         Word timestamps are precise (from edge-tts base audio).
+
+        Includes retry logic for concurrent access (GPU/model resource conflicts).
         """
+        import asyncio
+
         # Verify RVC sandbox exists
         if not RVC_PYTHON.exists():
             raise VoiceGenerationError(
@@ -339,7 +343,6 @@ class VoiceGenerator(IVoiceGenerator):
         self.log_progress("Using RVC Adam voice (local, free, unlimited!)")
         if self.rate != "+0%" or self.pitch != "+0Hz":
             self.log_progress(f"Excitement: rate={self.rate}, pitch={self.pitch}")
-        self.log_progress("Calling RVC sandbox...")
 
         # Call the sandboxed RVC script
         cmd = [
@@ -352,32 +355,80 @@ class VoiceGenerator(IVoiceGenerator):
             "--pitch", self.pitch,
         ]
 
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=300,  # 5 minute timeout
-            )
+        # Retry configuration for concurrent access handling
+        max_retries = 10
+        retry_delay = 5  # seconds
 
-            if result.returncode != 0:
-                raise VoiceGenerationError(
-                    f"RVC failed: {result.stderr}"
+        for attempt in range(1, max_retries + 1):
+            try:
+                if attempt > 1:
+                    self.log_progress(f"Retry attempt {attempt}/{max_retries}...")
+                else:
+                    self.log_progress("Calling RVC sandbox...")
+
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,  # 5 minute timeout
                 )
 
-            # Parse timestamps from stdout (JSON)
-            word_timestamps = json.loads(result.stdout.strip())
+                if result.returncode != 0:
+                    error_msg = result.stderr.strip()
 
-            self.log_progress(
-                f"Generated {len(word_timestamps)} word timestamps"
-            )
+                    # Check for errors that indicate resource contention (retry-able)
+                    retryable_errors = [
+                        "CUDA out of memory",
+                        "cuda",
+                        "GPU",
+                        "memory",
+                        "RuntimeError",
+                        "torch",
+                        "model",
+                        "index",
+                        "lock",
+                        "busy",
+                        "in use",
+                    ]
 
-            return audio_path, srt_path, word_timestamps
+                    is_retryable = any(
+                        err.lower() in error_msg.lower()
+                        for err in retryable_errors
+                    )
 
-        except subprocess.TimeoutExpired:
-            raise VoiceGenerationError("RVC timed out after 5 minutes")
-        except json.JSONDecodeError as e:
-            raise VoiceGenerationError(f"Failed to parse RVC output: {e}")
+                    if is_retryable and attempt < max_retries:
+                        self.log_progress(
+                            f"RVC resource busy, waiting {retry_delay}s before retry..."
+                        )
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    else:
+                        raise VoiceGenerationError(f"RVC failed: {error_msg}")
+
+                # Parse timestamps from stdout (JSON)
+                word_timestamps = json.loads(result.stdout.strip())
+
+                self.log_progress(
+                    f"Generated {len(word_timestamps)} word timestamps"
+                )
+
+                return audio_path, srt_path, word_timestamps
+
+            except subprocess.TimeoutExpired:
+                if attempt < max_retries:
+                    self.log_progress(
+                        f"RVC timed out, waiting {retry_delay}s before retry..."
+                    )
+                    await asyncio.sleep(retry_delay)
+                    continue
+                raise VoiceGenerationError("RVC timed out after 5 minutes (max retries)")
+
+            except json.JSONDecodeError as e:
+                # JSON decode errors are not retryable - something is fundamentally wrong
+                raise VoiceGenerationError(f"Failed to parse RVC output: {e}")
+
+        # Should not reach here, but just in case
+        raise VoiceGenerationError("RVC failed after maximum retries")
 
     async def _generate_voice_elevenlabs(
         self,

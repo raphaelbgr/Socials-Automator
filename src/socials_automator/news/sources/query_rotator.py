@@ -88,24 +88,39 @@ class QueryRotator:
 
         # Force rotation (e.g., for testing)
         rotator.advance_batch()
+
+        # Profile-scoped usage
+        rotator = QueryRotator(profile_path=Path("profiles/news.but.quick"))
     """
 
-    # Default state file location
+    # Default state file location (used when no profile_path specified)
     DEFAULT_STATE_PATH = Path("data/query_rotation_state.json")
+    STATE_FILENAME = "query_rotation_state.json"
 
     def __init__(
         self,
         registry: Optional[SourceRegistry] = None,
         state_path: Optional[Path] = None,
+        profile_path: Optional[Path] = None,
     ):
         """Initialize the rotator.
 
         Args:
             registry: SourceRegistry instance. Uses default if None.
             state_path: Path for state persistence. Uses default if None.
+            profile_path: Profile directory for profile-scoped state.
+                         If provided, state is saved to profile_path/data/.
         """
         self._registry = registry or get_source_registry()
-        self._state_path = state_path or self.DEFAULT_STATE_PATH
+
+        # Determine state path: profile-scoped > explicit > default
+        if profile_path is not None:
+            self._state_path = Path(profile_path) / "data" / self.STATE_FILENAME
+        elif state_path is not None:
+            self._state_path = state_path
+        else:
+            self._state_path = self.DEFAULT_STATE_PATH
+
         self._state = self._load_state()
 
     def _load_state(self) -> RotationState:
@@ -310,22 +325,30 @@ class QueryRotator:
         return summary
 
 
-# Module-level cached instance
-_rotator_instance: Optional[QueryRotator] = None
+# Module-level cached instances (per profile)
+_rotator_instances: dict[str, QueryRotator] = {}
 
 
-def get_query_rotator(reload: bool = False) -> QueryRotator:
-    """Get or create the default QueryRotator instance.
+def get_query_rotator(
+    reload: bool = False,
+    profile_path: Optional[Path] = None,
+) -> QueryRotator:
+    """Get or create a QueryRotator instance.
 
     Args:
-        reload: If True, reload from state file even if already loaded.
+        reload: If True, recreate the instance.
+        profile_path: Profile directory for profile-scoped state.
+                     If None, uses global default.
 
     Returns:
         QueryRotator instance.
     """
-    global _rotator_instance
+    global _rotator_instances
 
-    if _rotator_instance is None or reload:
-        _rotator_instance = QueryRotator()
+    # Use profile path as cache key, or "default" for global
+    cache_key = str(profile_path) if profile_path else "default"
 
-    return _rotator_instance
+    if cache_key not in _rotator_instances or reload:
+        _rotator_instances[cache_key] = QueryRotator(profile_path=profile_path)
+
+    return _rotator_instances[cache_key]

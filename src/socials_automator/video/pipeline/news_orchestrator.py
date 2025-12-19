@@ -117,6 +117,7 @@ class NewsPipeline:
         max_news_age_hours: int = 24,
         news_categories: Optional[list[NewsCategory]] = None,
         profile_name: Optional[str] = None,  # For theme history tracking
+        profile_path: Optional[Path] = None,  # For profile-scoped data storage
     ):
         """Initialize news pipeline.
 
@@ -139,8 +140,10 @@ class NewsPipeline:
             max_news_age_hours: Maximum article age in hours.
             news_categories: Filter to specific categories.
             profile_name: Profile name for theme history tracking.
+            profile_path: Profile directory for profile-scoped data storage.
         """
         self.profile_name = profile_name
+        self.profile_path = profile_path
         self.logger = logging.getLogger("video.news_pipeline")
         self.progress_callback = progress_callback
         self.text_ai = text_ai
@@ -184,7 +187,7 @@ class NewsPipeline:
                     self.gpu_accelerate = False
 
         # Initialize news components
-        self.news_aggregator = NewsAggregator()
+        self.news_aggregator = NewsAggregator(profile_path=profile_path)
         self.news_curator = NewsCurator(
             config=CurationConfig(
                 stories_per_brief=story_count,

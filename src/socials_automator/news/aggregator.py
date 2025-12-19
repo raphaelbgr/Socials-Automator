@@ -144,6 +144,9 @@ class NewsAggregator:
 
         # Use YAML-based global sources with rotation
         result = await aggregator.fetch_with_rotation()
+
+        # Profile-scoped usage (state saved to profile/data/)
+        aggregator = NewsAggregator(profile_path=Path("profiles/news.but.quick"))
     """
 
     def __init__(
@@ -152,6 +155,7 @@ class NewsAggregator:
         queries: list[SearchQueryConfig] | None = None,
         web_searcher: WebSearcher | None = None,
         use_yaml_sources: bool = True,
+        profile_path: Path | None = None,
     ):
         """Initialize the aggregator.
 
@@ -160,6 +164,7 @@ class NewsAggregator:
             queries: Custom search queries (uses defaults if None).
             web_searcher: Custom WebSearcher instance.
             use_yaml_sources: If True, use new YAML-based sources with rotation.
+            profile_path: Profile directory for profile-scoped state storage.
         """
         if feedparser is None:
             raise ImportError(
@@ -167,6 +172,7 @@ class NewsAggregator:
             )
 
         self.use_yaml_sources = use_yaml_sources
+        self.profile_path = profile_path
 
         # Legacy sources (for backwards compatibility)
         self.feeds = feeds or get_all_enabled_feeds()
@@ -206,7 +212,7 @@ class NewsAggregator:
     def _get_query_rotator(self) -> QueryRotator:
         """Get or create query rotator (lazy loading)."""
         if self._query_rotator is None:
-            self._query_rotator = get_query_rotator()
+            self._query_rotator = get_query_rotator(profile_path=self.profile_path)
         return self._query_rotator
 
     async def fetch(
