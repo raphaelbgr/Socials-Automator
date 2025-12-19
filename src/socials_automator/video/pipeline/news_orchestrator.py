@@ -362,24 +362,39 @@ class NewsPipeline:
 
         try:
             # =================================================================
-            # Phase 1: News Aggregation
+            # Phase 1: News Aggregation (with global source rotation)
             # =================================================================
             step_name = "NewsAggregator"
             description = STEP_DESCRIPTIONS.get(step_name, "Fetching news")
             self.display.start_step(step_name, description)
             self.debug_logger.start_step(step_name)
-            self._update_progress(step_name, step_counter / total_steps, "Fetching news...")
+            self._update_progress(step_name, step_counter / total_steps, "Fetching global news...")
 
-            aggregation = await self.news_aggregator.fetch(
+            # Use new rotation-based fetch for global sources
+            aggregation = await self.news_aggregator.fetch_with_rotation(
                 max_age_hours=self.max_news_age_hours,
-                categories=self.news_categories,
+                max_feeds=40,
                 max_articles=50,
             )
 
+            # Enhanced logging with region/language info
             self.display.info(
                 f"Fetched {aggregation.total_articles} articles "
                 f"(RSS: {aggregation.rss_articles_count}, Search: {aggregation.search_articles_count})"
             )
+
+            # Show source diversity
+            if aggregation.regions_used:
+                regions_str = ", ".join(sorted(aggregation.regions_used))
+                self.display.info(f"Regions: {regions_str}")
+
+            if aggregation.languages_used:
+                langs_str = ", ".join(sorted(aggregation.languages_used))
+                self.display.info(f"Languages: {langs_str}")
+
+            if aggregation.query_batch > 0:
+                self.display.debug(f"Query batch: {aggregation.query_batch}")
+
             self.debug_logger.end_step(step_name)
             step_counter += 1
 

@@ -79,6 +79,13 @@ class NewsArticle:
     content_hash: str = ""
     fetch_timestamp: datetime = field(default_factory=datetime.utcnow)
 
+    # Location and language metadata (for global news support)
+    region: str = "us"  # Region ID (us, uk, korea, japan, latam, europe, india, australia)
+    source_language: str = "en"  # Original language code
+    source_timezone: str = "UTC"  # Source timezone abbreviation (EST, KST, etc.)
+    was_translated: bool = False  # Whether content was translated to English
+    country_code: str = ""  # ISO country code if known (US, GB, KR, etc.)
+
     @property
     def age_hours(self) -> float:
         """Hours since publication."""
@@ -110,6 +117,12 @@ class NewsArticle:
             "age_hours": round(self.age_hours, 1),
             "is_fresh": self.is_fresh,
             "is_breaking": self.is_breaking,
+            # Location and language metadata
+            "region": self.region,
+            "source_language": self.source_language,
+            "source_timezone": self.source_timezone,
+            "was_translated": self.was_translated,
+            "country_code": self.country_code,
         }
 
 
@@ -137,6 +150,11 @@ class NewsStory:
     relevance_score: float = 0.0  # 0-1, how relevant/important
     virality_score: float = 0.0  # 0-1, how shareable/trending
     usefulness_score: float = 0.0  # 0-1, how actionable for viewer
+
+    # Location and language metadata
+    region: str = "us"  # Region ID
+    source_language: str = "en"  # Original language code
+    was_translated: bool = False  # Whether content was translated
 
     @property
     def total_score(self) -> float:
@@ -166,6 +184,10 @@ class NewsStory:
                 "usefulness": round(self.usefulness_score, 2),
                 "total": round(self.total_score, 2),
             },
+            # Location and language metadata
+            "region": self.region,
+            "source_language": self.source_language,
+            "was_translated": self.was_translated,
         }
 
 
@@ -285,6 +307,12 @@ class AggregationResult:
     failed_feeds: list[str] = field(default_factory=list)
     failed_queries: list[str] = field(default_factory=list)
 
+    # Region/language statistics (for enhanced logging)
+    regions_used: list[str] = field(default_factory=list)
+    languages_used: list[str] = field(default_factory=list)
+    feeds_fetched: list[str] = field(default_factory=list)
+    query_batch: int = 0  # Which query batch was used
+
     @property
     def total_articles(self) -> int:
         """Total articles after deduplication."""
@@ -312,6 +340,12 @@ class AggregationResult:
                 "search_count": self.search_articles_count,
                 "total_before_dedup": self.total_before_dedup,
                 "duplicates_removed": self.duplicates_removed,
+                "feeds_fetched": self.feeds_fetched,
+                "query_batch": self.query_batch,
+            },
+            "coverage": {
+                "regions": self.regions_used,
+                "languages": self.languages_used,
             },
             "errors": {
                 "failed_feeds": self.failed_feeds,

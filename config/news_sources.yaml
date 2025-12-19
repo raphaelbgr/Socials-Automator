@@ -1,0 +1,800 @@
+# =============================================================================
+# Global News Sources Configuration
+# =============================================================================
+# This file defines all RSS feeds and search queries for news aggregation.
+# Organized by region with support for multilingual content.
+#
+# To add a new feed: Add entry under the appropriate region in 'feeds' section
+# To add a new query: Add entry under 'queries' section with language tag
+# =============================================================================
+
+version: "1.0"
+
+# Global settings
+settings:
+  default_max_age_hours: 24
+  parallel_fetch_limit: 50
+  translation_enabled: true
+  semantic_dedup_threshold: 0.85
+  query_batch_size: 10
+  query_cooldown_hours: 6
+
+# =============================================================================
+# Regions
+# =============================================================================
+# Each region defines geographic and language context for sources
+
+regions:
+  us:
+    id: us
+    display_name: "United States"
+    languages: [en]
+    timezone: "EST"
+    priority_weight: 1.0
+    country_code: "US"
+
+  uk:
+    id: uk
+    display_name: "United Kingdom"
+    languages: [en]
+    timezone: "GMT"
+    priority_weight: 0.9
+    country_code: "GB"
+
+  korea:
+    id: korea
+    display_name: "Korea/K-Pop"
+    languages: [ko, en]
+    timezone: "KST"
+    priority_weight: 0.85
+    country_code: "KR"
+
+  japan:
+    id: japan
+    display_name: "Japan/Anime"
+    languages: [ja, en]
+    timezone: "JST"
+    priority_weight: 0.8
+    country_code: "JP"
+
+  latam:
+    id: latam
+    display_name: "Latin America"
+    languages: [es, pt, en]
+    timezone: "BRT"
+    priority_weight: 0.75
+    country_code: "BR"
+
+  europe:
+    id: europe
+    display_name: "Europe"
+    languages: [en, fr, de, es, it]
+    timezone: "CET"
+    priority_weight: 0.7
+    country_code: "EU"
+
+  india:
+    id: india
+    display_name: "India/Bollywood"
+    languages: [en, hi]
+    timezone: "IST"
+    priority_weight: 0.7
+    country_code: "IN"
+
+  australia:
+    id: australia
+    display_name: "Australia/Pacific"
+    languages: [en]
+    timezone: "AEST"
+    priority_weight: 0.6
+    country_code: "AU"
+
+# =============================================================================
+# RSS Feeds (52 total)
+# =============================================================================
+# Organized by region, each feed has:
+# - name: Display name for logging
+# - url: RSS feed URL
+# - region: Region identifier
+# - category: celebrity|movies|tv|music|streaming|viral|general
+# - priority: 1 (highest) to 3 (lowest)
+# - language: Content language (default: en)
+# - translate: Whether to translate to English (default: false)
+
+feeds:
+  # ---------------------------------------------------------------------------
+  # US - Celebrity & Entertainment (12 feeds)
+  # ---------------------------------------------------------------------------
+  - name: TMZ
+    url: https://www.tmz.com/rss.xml
+    region: us
+    category: celebrity
+    priority: 1
+
+  - name: E! News
+    url: https://www.eonline.com/syndication/feeds/rssfeeds/topstories.xml
+    region: us
+    category: celebrity
+    priority: 1
+
+  - name: People
+    url: https://people.com/feed/
+    region: us
+    category: celebrity
+    priority: 1
+
+  - name: Entertainment Tonight
+    url: https://www.etonline.com/news/rss
+    region: us
+    category: celebrity
+    priority: 1
+
+  - name: Us Weekly
+    url: https://www.usmagazine.com/feed/
+    region: us
+    category: celebrity
+    priority: 2
+
+  - name: Page Six
+    url: https://pagesix.com/feed/
+    region: us
+    category: celebrity
+    priority: 2
+
+  - name: HollywoodLife
+    url: https://hollywoodlife.com/feed/
+    region: us
+    category: celebrity
+    priority: 2
+
+  - name: The Shade Room
+    url: https://theshaderoom.com/feed/
+    region: us
+    category: celebrity
+    priority: 2
+
+  # US - Movies & TV (6 feeds)
+  - name: Variety
+    url: https://variety.com/feed/
+    region: us
+    category: movies
+    priority: 1
+
+  - name: Deadline
+    url: https://deadline.com/feed/
+    region: us
+    category: movies
+    priority: 1
+
+  - name: Hollywood Reporter
+    url: https://www.hollywoodreporter.com/feed/
+    region: us
+    category: movies
+    priority: 1
+
+  - name: Entertainment Weekly
+    url: https://ew.com/feed/
+    region: us
+    category: tv
+    priority: 2
+
+  - name: Screen Rant
+    url: https://screenrant.com/feed/
+    region: us
+    category: movies
+    priority: 3
+
+  - name: Collider
+    url: https://collider.com/feed/
+    region: us
+    category: movies
+    priority: 3
+
+  # US - Music (4 feeds)
+  - name: Rolling Stone
+    url: https://www.rollingstone.com/feed/
+    region: us
+    category: music
+    priority: 1
+
+  - name: Billboard
+    url: https://www.billboard.com/feed/
+    region: us
+    category: music
+    priority: 1
+
+  - name: Pitchfork
+    url: https://pitchfork.com/feed/feed-news/rss
+    region: us
+    category: music
+    priority: 2
+
+  - name: Consequence
+    url: https://consequence.net/feed/
+    region: us
+    category: music
+    priority: 3
+
+  # US - Streaming (3 feeds)
+  - name: What's on Netflix
+    url: https://www.whats-on-netflix.com/feed/
+    region: us
+    category: streaming
+    priority: 2
+
+  - name: Decider
+    url: https://decider.com/feed/
+    region: us
+    category: streaming
+    priority: 2
+
+  - name: Streaming Wars
+    url: https://www.streamingmedia.com/rss/news.aspx
+    region: us
+    category: streaming
+    priority: 3
+
+  # ---------------------------------------------------------------------------
+  # UK (6 feeds)
+  # ---------------------------------------------------------------------------
+  - name: BBC Entertainment
+    url: http://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml
+    region: uk
+    category: general
+    priority: 1
+
+  - name: The Guardian Culture
+    url: https://www.theguardian.com/culture/rss
+    region: uk
+    category: general
+    priority: 1
+
+  - name: Metro Entertainment
+    url: https://metro.co.uk/entertainment/feed/
+    region: uk
+    category: celebrity
+    priority: 2
+
+  - name: NME
+    url: https://www.nme.com/feed
+    region: uk
+    category: music
+    priority: 2
+
+  - name: Digital Spy
+    url: https://www.digitalspy.com/feed/
+    region: uk
+    category: tv
+    priority: 2
+
+  - name: Sky News Entertainment
+    url: https://feeds.skynews.com/feeds/rss/entertainment.xml
+    region: uk
+    category: celebrity
+    priority: 2
+
+  # ---------------------------------------------------------------------------
+  # Korea/K-Pop (8 feeds)
+  # ---------------------------------------------------------------------------
+  - name: Soompi
+    url: https://www.soompi.com/feed
+    region: korea
+    category: music
+    priority: 1
+
+  - name: AllKPop
+    url: https://www.allkpop.com/feed
+    region: korea
+    category: celebrity
+    priority: 1
+
+  - name: Koreaboo
+    url: https://www.koreaboo.com/feed/
+    region: korea
+    category: celebrity
+    priority: 1
+
+  - name: Soompi K-Drama
+    url: https://www.soompi.com/category/tvfilm/korean-drama/feed
+    region: korea
+    category: tv
+    priority: 2
+
+  - name: HelloKpop
+    url: https://www.hellokpop.com/feed/
+    region: korea
+    category: music
+    priority: 2
+
+  - name: KpopStarz
+    url: https://www.kpopstarz.com/rss/
+    region: korea
+    category: celebrity
+    priority: 3
+
+  - name: SCMP K-Pop
+    url: https://www.scmp.com/rss/322296/feed
+    region: korea
+    category: music
+    priority: 2
+
+  - name: Korea Herald Entertainment
+    url: https://www.koreaherald.com/common/rss_xml.php?ct=102
+    region: korea
+    category: general
+    priority: 3
+    language: en
+
+  # ---------------------------------------------------------------------------
+  # Japan/Anime (5 feeds)
+  # ---------------------------------------------------------------------------
+  - name: Anime News Network
+    url: https://www.animenewsnetwork.com/all/rss.xml?ann-hierarchical
+    region: japan
+    category: general
+    priority: 1
+
+  - name: Crunchyroll News
+    url: https://feeds.feedburner.com/crunchyroll/animenews
+    region: japan
+    category: general
+    priority: 1
+
+  - name: Tokyo Otaku Mode
+    url: https://otakumode.com/news/feed
+    region: japan
+    category: general
+    priority: 2
+
+  - name: Anime UK News
+    url: https://animeuknews.net/feed/
+    region: japan
+    category: general
+    priority: 2
+
+  - name: Japan Today Entertainment
+    url: https://japantoday.com/category/entertainment/feed
+    region: japan
+    category: celebrity
+    priority: 2
+
+  # ---------------------------------------------------------------------------
+  # Latin America (7 feeds)
+  # ---------------------------------------------------------------------------
+  - name: Remezcla
+    url: https://remezcla.com/feed/
+    region: latam
+    category: music
+    priority: 1
+
+  - name: Latin Times
+    url: https://www.latintimes.com/feed
+    region: latam
+    category: celebrity
+    priority: 2
+
+  - name: Billboard Latin
+    url: https://www.billboard.com/c/latin/feed/
+    region: latam
+    category: music
+    priority: 1
+
+  - name: CNN Espanol Entertainment
+    url: https://cnnespanol.cnn.com/category/entretenimiento/feed/
+    region: latam
+    category: general
+    priority: 2
+    language: es
+    translate: true
+
+  - name: Telemundo Entertainment
+    url: https://www.telemundo.com/entretenimiento/rss
+    region: latam
+    category: celebrity
+    priority: 2
+    language: es
+    translate: true
+
+  - name: mituu
+    url: https://wearemitu.com/feed/
+    region: latam
+    category: celebrity
+    priority: 2
+
+  - name: Rolling Stone Latin
+    url: https://www.rollingstone.com/music/music-latin/feed/
+    region: latam
+    category: music
+    priority: 2
+
+  # ---------------------------------------------------------------------------
+  # Europe (5 feeds)
+  # ---------------------------------------------------------------------------
+  - name: Euronews Culture
+    url: https://feeds.feedburner.com/euronews/en/culture
+    region: europe
+    category: general
+    priority: 2
+
+  - name: France 24 Culture
+    url: https://www.france24.com/en/culture/rss
+    region: europe
+    category: general
+    priority: 2
+
+  - name: Deutsche Welle Culture
+    url: https://rss.dw.com/xml/rss-en-cul
+    region: europe
+    category: general
+    priority: 2
+
+  - name: Cineuropa
+    url: https://cineuropa.org/en/rss/
+    region: europe
+    category: movies
+    priority: 2
+
+  - name: The Local Spain
+    url: https://feeds.thelocal.com/rss/es
+    region: europe
+    category: general
+    priority: 3
+
+  # ---------------------------------------------------------------------------
+  # India/Bollywood (5 feeds)
+  # ---------------------------------------------------------------------------
+  - name: Bollywood Hungama
+    url: https://www.bollywoodhungama.com/rss.xml
+    region: india
+    category: movies
+    priority: 1
+
+  - name: Filmibeat
+    url: https://www.filmibeat.com/rss/fb-bollywood.xml
+    region: india
+    category: movies
+    priority: 2
+
+  - name: NDTV Movies
+    url: https://feeds.feedburner.com/ndtvmovies-latest
+    region: india
+    category: movies
+    priority: 2
+
+  - name: Pinkvilla
+    url: https://www.pinkvilla.com/rss.xml
+    region: india
+    category: celebrity
+    priority: 2
+
+  - name: ANI Entertainment
+    url: https://aninews.in/category/entertainment/feed/
+    region: india
+    category: general
+    priority: 3
+
+# =============================================================================
+# Search Queries (36 total, 8 languages)
+# =============================================================================
+# Queries are organized by language with rotation support.
+# - query: The search string
+# - category: Content category
+# - language: Query language code
+# - priority: 1 (highest) to 3 (lowest)
+# - translate: Whether results need translation to English
+# - batch: Batch number for round-robin rotation (1-3)
+
+queries:
+  # ---------------------------------------------------------------------------
+  # English Queries (12)
+  # ---------------------------------------------------------------------------
+  - query: "celebrity news today"
+    category: celebrity
+    language: en
+    priority: 1
+    batch: 1
+
+  - query: "entertainment news breaking"
+    category: general
+    language: en
+    priority: 1
+    batch: 1
+
+  - query: "viral celebrity moment today"
+    category: viral
+    language: en
+    priority: 1
+    batch: 1
+
+  - query: "new movie releases this week"
+    category: movies
+    language: en
+    priority: 2
+    batch: 1
+
+  - query: "tv show premiere this week"
+    category: tv
+    language: en
+    priority: 2
+    batch: 2
+
+  - query: "streaming news netflix disney plus"
+    category: streaming
+    language: en
+    priority: 2
+    batch: 2
+
+  - query: "new music releases this week"
+    category: music
+    language: en
+    priority: 2
+    batch: 2
+
+  - query: "concert tour announcement 2025"
+    category: music
+    language: en
+    priority: 3
+    batch: 2
+
+  - query: "celebrity drama today"
+    category: viral
+    language: en
+    priority: 3
+    batch: 3
+
+  - query: "award show news 2025"
+    category: general
+    language: en
+    priority: 3
+    batch: 3
+
+  - query: "box office weekend results"
+    category: movies
+    language: en
+    priority: 2
+    batch: 3
+
+  - query: "new on streaming this week"
+    category: streaming
+    language: en
+    priority: 2
+    batch: 3
+
+  # ---------------------------------------------------------------------------
+  # Spanish Queries (6)
+  # ---------------------------------------------------------------------------
+  - query: "noticias entretenimiento hoy"
+    category: general
+    language: es
+    priority: 2
+    translate: true
+    batch: 1
+
+  - query: "noticias celebridades latinoamerica"
+    category: celebrity
+    language: es
+    priority: 2
+    translate: true
+    batch: 1
+
+  - query: "musica latina nuevos lanzamientos"
+    category: music
+    language: es
+    priority: 2
+    translate: true
+    batch: 2
+
+  - query: "telenovelas estrenos 2025"
+    category: tv
+    language: es
+    priority: 3
+    translate: true
+    batch: 2
+
+  - query: "reggaeton noticias artistas"
+    category: music
+    language: es
+    priority: 3
+    translate: true
+    batch: 3
+
+  - query: "peliculas estrenos cine"
+    category: movies
+    language: es
+    priority: 3
+    translate: true
+    batch: 3
+
+  # ---------------------------------------------------------------------------
+  # Korean Queries (6)
+  # ---------------------------------------------------------------------------
+  - query: "K-pop news today"
+    category: music
+    language: en
+    priority: 1
+    batch: 1
+
+  - query: "Korean drama news 2025"
+    category: tv
+    language: en
+    priority: 2
+    batch: 2
+
+  - query: "BTS BLACKPINK latest news"
+    category: music
+    language: en
+    priority: 2
+    batch: 1
+
+  - query: "K-pop comeback announcement"
+    category: music
+    language: en
+    priority: 2
+    batch: 2
+
+  - query: "Korean celebrity dating news"
+    category: celebrity
+    language: en
+    priority: 3
+    batch: 3
+
+  - query: "K-drama Netflix premiere"
+    category: streaming
+    language: en
+    priority: 2
+    batch: 3
+
+  # ---------------------------------------------------------------------------
+  # Japanese Queries (4)
+  # ---------------------------------------------------------------------------
+  - query: "anime news new releases"
+    category: general
+    language: en
+    priority: 1
+    batch: 1
+
+  - query: "anime season premiere 2025"
+    category: tv
+    language: en
+    priority: 2
+    batch: 2
+
+  - query: "Japanese entertainment news"
+    category: celebrity
+    language: en
+    priority: 2
+    batch: 2
+
+  - query: "manga adaptation announcement"
+    category: movies
+    language: en
+    priority: 3
+    batch: 3
+
+  # ---------------------------------------------------------------------------
+  # Portuguese Queries (4)
+  # ---------------------------------------------------------------------------
+  - query: "noticias famosos brasil"
+    category: celebrity
+    language: pt
+    priority: 2
+    translate: true
+    batch: 1
+
+  - query: "musica brasileira lancamentos"
+    category: music
+    language: pt
+    priority: 3
+    translate: true
+    batch: 2
+
+  - query: "novelas brasileiras 2025"
+    category: tv
+    language: pt
+    priority: 3
+    translate: true
+    batch: 3
+
+  - query: "funk sertanejo noticias"
+    category: music
+    language: pt
+    priority: 3
+    translate: true
+    batch: 3
+
+  # ---------------------------------------------------------------------------
+  # French Queries (2)
+  # ---------------------------------------------------------------------------
+  - query: "actualites cinema francais"
+    category: movies
+    language: fr
+    priority: 3
+    translate: true
+    batch: 2
+
+  - query: "musique francaise actualites"
+    category: music
+    language: fr
+    priority: 3
+    translate: true
+    batch: 3
+
+  # ---------------------------------------------------------------------------
+  # Hindi Queries (2)
+  # ---------------------------------------------------------------------------
+  - query: "Bollywood news today"
+    category: movies
+    language: en
+    priority: 2
+    batch: 1
+
+  - query: "Bollywood celebrity gossip"
+    category: celebrity
+    language: en
+    priority: 3
+    batch: 2
+
+# =============================================================================
+# Rotation Configuration
+# =============================================================================
+# Controls how sources are selected and rotated across editions
+
+rotation:
+  # Time-based weights by UTC hour ranges
+  time_weights:
+    morning:  # 6-12 UTC
+      us: 0.6       # US sleeping, lower priority
+      uk: 1.0       # UK morning news
+      korea: 0.9    # Korea evening
+      japan: 0.8    # Japan evening
+      europe: 1.0   # Europe morning
+      latam: 0.5    # LatAm late night
+      india: 0.9    # India afternoon
+
+    afternoon:  # 12-18 UTC
+      us: 0.9       # US morning
+      uk: 0.9       # UK afternoon
+      korea: 0.6    # Korea late night
+      japan: 0.6    # Japan late night
+      europe: 0.8   # Europe afternoon
+      latam: 0.8    # LatAm morning
+      india: 0.7    # India evening
+
+    evening:  # 18-24 UTC
+      us: 1.0       # US prime time
+      uk: 0.7       # UK night
+      korea: 0.5    # Korea early morning
+      japan: 0.5    # Japan early morning
+      europe: 0.6   # Europe night
+      latam: 1.0    # LatAm afternoon
+      india: 0.5    # India late night
+
+    night:  # 0-6 UTC
+      us: 0.7       # US evening
+      uk: 0.5       # UK late night
+      korea: 0.8    # Korea morning
+      japan: 0.9    # Japan morning
+      europe: 0.5   # Europe late night
+      latam: 0.9    # LatAm evening
+      india: 0.8    # India morning
+
+  # Category balance targets per video (percentages)
+  category_targets:
+    celebrity: 0.30
+    music: 0.25
+    movies: 0.20
+    streaming: 0.15
+    viral: 0.10
+
+  # Freshness settings
+  freshness:
+    breaking_window_hours: 6
+    breaking_boost: 1.5
+    stale_penalty_per_hour: 0.02
+    max_age_hours: 24
+
+  # Query rotation settings
+  query_rotation:
+    batches: 3
+    queries_per_batch: 12
+    cooldown_hours: 6

@@ -12,6 +12,10 @@ Usage:
         parse_timestamp,
         format_timestamp,
         format_local,
+        # Timezone conversion for content
+        tz_abbrev_to_offset,
+        convert_time_to_utc,
+        format_time_utc,
     )
 
     # Get current time
@@ -29,6 +33,10 @@ Usage:
     # Format for storage or display
     iso_str = format_timestamp(dt)  # ISO format with timezone
     display_str = format_local(dt)  # "Dec 17, 2025 12:43 PM"
+
+    # Convert time mentions to UTC (for news content)
+    utc_h, utc_m, day_off = convert_time_to_utc(19, 0, "EST")  # 7pm EST
+    display = format_time_utc(utc_h, utc_m, day_off)  # "12:00 AM UTC (next day)"
 """
 
 from __future__ import annotations
@@ -436,3 +444,267 @@ def time_diff_human(dt1: datetime, dt2: datetime) -> str:
         if hours > 0:
             return f"{days}d {hours}h"
         return f"{days}d"
+
+
+# =============================================================================
+# TIMEZONE ABBREVIATIONS FOR CONTENT CONVERSION
+# =============================================================================
+
+# Common timezone abbreviations to UTC offset in hours
+# Used for converting time mentions in news content to UTC
+TIMEZONE_OFFSETS: dict[str, float] = {
+    # UTC
+    "UTC": 0,
+    "GMT": 0,
+    "Z": 0,
+
+    # North America - Standard
+    "EST": -5,   # Eastern Standard
+    "CST": -6,   # Central Standard
+    "MST": -7,   # Mountain Standard
+    "PST": -8,   # Pacific Standard
+    "AKST": -9,  # Alaska Standard
+    "HST": -10,  # Hawaii Standard
+
+    # North America - Daylight
+    "EDT": -4,   # Eastern Daylight
+    "CDT": -5,   # Central Daylight
+    "MDT": -6,   # Mountain Daylight
+    "PDT": -7,   # Pacific Daylight
+    "AKDT": -8,  # Alaska Daylight
+
+    # North America - Short forms (assume standard)
+    "ET": -5,    # Eastern Time
+    "CT": -6,    # Central Time
+    "MT": -7,    # Mountain Time
+    "PT": -8,    # Pacific Time
+
+    # Europe
+    "WET": 0,    # Western European
+    "WEST": 1,   # Western European Summer
+    "CET": 1,    # Central European
+    "CEST": 2,   # Central European Summer
+    "EET": 2,    # Eastern European
+    "EEST": 3,   # Eastern European Summer
+    "BST": 1,    # British Summer Time
+    "ISH": 0,    # Ireland (same as GMT)
+
+    # Asia
+    "KST": 9,    # Korea Standard
+    "JST": 9,    # Japan Standard
+    "CST_CN": 8, # China Standard
+    "HKT": 8,    # Hong Kong
+    "SGT": 8,    # Singapore
+    "IST": 5.5,  # India Standard
+    "PKT": 5,    # Pakistan
+    "ICT": 7,    # Indochina (Thailand, Vietnam)
+    "WIB": 7,    # Western Indonesia
+    "PHT": 8,    # Philippines
+
+    # South America
+    "BRT": -3,   # Brasilia
+    "BRST": -2,  # Brasilia Summer
+    "ART": -3,   # Argentina
+    "CLT": -4,   # Chile Standard
+    "CLST": -3,  # Chile Summer
+    "COT": -5,   # Colombia
+    "PET": -5,   # Peru
+    "VET": -4,   # Venezuela
+
+    # Australia/Pacific
+    "AEST": 10,  # Australian Eastern Standard
+    "AEDT": 11,  # Australian Eastern Daylight
+    "ACST": 9.5, # Australian Central Standard
+    "ACDT": 10.5,# Australian Central Daylight
+    "AWST": 8,   # Australian Western Standard
+    "NZST": 12,  # New Zealand Standard
+    "NZDT": 13,  # New Zealand Daylight
+
+    # Middle East
+    "GST": 4,    # Gulf Standard (UAE, Oman)
+    "AST_AR": 3, # Arabia Standard (Saudi, Kuwait, Qatar)
+    "IRST": 3.5, # Iran Standard
+    "IDT": 3,    # Israel Daylight
+    "IST_IL": 2, # Israel Standard
+    "TRT": 3,    # Turkey
+
+    # Africa
+    "CAT": 2,    # Central Africa
+    "EAT": 3,    # East Africa
+    "WAT": 1,    # West Africa
+    "SAST": 2,   # South Africa Standard
+}
+
+# Region to typical timezone mapping (for sources without explicit TZ)
+REGION_DEFAULT_TIMEZONES: dict[str, str] = {
+    "us": "EST",
+    "uk": "GMT",
+    "korea": "KST",
+    "japan": "JST",
+    "india": "IST",
+    "latam": "BRT",
+    "europe": "CET",
+    "australia": "AEST",
+    "middle_east": "GST",
+    "china": "CST_CN",
+}
+
+
+def tz_abbrev_to_offset(abbrev: str) -> Optional[float]:
+    """Convert timezone abbreviation to UTC offset in hours.
+
+    Args:
+        abbrev: Timezone abbreviation like "EST", "PST", "KST".
+
+    Returns:
+        UTC offset in hours (e.g., -5 for EST, 9 for KST).
+        Returns None if abbreviation is unknown.
+
+    Examples:
+        >>> tz_abbrev_to_offset("EST")
+        -5
+        >>> tz_abbrev_to_offset("KST")
+        9
+        >>> tz_abbrev_to_offset("IST")
+        5.5
+    """
+    return TIMEZONE_OFFSETS.get(abbrev.upper())
+
+
+def get_region_timezone(region: str) -> str:
+    """Get default timezone abbreviation for a region.
+
+    Args:
+        region: Region identifier (e.g., "us", "korea", "latam").
+
+    Returns:
+        Timezone abbreviation (e.g., "EST", "KST", "BRT").
+    """
+    return REGION_DEFAULT_TIMEZONES.get(region.lower(), "UTC")
+
+
+def convert_time_to_utc(
+    hour: int,
+    minute: int,
+    source_tz: str,
+) -> tuple[int, int, int]:
+    """Convert a time from source timezone to UTC.
+
+    Args:
+        hour: Hour in 24-hour format (0-23).
+        minute: Minute (0-59).
+        source_tz: Timezone abbreviation (e.g., "EST", "PST", "KST").
+
+    Returns:
+        Tuple of (utc_hour, utc_minute, day_offset) where:
+        - utc_hour: Hour in UTC (0-23)
+        - utc_minute: Minute (0-59)
+        - day_offset: -1 (previous day), 0 (same day), or 1 (next day)
+
+    Examples:
+        >>> convert_time_to_utc(19, 0, "EST")  # 7pm EST
+        (0, 0, 1)  # 12:00 AM UTC next day
+
+        >>> convert_time_to_utc(9, 30, "KST")  # 9:30am Korea
+        (0, 30, 0)  # 12:30 AM UTC same day
+    """
+    offset = tz_abbrev_to_offset(source_tz)
+    if offset is None:
+        # Unknown timezone, assume UTC
+        return hour, minute, 0
+
+    # Convert to total minutes, then subtract offset
+    total_minutes = hour * 60 + minute
+    utc_minutes = total_minutes - int(offset * 60)
+
+    # Handle day rollover
+    day_offset = 0
+    if utc_minutes < 0:
+        utc_minutes += 24 * 60
+        day_offset = -1
+    elif utc_minutes >= 24 * 60:
+        utc_minutes -= 24 * 60
+        day_offset = 1
+
+    utc_hour = utc_minutes // 60
+    utc_minute = utc_minutes % 60
+
+    return utc_hour, utc_minute, day_offset
+
+
+def format_time_utc(
+    hour: int,
+    minute: int = 0,
+    day_offset: int = 0,
+    use_24h: bool = False,
+) -> str:
+    """Format time for display with UTC suffix.
+
+    Creates human-readable time strings for news content.
+    All times should be displayed in UTC for consistency.
+
+    Args:
+        hour: Hour in 24-hour format (0-23).
+        minute: Minute (0-59).
+        day_offset: -1 (previous day), 0 (same day), or 1 (next day).
+        use_24h: If True, use 24-hour format. Default is 12-hour with AM/PM.
+
+    Returns:
+        Formatted string like "8:00 PM UTC" or "20:00 UTC".
+
+    Examples:
+        >>> format_time_utc(20, 0)
+        "8:00 PM UTC"
+
+        >>> format_time_utc(0, 0, day_offset=1)
+        "12:00 AM UTC (next day)"
+
+        >>> format_time_utc(14, 30, use_24h=True)
+        "14:30 UTC"
+    """
+    if use_24h:
+        time_str = f"{hour:02d}:{minute:02d}"
+    else:
+        am_pm = "AM" if hour < 12 else "PM"
+        display_hour = hour % 12
+        if display_hour == 0:
+            display_hour = 12
+        time_str = f"{display_hour}:{minute:02d} {am_pm}"
+
+    suffix = " UTC"
+    if day_offset == -1:
+        suffix = " UTC (prev day)"
+    elif day_offset == 1:
+        suffix = " UTC (next day)"
+
+    return time_str + suffix
+
+
+def convert_and_format_time(
+    hour: int,
+    minute: int,
+    source_tz: str,
+    use_24h: bool = False,
+) -> str:
+    """Convert time from source timezone to UTC and format for display.
+
+    Convenience function combining convert_time_to_utc and format_time_utc.
+
+    Args:
+        hour: Hour in source timezone (0-23).
+        minute: Minute (0-59).
+        source_tz: Source timezone abbreviation.
+        use_24h: Use 24-hour format.
+
+    Returns:
+        Formatted UTC time string.
+
+    Examples:
+        >>> convert_and_format_time(19, 0, "EST")
+        "12:00 AM UTC (next day)"
+
+        >>> convert_and_format_time(15, 30, "KST")
+        "6:30 AM UTC"
+    """
+    utc_hour, utc_minute, day_offset = convert_time_to_utc(hour, minute, source_tz)
+    return format_time_utc(utc_hour, utc_minute, day_offset, use_24h)

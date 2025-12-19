@@ -1764,6 +1764,142 @@ JUST IN
 -> Emily in Paris S5...
 ```
 
+### Global News Sources Strategy
+
+The news aggregation system uses a sophisticated multi-source strategy to ensure diverse, fresh, and non-repetitive content.
+
+#### Source Configuration (`config/news_sources.yaml`)
+
+All news sources are defined in a single YAML file with:
+- **57 RSS feeds** from 8 global regions
+- **36 search queries** in 4 languages (English, Spanish, Portuguese, French)
+- Time-based weighting for regional relevance
+- Query batch rotation to avoid API rate limits
+
+#### How Source Rotation Works
+
+```
++------------------+     +------------------+     +------------------+
+|   Feed Rotator   |     |  Query Rotator   |     |  Time Weighting  |
++------------------+     +------------------+     +------------------+
+        |                        |                        |
+        v                        v                        v
+  Select feeds by         Rotate through           Weight regions by
+  current UTC time        query batches            time of day (UTC)
+        |                        |                        |
+        +------------------------+------------------------+
+                                 |
+                                 v
+                    +------------------------+
+                    |   NewsAggregator       |
+                    |   fetch_with_rotation()|
+                    +------------------------+
+                                 |
+                                 v
+                    Articles with region/language metadata
+```
+
+#### Regional Coverage (8 Regions)
+
+| Region | Feeds | Focus | Timezone |
+|--------|-------|-------|----------|
+| US | 25 | Celebrity, Movies, Music, Streaming | EST |
+| UK | 6 | BBC, Guardian, NME, Digital Spy | GMT |
+| Korea | 8 | K-Pop, K-Drama (Soompi, AllKPop) | KST |
+| Japan | 5 | Anime, J-Pop (ANN, Crunchyroll) | JST |
+| LatAm | 7 | Latin music, Telenovelas | BRT |
+| Europe | 5 | Euronews, France24, DW | CET |
+| India | 5 | Bollywood (Hungama, Pinkvilla) | IST |
+| Australia | 1 | Pacific entertainment | AEST |
+
+#### Time-Weighted Selection
+
+Feeds are weighted by time of day (UTC) to prioritize active regions:
+
+| Period | US | UK | Korea | Japan | LatAm |
+|--------|----|----|-------|-------|-------|
+| Morning (6-12 UTC) | 0.6 | 1.0 | 0.9 | 0.8 | 0.5 |
+| Afternoon (12-18 UTC) | 0.9 | 0.9 | 0.6 | 0.6 | 0.8 |
+| Evening (18-24 UTC) | 1.0 | 0.7 | 0.5 | 0.5 | 1.0 |
+| Night (0-6 UTC) | 0.7 | 0.5 | 0.8 | 0.9 | 0.9 |
+
+Higher weight = more feeds selected from that region.
+
+#### Query Batch Rotation
+
+To avoid API rate limits and ensure diverse results:
+
+```
+Batch 1 (12 queries)  -->  Batch 2 (12 queries)  -->  Batch 3 (12 queries)
+        ^                                                      |
+        |                                                      |
+        +------------------- 6-hour cooldown ------------------+
+```
+
+- Queries are divided into 3 batches
+- Each batch runs for 6 hours before rotating
+- State is persisted in `data/query_rotation_state.json`
+
+#### UTC Time Normalization
+
+All times in news content are converted to UTC for consistency:
+
+```
+Original: "Concert starts at 7pm EST"
+   |
+   v
+Normalized: "Concert starts at 12:00 AM UTC (next day)"
+```
+
+The `TimeNormalizer` class handles:
+- Multiple time formats (12h, 24h, with/without timezone)
+- 50+ timezone abbreviations (EST, PST, KST, JST, etc.)
+- Day rollover handling ("next day", "prev day")
+
+#### Article Metadata
+
+Each article includes enhanced metadata for tracking:
+
+```python
+@dataclass
+class NewsArticle:
+    title: str
+    summary: str
+    # ... standard fields ...
+
+    # Location/language metadata
+    region: str          # "us", "korea", "uk", etc.
+    source_language: str # "en", "es", "ko", etc.
+    source_timezone: str # "EST", "KST", etc.
+    was_translated: bool # True if translated to English
+    country_code: str    # "US", "KR", "GB", etc.
+```
+
+#### CLI Logging
+
+The aggregator displays source diversity in the CLI:
+
+```
+>>> STEP 1: NewsAggregator
+    Fetching global news...
+    Fetched 45 articles (RSS: 38, Search: 7)
+    Regions: australia, europe, india, japan, korea, latam, uk, us
+    Languages: en, es, pt
+    Query batch: 2
+```
+
+#### Key Files
+
+| File | Purpose |
+|------|---------|
+| `config/news_sources.yaml` | All feeds, queries, rotation config |
+| `news/sources/registry.py` | Loads YAML, provides query methods |
+| `news/sources/feed_rotator.py` | Time-weighted feed selection |
+| `news/sources/query_rotator.py` | Round-robin query batch rotation |
+| `news/aggregator.py` | `fetch_with_rotation()` method |
+| `utils/time_normalizer.py` | UTC time conversion for content |
+| `data/query_rotation_state.json` | Persisted rotation state |
+
 ## Troubleshooting
 
 ### "No providers available"
