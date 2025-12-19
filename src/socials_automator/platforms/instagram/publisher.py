@@ -63,6 +63,8 @@ class InstagramPublisher(PlatformPublisher):
         video_path: Path,
         caption: str,
         thumbnail_path: Optional[Path] = None,
+        profile: Optional[str] = None,
+        post_id: Optional[str] = None,
         **kwargs: Any,
     ) -> PublishResult:
         """Publish a video reel to Instagram.
@@ -71,6 +73,8 @@ class InstagramPublisher(PlatformPublisher):
             video_path: Path to the video file.
             caption: Caption for the reel.
             thumbnail_path: Optional custom thumbnail.
+            profile: Profile name for scoped Cloudinary folder (e.g., "ai.for.mortals").
+            post_id: Post/reel ID for scoped Cloudinary folder (e.g., "18-003-news").
             **kwargs: Additional options:
                 - share_to_feed: bool (default True)
                 - max_retries: int (default 3)
@@ -90,8 +94,9 @@ class InstagramPublisher(PlatformPublisher):
                 error=f"Video file not found: {video_path}",
             )
 
+        uploader = None
         try:
-            # Step 1: Upload video to Cloudinary
+            # Step 1: Upload video to Cloudinary (scoped by profile/post_id)
             file_size_mb = video_path.stat().st_size / (1024 * 1024)
             await self._emit_progress(
                 "upload", 0.0,
@@ -99,21 +104,21 @@ class InstagramPublisher(PlatformPublisher):
             )
 
             uploader = self._get_uploader()
-            video_url = uploader.upload_video(video_path)
+            video_url = uploader.upload_video(video_path, profile=profile, post_id=post_id)
 
             await self._emit_progress(
                 "upload", 40.0,
                 f"Step 1/4: Video uploaded to Cloudinary"
             )
 
-            # Step 2: Upload thumbnail if provided
+            # Step 2: Upload thumbnail if provided (same scoped folder)
             cover_url = None
             if thumbnail_path and thumbnail_path.exists():
                 await self._emit_progress(
                     "upload", 45.0,
                     "Step 2/4: Uploading thumbnail..."
                 )
-                cover_url = uploader.upload_image(thumbnail_path)
+                cover_url = uploader.upload_image(thumbnail_path, profile=profile, post_id=post_id)
                 await self._emit_progress(
                     "upload", 50.0,
                     "Step 2/4: Thumbnail uploaded"
@@ -146,6 +151,19 @@ class InstagramPublisher(PlatformPublisher):
                     "complete", 100.0,
                     "Step 4/4: Published successfully!"
                 )
+
+                # Cleanup Cloudinary files after successful publish
+                if uploader:
+                    try:
+                        deleted = await uploader.cleanup_async()
+                        if deleted > 0:
+                            await self._emit_progress(
+                                "cleanup", 100.0,
+                                f"Cleaned up {deleted} file(s) from Cloudinary"
+                            )
+                    except Exception:
+                        pass  # Ignore cleanup errors
+
                 return self._make_result(
                     success=True,
                     media_id=result.media_id,
@@ -154,6 +172,7 @@ class InstagramPublisher(PlatformPublisher):
                     cover_url=cover_url,
                 )
             else:
+                # Don't cleanup on failure - keep files for retry
                 return self._make_result(
                     success=False,
                     error=result.error_message,
@@ -161,6 +180,7 @@ class InstagramPublisher(PlatformPublisher):
                 )
 
         except Exception as e:
+            # Don't cleanup on exception - keep files for retry
             return self._make_result(
                 success=False,
                 error=f"Instagram publish failed: {str(e)}",

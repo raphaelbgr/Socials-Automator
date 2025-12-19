@@ -1350,7 +1350,7 @@ class ReelUploaderService:
                     any_success = True
                     continue
 
-                # Upload to this platform
+                # Upload to this platform (with scoped Cloudinary folder)
                 any_new_upload = True
                 platform_result = await self._upload_to_platform(
                     platform_name=platform_name,
@@ -1359,6 +1359,7 @@ class ReelUploaderService:
                     caption=caption,
                     profile_path=params.profile_path,
                     log_fn=log,
+                    reel_folder_name=reel_path.name,  # For scoped Cloudinary uploads
                 )
 
                 result["platforms"][platform_name] = platform_result
@@ -1412,6 +1413,7 @@ class ReelUploaderService:
         caption: str,
         profile_path: Path,
         log_fn,
+        reel_folder_name: Optional[str] = None,
     ) -> dict:
         """Upload to a specific platform using the platform adapter."""
         from socials_automator.platforms import PlatformRegistry
@@ -1496,11 +1498,16 @@ class ReelUploaderService:
             file_size_mb = video_path.stat().st_size / (1024 * 1024)
             log_fn(f"[yellow]Starting upload ({file_size_mb:.1f} MB)...[/yellow]")
 
-            # Publish
+            # Extract profile name from profile_path for scoped uploads
+            profile_name = profile_path.name if profile_path else None
+
+            # Publish with scoped Cloudinary folder (profile/reel_folder)
             publish_result = await publisher.publish_reel(
                 video_path=video_path,
                 caption=caption,
                 thumbnail_path=thumbnail_path,
+                profile=profile_name,
+                post_id=reel_folder_name,
             )
 
             if publish_result.success:

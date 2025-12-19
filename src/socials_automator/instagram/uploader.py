@@ -79,23 +79,38 @@ class CloudinaryUploader:
         if self.progress_callback:
             await self.progress_callback(step, current, total)
 
-    def upload_image(self, image_path: Path, folder: str = "socials-automator") -> str:
+    def upload_image(
+        self,
+        image_path: Path,
+        folder: str = "socials-automator",
+        profile: str | None = None,
+        post_id: str | None = None,
+    ) -> str:
         """Upload a single image to Cloudinary.
 
         Args:
             image_path: Path to the image file
-            folder: Cloudinary folder to organize uploads
+            folder: Base Cloudinary folder to organize uploads
+            profile: Profile name for scoped folder (e.g., "ai.for.mortals")
+            post_id: Post/reel ID for scoped folder (e.g., "18-003-news")
 
         Returns:
             Public URL of the uploaded image
         """
+        # Build scoped folder path: folder/profile/post_id
+        scoped_folder = folder
+        if profile:
+            scoped_folder = f"{folder}/{profile}"
+            if post_id:
+                scoped_folder = f"{scoped_folder}/{post_id}"
+
         result = cloudinary.uploader.upload(
             str(image_path),
-            folder=folder,
+            folder=scoped_folder,
             resource_type="image",
             overwrite=True,
-            # Use original filename as public_id for easier cleanup
-            public_id=f"{folder}/{image_path.stem}",
+            # Use scoped path + filename as public_id for easier cleanup
+            public_id=f"{scoped_folder}/{image_path.stem}",
         )
 
         # Track for cleanup
@@ -108,27 +123,38 @@ class CloudinaryUploader:
         video_path: Path,
         folder: str = "socials-automator",
         progress_callback: Callable[[int, int], None] | None = None,
+        profile: str | None = None,
+        post_id: str | None = None,
     ) -> str:
         """Upload a video to Cloudinary with progress tracking.
 
         Args:
             video_path: Path to the video file (MP4 recommended)
-            folder: Cloudinary folder to organize uploads
+            folder: Base Cloudinary folder to organize uploads
             progress_callback: Optional callback(bytes_uploaded, total_bytes) for progress
+            profile: Profile name for scoped folder (e.g., "ai.for.mortals")
+            post_id: Post/reel ID for scoped folder (e.g., "18-003-news")
 
         Returns:
             Public URL of the uploaded video
         """
+        # Build scoped folder path: folder/profile/post_id
+        scoped_folder = folder
+        if profile:
+            scoped_folder = f"{folder}/{profile}"
+            if post_id:
+                scoped_folder = f"{scoped_folder}/{post_id}"
+
         file_size = video_path.stat().st_size
 
         # For large files (>20MB), use chunked upload
         if file_size > 20_000_000:
             result = cloudinary.uploader.upload_large(
                 str(video_path),
-                folder=folder,
+                folder=scoped_folder,
                 resource_type="video",
                 overwrite=True,
-                public_id=f"{folder}/{video_path.stem}",
+                public_id=f"{scoped_folder}/{video_path.stem}",
                 chunk_size=6_000_000,  # 6MB chunks
             )
         else:
@@ -137,10 +163,10 @@ class CloudinaryUploader:
             try:
                 result = cloudinary.uploader.upload(
                     wrapper,
-                    folder=folder,
+                    folder=scoped_folder,
                     resource_type="video",
                     overwrite=True,
-                    public_id=f"{folder}/{video_path.stem}",
+                    public_id=f"{scoped_folder}/{video_path.stem}",
                 )
             finally:
                 wrapper.close()
@@ -154,12 +180,16 @@ class CloudinaryUploader:
         self,
         video_path: Path,
         folder: str = "socials-automator",
+        profile: str | None = None,
+        post_id: str | None = None,
     ) -> str:
         """Upload a video asynchronously.
 
         Args:
             video_path: Path to the video file
-            folder: Cloudinary folder to organize uploads
+            folder: Base Cloudinary folder to organize uploads
+            profile: Profile name for scoped folder (e.g., "ai.for.mortals")
+            post_id: Post/reel ID for scoped folder (e.g., "18-003-news")
 
         Returns:
             Public URL of the uploaded video
@@ -169,7 +199,7 @@ class CloudinaryUploader:
         loop = asyncio.get_event_loop()
         url = await loop.run_in_executor(
             None,
-            lambda: self.upload_video(video_path, folder),
+            lambda: self.upload_video(video_path, folder, profile=profile, post_id=post_id),
         )
 
         await self._report_progress("Uploading video to Cloudinary", 1, 1)
@@ -179,12 +209,16 @@ class CloudinaryUploader:
         self,
         image_paths: list[Path],
         folder: str = "socials-automator",
+        profile: str | None = None,
+        post_id: str | None = None,
     ) -> list[str]:
         """Upload multiple images in parallel.
 
         Args:
             image_paths: List of paths to image files
-            folder: Cloudinary folder to organize uploads
+            folder: Base Cloudinary folder to organize uploads
+            profile: Profile name for scoped folder (e.g., "ai.for.mortals")
+            post_id: Post/reel ID for scoped folder (e.g., "18-003-news")
 
         Returns:
             List of public URLs in the same order as input paths
@@ -201,7 +235,7 @@ class CloudinaryUploader:
             loop = asyncio.get_event_loop()
             url = await loop.run_in_executor(
                 None,
-                lambda p=path: self.upload_image(p, folder),
+                lambda p=path: self.upload_image(p, folder, profile=profile, post_id=post_id),
             )
             urls.append(url)
             await self._report_progress("Uploading images to Cloudinary", i + 1, total)

@@ -1724,6 +1724,67 @@ generate-reel
     voiceover.mp3       # Optional - audio file
 ```
 
+### Cloudinary Upload Architecture
+
+When uploading to Instagram, videos and thumbnails must be hosted at publicly accessible URLs. The system uses Cloudinary for temporary hosting with profile/post-scoped folders to prevent conflicts during concurrent uploads.
+
+#### Scoped Folder Structure
+
+```
+socials-automator/                    # Base folder
+    ai.for.mortals/                   # Profile name
+        18-003-chatgpt-tips/          # Reel folder name (post_id)
+            final                     # Video file
+            thumbnail                 # Thumbnail image
+    news.but.quick/                   # Another profile
+        18-004-morning-news/
+            final
+            thumbnail
+```
+
+This ensures concurrent uploads from different profiles (or even different reels from the same profile) never interfere with each other.
+
+#### Upload Flow
+
+```
+upload-reel
+    |
+    v
+CloudinaryUploader.upload_video(video_path, profile="ai.for.mortals", post_id="18-003-chatgpt-tips")
+    |
+    v
+Cloudinary folder: socials-automator/ai.for.mortals/18-003-chatgpt-tips/final
+    |
+    v
+Instagram API receives public URL
+    |
+    v
+On success: CloudinaryUploader.cleanup_async() deletes uploaded files
+On failure: Files kept in Cloudinary for retry
+```
+
+#### Key Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `profile` | `str` | Profile name (e.g., "ai.for.mortals") |
+| `post_id` | `str` | Reel folder name (e.g., "18-003-chatgpt-tips") |
+
+These parameters are passed through the upload chain:
+1. `ReelUploaderService._upload_to_platform()` extracts profile name from `profile_path.name`
+2. `InstagramPublisher.publish_reel()` receives `profile` and `post_id` kwargs
+3. `CloudinaryUploader.upload_video()` and `upload_image()` build the scoped folder path
+
+#### Cleanup Behavior
+
+| Scenario | Cloudinary Files |
+|----------|------------------|
+| Upload succeeds | Deleted immediately after Instagram confirms post |
+| Upload fails | Kept in Cloudinary (allows retry without re-upload) |
+| Exception occurs | Kept in Cloudinary (same as failure) |
+
+**Note:** Currently, retries re-upload files even if they exist in Cloudinary. Future optimization could check for existing uploads and reuse them.
+
 ### Validation States (ReelStatus)
 
 | Status | Meaning | Action |
