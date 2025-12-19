@@ -1,0 +1,1642 @@
+# AI Tools Database for Content Generation
+# Last updated: 2025-12-18
+#
+# This database powers:
+# - Topic suggestions for AI-related content
+# - Version verification during content generation
+# - Hidden gem discovery for unique video topics
+#
+# Fields:
+#   id: Unique identifier (lowercase, hyphens)
+#   name: Display name
+#   company: Company/creator
+#   category: Category ID from categories list
+#   current_version: Latest version (update regularly!)
+#   version_date: When this version was released (YYYY-MM or YYYY-MM-DD)
+#   url: Official website
+#   pricing: free | freemium | paid | enterprise
+#   hidden_gem: true if underrated/lesser-known (good for unique content)
+#   content_potential: low | medium | high (how good for video content)
+#   features: List of key features/capabilities
+#   best_for: Use cases this tool excels at
+#   video_ideas: Specific video topic ideas (optional)
+
+version: "2025.12.18"
+last_updated: "2025-12-18"
+
+# =============================================================================
+# CATEGORIES
+# =============================================================================
+categories:
+  - id: chatbots
+    name: AI Chatbots & Assistants
+    description: General-purpose conversational AI
+    icon: "[CHAT]"
+
+  - id: research
+    name: Research & Knowledge
+    description: AI for research, learning, document analysis
+    icon: "[RESEARCH]"
+
+  - id: writing
+    name: Writing & Content
+    description: AI writing assistants and content generators
+    icon: "[WRITE]"
+
+  - id: image
+    name: Image Generation
+    description: AI image generators and editors
+    icon: "[IMG]"
+
+  - id: video
+    name: Video Generation
+    description: AI video creation and editing
+    icon: "[VIDEO]"
+
+  - id: audio
+    name: Audio & Voice
+    description: Text-to-speech, voice cloning, music
+    icon: "[AUDIO]"
+
+  - id: coding
+    name: Coding & Development
+    description: AI coding assistants and tools
+    icon: "[CODE]"
+
+  - id: productivity
+    name: Productivity & Workflow
+    description: AI tools for work efficiency
+    icon: "[WORK]"
+
+  - id: automation
+    name: Automation & Integration
+    description: AI workflow automation platforms
+    icon: "[AUTO]"
+
+  - id: design
+    name: Design & Creative
+    description: AI design tools and creative assistants
+    icon: "[DESIGN]"
+
+  - id: meeting
+    name: Meeting & Collaboration
+    description: AI meeting assistants and note-takers
+    icon: "[MEET]"
+
+  - id: avatar
+    name: AI Avatars & Presenters
+    description: AI avatar video generators
+    icon: "[AVATAR]"
+
+  - id: social
+    name: Social Media
+    description: AI tools for social media management
+    icon: "[SOCIAL]"
+
+  - id: data
+    name: Data & Analytics
+    description: AI data analysis and visualization
+    icon: "[DATA]"
+
+  - id: presentation
+    name: Presentations & Slides
+    description: AI presentation generators
+    icon: "[SLIDES]"
+
+# =============================================================================
+# TOOLS DATABASE (100+ tools)
+# =============================================================================
+tools:
+  # ---------------------------------------------------------------------------
+  # CHATBOTS & ASSISTANTS
+  # ---------------------------------------------------------------------------
+  - id: chatgpt
+    name: ChatGPT
+    company: OpenAI
+    category: chatbots
+    current_version: "GPT-5.2"
+    version_date: "2025-12-11"
+    url: https://chat.openai.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["text", "code", "images", "voice", "video", "canvas", "memory"]
+    best_for: ["general", "coding", "writing", "analysis"]
+
+  - id: claude
+    name: Claude
+    company: Anthropic
+    category: chatbots
+    current_version: "Opus 4.5"
+    version_date: "2025-11-24"
+    url: https://claude.ai
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["text", "code", "analysis", "artifacts", "projects", "computer_use"]
+    best_for: ["coding", "writing", "research", "long_documents"]
+
+  - id: gemini
+    name: Gemini
+    company: Google
+    category: chatbots
+    current_version: "3 Flash"
+    version_date: "2025-12-17"
+    url: https://gemini.google.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["text", "code", "images", "deep_research", "extensions"]
+    best_for: ["research", "google_integration", "multimodal"]
+
+  - id: copilot
+    name: Microsoft Copilot
+    company: Microsoft
+    category: chatbots
+    current_version: "GPT-4 Turbo"
+    version_date: "2025-12"
+    url: https://copilot.microsoft.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: low
+    features: ["text", "images", "web_search", "office_integration"]
+    best_for: ["office_users", "web_search", "windows"]
+
+  - id: perplexity
+    name: Perplexity
+    company: Perplexity AI
+    category: research
+    current_version: "Sonar"
+    version_date: "2025-02"
+    url: https://perplexity.ai
+    pricing: freemium
+    hidden_gem: false
+    content_potential: high
+    features: ["web_search", "citations", "deep_research", "pro_search", "spaces"]
+    best_for: ["research", "fact_checking", "current_events"]
+    video_ideas:
+      - "Perplexity vs Google Search - which finds better answers?"
+      - "Deep Research mode explained"
+
+  - id: poe
+    name: Poe
+    company: Quora
+    category: chatbots
+    current_version: "2025"
+    version_date: "2025-12"
+    url: https://poe.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["multi_model", "custom_bots", "image_gen", "web_search"]
+    best_for: ["comparing_models", "custom_bots", "all_in_one"]
+    video_ideas:
+      - "Access ALL AI models in one place with Poe"
+      - "Create your own AI bot without coding"
+
+  - id: character-ai
+    name: Character.AI
+    company: Character.AI
+    category: chatbots
+    current_version: "2025"
+    version_date: "2025-12"
+    url: https://character.ai
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["roleplay", "characters", "voice_calls", "group_chats"]
+    best_for: ["entertainment", "roleplay", "companionship"]
+
+  - id: pi
+    name: Pi
+    company: Inflection AI
+    category: chatbots
+    current_version: "2025"
+    version_date: "2025"
+    url: https://pi.ai
+    pricing: free
+    hidden_gem: true
+    content_potential: medium
+    features: ["conversation", "voice", "empathetic", "coaching"]
+    best_for: ["personal_support", "conversation", "emotional_intelligence"]
+    video_ideas:
+      - "The most human-like AI chatbot you've never heard of"
+
+  # ---------------------------------------------------------------------------
+  # RESEARCH & KNOWLEDGE
+  # ---------------------------------------------------------------------------
+  - id: notebooklm
+    name: NotebookLM
+    company: Google
+    category: research
+    current_version: "2.0"
+    version_date: "2025-12"
+    url: https://notebooklm.google
+    pricing: free
+    hidden_gem: true
+    content_potential: high
+    features: ["pdf_analysis", "audio_overviews", "video_overviews", "infographics", "citations"]
+    best_for: ["research", "learning", "document_analysis", "podcasts"]
+    video_ideas:
+      - "Turn any PDF into a podcast with NotebookLM (FREE)"
+      - "NotebookLM just added VIDEO - here's how it works"
+      - "Study smarter: NotebookLM for students"
+
+  - id: elicit
+    name: Elicit
+    company: Elicit
+    category: research
+    current_version: "2025"
+    version_date: "2025"
+    url: https://elicit.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["paper_search", "literature_review", "summarization", "extraction"]
+    best_for: ["academic_research", "literature_review", "paper_analysis"]
+    video_ideas:
+      - "AI that reads research papers FOR you"
+      - "Write literature reviews 10x faster"
+
+  - id: consensus
+    name: Consensus
+    company: Consensus
+    category: research
+    current_version: "2025"
+    version_date: "2025"
+    url: https://consensus.app
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["academic_search", "yes_no_answers", "citations", "meter"]
+    best_for: ["fact_checking", "scientific_questions", "research"]
+    video_ideas:
+      - "Get scientific answers to any question"
+      - "Fact-check anything with peer-reviewed research"
+
+  - id: scite
+    name: Scite
+    company: Scite
+    category: research
+    current_version: "2025"
+    version_date: "2025"
+    url: https://scite.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["citation_analysis", "supporting_vs_contrasting", "smart_citations"]
+    best_for: ["academic_research", "citation_checking", "paper_evaluation"]
+
+  - id: research-rabbit
+    name: Research Rabbit
+    company: Research Rabbit
+    category: research
+    current_version: "2025"
+    version_date: "2025"
+    url: https://researchrabbit.ai
+    pricing: free
+    hidden_gem: true
+    content_potential: medium
+    features: ["paper_discovery", "citation_mapping", "recommendations", "collections"]
+    best_for: ["literature_discovery", "research_mapping", "academics"]
+
+  - id: semantic-scholar
+    name: Semantic Scholar
+    company: Allen AI
+    category: research
+    current_version: "2025"
+    version_date: "2025"
+    url: https://semanticscholar.org
+    pricing: free
+    hidden_gem: true
+    content_potential: medium
+    features: ["paper_search", "tldr", "citations", "alerts"]
+    best_for: ["academic_search", "paper_discovery", "research"]
+
+  - id: jenni-ai
+    name: Jenni AI
+    company: Jenni AI
+    category: research
+    current_version: "2025"
+    version_date: "2025"
+    url: https://jenni.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["academic_writing", "citations", "paraphrasing", "outline"]
+    best_for: ["academic_writing", "essays", "thesis"]
+
+  # ---------------------------------------------------------------------------
+  # WRITING & CONTENT
+  # ---------------------------------------------------------------------------
+  - id: jasper
+    name: Jasper
+    company: Jasper AI
+    category: writing
+    current_version: "2025"
+    version_date: "2025"
+    url: https://jasper.ai
+    pricing: paid
+    hidden_gem: false
+    content_potential: medium
+    features: ["marketing_copy", "brand_voice", "templates", "campaigns"]
+    best_for: ["marketing", "copywriting", "brand_content"]
+
+  - id: copy-ai
+    name: Copy.ai
+    company: Copy.ai
+    category: writing
+    current_version: "2025"
+    version_date: "2025"
+    url: https://copy.ai
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["marketing_copy", "workflows", "infobase", "brand_voice"]
+    best_for: ["marketing", "sales", "copywriting"]
+
+  - id: writesonic
+    name: Writesonic
+    company: Writesonic
+    category: writing
+    current_version: "2025"
+    version_date: "2025"
+    url: https://writesonic.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: low
+    features: ["articles", "ads", "landing_pages", "chatsonic"]
+    best_for: ["blog_posts", "ads", "seo_content"]
+
+  - id: rytr
+    name: Rytr
+    company: Rytr
+    category: writing
+    current_version: "2025"
+    version_date: "2025"
+    url: https://rytr.me
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["short_form", "use_cases", "tones", "languages"]
+    best_for: ["quick_content", "social_posts", "emails"]
+    video_ideas:
+      - "Best budget AI writer for beginners"
+
+  - id: sudowrite
+    name: Sudowrite
+    company: Sudowrite
+    category: writing
+    current_version: "2025"
+    version_date: "2025"
+    url: https://sudowrite.com
+    pricing: paid
+    hidden_gem: true
+    content_potential: high
+    features: ["fiction", "story_engine", "describe", "brainstorm", "rewrite"]
+    best_for: ["fiction", "novels", "creative_writing"]
+    video_ideas:
+      - "AI for fiction writers - Sudowrite review"
+      - "Write your novel with AI assistance"
+
+  - id: novelai
+    name: NovelAI
+    company: Anlatan
+    category: writing
+    current_version: "Kayra"
+    version_date: "2025"
+    url: https://novelai.net
+    pricing: paid
+    hidden_gem: true
+    content_potential: medium
+    features: ["storytelling", "image_gen", "text_adventure", "lorebook"]
+    best_for: ["fiction", "roleplay", "worldbuilding"]
+
+  - id: wordtune
+    name: Wordtune
+    company: AI21 Labs
+    category: writing
+    current_version: "2025"
+    version_date: "2025"
+    url: https://wordtune.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["rewriting", "summarization", "tone_adjustment", "expansion"]
+    best_for: ["rewriting", "improving_text", "summarization"]
+
+  - id: grammarly
+    name: Grammarly
+    company: Grammarly
+    category: writing
+    current_version: "2025"
+    version_date: "2025"
+    url: https://grammarly.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: low
+    features: ["grammar", "tone", "clarity", "generative_ai"]
+    best_for: ["proofreading", "grammar", "professional_writing"]
+
+  # ---------------------------------------------------------------------------
+  # IMAGE GENERATION
+  # ---------------------------------------------------------------------------
+  - id: midjourney
+    name: Midjourney
+    company: Midjourney
+    category: image
+    current_version: "V7"
+    version_date: "2025-06-17"
+    url: https://midjourney.com
+    pricing: paid
+    hidden_gem: false
+    content_potential: medium
+    features: ["image_gen", "styles", "variations", "upscaling", "web_editor"]
+    best_for: ["art", "concept_art", "illustrations", "creative"]
+
+  - id: dall-e
+    name: DALL-E 3
+    company: OpenAI
+    category: image
+    current_version: "DALL-E 3"
+    version_date: "2024"
+    url: https://openai.com/dall-e-3
+    pricing: freemium
+    hidden_gem: false
+    content_potential: low
+    features: ["image_gen", "text_in_images", "chatgpt_integration"]
+    best_for: ["quick_images", "text_rendering", "concepts"]
+
+  - id: stable-diffusion
+    name: Stable Diffusion
+    company: Stability AI
+    category: image
+    current_version: "SD 3.5"
+    version_date: "2025"
+    url: https://stability.ai
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["open_source", "customizable", "local_running", "controlnet"]
+    best_for: ["custom_workflows", "local_generation", "fine_tuning"]
+
+  - id: leonardo
+    name: Leonardo.AI
+    company: Leonardo.AI
+    category: image
+    current_version: "Phoenix"
+    version_date: "2025"
+    url: https://leonardo.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["image_gen", "motion", "realtime_canvas", "fine_tuned_models"]
+    best_for: ["game_assets", "concept_art", "consistent_characters"]
+    video_ideas:
+      - "Leonardo.AI - the Midjourney alternative you need to try"
+      - "Create consistent characters with Leonardo"
+
+  - id: ideogram
+    name: Ideogram
+    company: Ideogram
+    category: image
+    current_version: "2.0"
+    version_date: "2025"
+    url: https://ideogram.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["text_in_images", "typography", "logos", "posters"]
+    best_for: ["text_rendering", "logos", "typography", "posters"]
+    video_ideas:
+      - "Best AI for text in images - Ideogram"
+      - "Create logos with AI"
+
+  - id: flux
+    name: FLUX
+    company: Black Forest Labs
+    category: image
+    current_version: "FLUX 1.1 Pro"
+    version_date: "2025"
+    url: https://blackforestlabs.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["photorealistic", "fast", "open_weights", "api"]
+    best_for: ["photorealism", "speed", "api_integration"]
+    video_ideas:
+      - "FLUX vs Midjourney - which is better in 2025?"
+
+  - id: recraft
+    name: Recraft
+    company: Recraft
+    category: image
+    current_version: "V3"
+    version_date: "2025"
+    url: https://recraft.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["vector", "illustrations", "mockups", "brand_kit", "styles"]
+    best_for: ["illustrations", "vectors", "brand_assets", "mockups"]
+    video_ideas:
+      - "AI vector illustrations with Recraft"
+      - "Create brand assets in seconds"
+
+  - id: krea
+    name: Krea
+    company: Krea
+    category: image
+    current_version: "2025"
+    version_date: "2025"
+    url: https://krea.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["realtime_gen", "upscaling", "enhance", "video"]
+    best_for: ["realtime_generation", "enhancement", "upscaling"]
+    video_ideas:
+      - "Real-time AI image generation with Krea"
+
+  - id: playground
+    name: Playground
+    company: Playground AI
+    category: image
+    current_version: "V3"
+    version_date: "2025"
+    url: https://playground.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["mixed_editing", "canvas", "filters", "styles"]
+    best_for: ["editing", "creative_exploration", "beginners"]
+
+  - id: magnific
+    name: Magnific
+    company: Magnific AI
+    category: image
+    current_version: "2025"
+    version_date: "2025"
+    url: https://magnific.ai
+    pricing: paid
+    hidden_gem: true
+    content_potential: high
+    features: ["upscaling", "enhancement", "reimagine", "creativity_slider"]
+    best_for: ["upscaling", "enhancement", "detail_addition"]
+    video_ideas:
+      - "The AI upscaler that adds details"
+
+  # ---------------------------------------------------------------------------
+  # VIDEO GENERATION
+  # ---------------------------------------------------------------------------
+  - id: sora
+    name: Sora
+    company: OpenAI
+    category: video
+    current_version: "Sora 2"
+    version_date: "2025-09-30"
+    url: https://openai.com/sora
+    pricing: paid
+    hidden_gem: false
+    content_potential: high
+    features: ["text_to_video", "audio", "realistic_physics", "styles"]
+    best_for: ["video_creation", "creative_projects", "b_roll"]
+    video_ideas:
+      - "Sora 2 is here - first look at OpenAI's video AI"
+
+  - id: runway
+    name: Runway
+    company: Runway
+    category: video
+    current_version: "Gen-4"
+    version_date: "2025-03"
+    url: https://runway.ml
+    pricing: freemium
+    hidden_gem: false
+    content_potential: high
+    features: ["text_to_video", "image_to_video", "motion_brush", "extend"]
+    best_for: ["video_creation", "motion", "creative_tools"]
+
+  - id: pika
+    name: Pika
+    company: Pika Labs
+    category: video
+    current_version: "2.5"
+    version_date: "2025-11"
+    url: https://pika.art
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["text_to_video", "image_to_video", "pikaffects", "lip_sync"]
+    best_for: ["quick_videos", "effects", "creative"]
+    video_ideas:
+      - "Pika 2.5 review - better than Runway?"
+
+  - id: luma
+    name: Luma Dream Machine
+    company: Luma AI
+    category: video
+    current_version: "1.6"
+    version_date: "2025"
+    url: https://lumalabs.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["text_to_video", "image_to_video", "fast", "realistic"]
+    best_for: ["realistic_motion", "quick_generation", "concepts"]
+    video_ideas:
+      - "Luma Dream Machine - fast AI video generation"
+
+  - id: kling
+    name: Kling
+    company: Kuaishou
+    category: video
+    current_version: "1.6"
+    version_date: "2025"
+    url: https://klingai.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["text_to_video", "image_to_video", "long_videos", "motion"]
+    best_for: ["longer_videos", "realistic_motion", "creative"]
+    video_ideas:
+      - "Kling AI - the Chinese video AI taking over"
+
+  - id: minimax
+    name: MiniMax (Hailuo)
+    company: MiniMax
+    category: video
+    current_version: "2025"
+    version_date: "2025"
+    url: https://hailuoai.video
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["text_to_video", "character_consistency", "long_form"]
+    best_for: ["narrative_videos", "character_videos", "creative"]
+
+  - id: vidu
+    name: Vidu
+    company: Shengshu AI
+    category: video
+    current_version: "2.0"
+    version_date: "2025"
+    url: https://vidu.studio
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["text_to_video", "4k", "fast"]
+    best_for: ["quick_videos", "high_resolution"]
+
+  - id: invideo
+    name: InVideo
+    company: InVideo
+    category: video
+    current_version: "3.0"
+    version_date: "2025"
+    url: https://invideo.io
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["text_to_video", "templates", "stock", "voiceover", "subtitles"]
+    best_for: ["marketing_videos", "social_content", "quick_edits"]
+    video_ideas:
+      - "Create videos from text prompts with InVideo"
+
+  - id: descript
+    name: Descript
+    company: Descript
+    category: video
+    current_version: "2025"
+    version_date: "2025"
+    url: https://descript.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["text_editing", "overdub", "filler_removal", "screen_recording"]
+    best_for: ["podcasts", "video_editing", "transcription"]
+    video_ideas:
+      - "Edit videos by editing text with Descript"
+
+  - id: capcut
+    name: CapCut
+    company: ByteDance
+    category: video
+    current_version: "2025"
+    version_date: "2025"
+    url: https://capcut.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["video_editing", "effects", "templates", "ai_tools", "auto_captions"]
+    best_for: ["social_videos", "tiktok", "reels", "quick_edits"]
+
+  # ---------------------------------------------------------------------------
+  # AUDIO & VOICE
+  # ---------------------------------------------------------------------------
+  - id: elevenlabs
+    name: ElevenLabs
+    company: ElevenLabs
+    category: audio
+    current_version: "Eleven v3"
+    version_date: "2025"
+    url: https://elevenlabs.io
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["tts", "voice_cloning", "dubbing", "sound_effects", "conversational"]
+    best_for: ["voiceovers", "dubbing", "voice_cloning", "audiobooks"]
+
+  - id: murf
+    name: Murf
+    company: Murf AI
+    category: audio
+    current_version: "2025"
+    version_date: "2025"
+    url: https://murf.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["tts", "voices", "studio", "api"]
+    best_for: ["voiceovers", "presentations", "elearning"]
+
+  - id: play-ht
+    name: Play.ht
+    company: Play.ht
+    category: audio
+    current_version: "3.0"
+    version_date: "2025"
+    url: https://play.ht
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["tts", "voice_cloning", "emotions", "api"]
+    best_for: ["podcasts", "voiceovers", "content_creation"]
+
+  - id: suno
+    name: Suno
+    company: Suno
+    category: audio
+    current_version: "v4"
+    version_date: "2025"
+    url: https://suno.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["music_generation", "vocals", "genres", "covers"]
+    best_for: ["music_creation", "jingles", "background_music"]
+    video_ideas:
+      - "Create a full song in 60 seconds with Suno"
+      - "AI music is getting scary good"
+
+  - id: udio
+    name: Udio
+    company: Udio
+    category: audio
+    current_version: "2025"
+    version_date: "2025"
+    url: https://udio.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["music_generation", "vocals", "remix", "extend"]
+    best_for: ["music_creation", "remixes", "creative"]
+    video_ideas:
+      - "Udio vs Suno - which AI music tool is better?"
+
+  - id: adobe-podcast
+    name: Adobe Podcast
+    company: Adobe
+    category: audio
+    current_version: "2025"
+    version_date: "2025"
+    url: https://podcast.adobe.com
+    pricing: free
+    hidden_gem: true
+    content_potential: high
+    features: ["enhance_speech", "transcription", "studio_quality"]
+    best_for: ["podcast_cleanup", "audio_enhancement", "transcription"]
+    video_ideas:
+      - "Make any audio sound professional (FREE)"
+
+  - id: krisp
+    name: Krisp
+    company: Krisp
+    category: audio
+    current_version: "2025"
+    version_date: "2025"
+    url: https://krisp.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["noise_cancellation", "meeting_notes", "transcription"]
+    best_for: ["meetings", "calls", "noise_removal"]
+
+  # ---------------------------------------------------------------------------
+  # CODING & DEVELOPMENT
+  # ---------------------------------------------------------------------------
+  - id: github-copilot
+    name: GitHub Copilot
+    company: GitHub/Microsoft
+    category: coding
+    current_version: "2025"
+    version_date: "2025"
+    url: https://github.com/features/copilot
+    pricing: paid
+    hidden_gem: false
+    content_potential: medium
+    features: ["code_completion", "chat", "cli", "pr_summaries"]
+    best_for: ["coding", "autocomplete", "github_integration"]
+
+  - id: cursor
+    name: Cursor
+    company: Cursor
+    category: coding
+    current_version: "2025"
+    version_date: "2025"
+    url: https://cursor.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: high
+    features: ["ai_editor", "chat", "composer", "codebase_aware"]
+    best_for: ["full_projects", "refactoring", "learning"]
+    video_ideas:
+      - "Cursor vs Copilot - which AI coding tool wins?"
+
+  - id: windsurf
+    name: Windsurf
+    company: Codeium
+    category: coding
+    current_version: "2025"
+    version_date: "2025"
+    url: https://codeium.com/windsurf
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["ai_editor", "flows", "cascade", "autocomplete"]
+    best_for: ["coding", "refactoring", "agentic_workflows"]
+    video_ideas:
+      - "Windsurf - the Cursor alternative you need to try"
+
+  - id: codeium
+    name: Codeium
+    company: Codeium
+    category: coding
+    current_version: "2025"
+    version_date: "2025"
+    url: https://codeium.com
+    pricing: free
+    hidden_gem: true
+    content_potential: high
+    features: ["autocomplete", "chat", "search", "free_tier"]
+    best_for: ["free_coding_ai", "autocomplete", "multiple_ides"]
+    video_ideas:
+      - "FREE GitHub Copilot alternative - Codeium"
+
+  - id: tabnine
+    name: Tabnine
+    company: Tabnine
+    category: coding
+    current_version: "2025"
+    version_date: "2025"
+    url: https://tabnine.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: low
+    features: ["autocomplete", "private", "on_prem"]
+    best_for: ["enterprise", "privacy", "on_prem"]
+
+  - id: replit
+    name: Replit
+    company: Replit
+    category: coding
+    current_version: "2025"
+    version_date: "2025"
+    url: https://replit.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["browser_ide", "ai_agent", "deployments", "multiplayer"]
+    best_for: ["quick_projects", "learning", "collaboration"]
+
+  - id: v0
+    name: v0
+    company: Vercel
+    category: coding
+    current_version: "2025"
+    version_date: "2025"
+    url: https://v0.dev
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["ui_generation", "react", "tailwind", "shadcn"]
+    best_for: ["frontend", "ui_components", "prototyping"]
+    video_ideas:
+      - "Build UI components with AI - v0 by Vercel"
+
+  - id: bolt
+    name: Bolt.new
+    company: StackBlitz
+    category: coding
+    current_version: "2025"
+    version_date: "2025"
+    url: https://bolt.new
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["full_stack", "browser", "deploy", "ai_agent"]
+    best_for: ["full_stack_apps", "prototyping", "quick_deploy"]
+    video_ideas:
+      - "Build and deploy apps in your browser with Bolt"
+
+  - id: lovable
+    name: Lovable
+    company: Lovable
+    category: coding
+    current_version: "2025"
+    version_date: "2025"
+    url: https://lovable.dev
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["full_stack", "supabase", "deploy", "ai_engineer"]
+    best_for: ["full_apps", "backend", "databases"]
+    video_ideas:
+      - "Lovable vs Bolt.new - which AI app builder is better?"
+
+  - id: claude-code
+    name: Claude Code
+    company: Anthropic
+    category: coding
+    current_version: "2025"
+    version_date: "2025-12"
+    url: https://claude.ai/claude-code
+    pricing: paid
+    hidden_gem: true
+    content_potential: high
+    features: ["terminal", "agentic", "multi_file", "git"]
+    best_for: ["terminal_coding", "refactoring", "debugging"]
+    video_ideas:
+      - "Claude Code - coding in your terminal with AI"
+
+  # ---------------------------------------------------------------------------
+  # PRODUCTIVITY & WORKFLOW
+  # ---------------------------------------------------------------------------
+  - id: notion-ai
+    name: Notion AI
+    company: Notion
+    category: productivity
+    current_version: "2025"
+    version_date: "2025"
+    url: https://notion.so/product/ai
+    pricing: paid
+    hidden_gem: false
+    content_potential: medium
+    features: ["writing", "summarization", "q_and_a", "autofill"]
+    best_for: ["notion_users", "docs", "wikis"]
+
+  - id: mem
+    name: Mem
+    company: Mem
+    category: productivity
+    current_version: "2025"
+    version_date: "2025"
+    url: https://mem.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["ai_notes", "search", "connections", "chat"]
+    best_for: ["note_taking", "knowledge_management", "search"]
+    video_ideas:
+      - "Mem - AI-powered notes that connect your ideas"
+
+  - id: taskade
+    name: Taskade
+    company: Taskade
+    category: productivity
+    current_version: "2025"
+    version_date: "2025"
+    url: https://taskade.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["ai_agents", "projects", "notes", "chat"]
+    best_for: ["project_management", "collaboration", "agents"]
+
+  - id: clickup-ai
+    name: ClickUp AI
+    company: ClickUp
+    category: productivity
+    current_version: "2025"
+    version_date: "2025"
+    url: https://clickup.com/ai
+    pricing: paid
+    hidden_gem: false
+    content_potential: low
+    features: ["task_gen", "summaries", "writing", "standup"]
+    best_for: ["clickup_users", "project_management"]
+
+  - id: reclaim
+    name: Reclaim.ai
+    company: Reclaim
+    category: productivity
+    current_version: "2025"
+    version_date: "2025"
+    url: https://reclaim.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["smart_scheduling", "habits", "tasks", "buffer_time"]
+    best_for: ["calendar_management", "time_blocking", "habits"]
+    video_ideas:
+      - "Let AI manage your calendar - Reclaim.ai"
+
+  - id: motion
+    name: Motion
+    company: Motion
+    category: productivity
+    current_version: "2025"
+    version_date: "2025"
+    url: https://usemotion.com
+    pricing: paid
+    hidden_gem: true
+    content_potential: high
+    features: ["auto_scheduling", "tasks", "projects", "meetings"]
+    best_for: ["busy_professionals", "scheduling", "prioritization"]
+    video_ideas:
+      - "Motion - the AI calendar that plans your day"
+
+  - id: readwise
+    name: Readwise
+    company: Readwise
+    category: productivity
+    current_version: "Reader 2025"
+    version_date: "2025"
+    url: https://readwise.io
+    pricing: paid
+    hidden_gem: true
+    content_potential: medium
+    features: ["highlights", "reader", "review", "export"]
+    best_for: ["reading", "highlights", "retention"]
+
+  # ---------------------------------------------------------------------------
+  # AUTOMATION & INTEGRATION
+  # ---------------------------------------------------------------------------
+  - id: zapier
+    name: Zapier
+    company: Zapier
+    category: automation
+    current_version: "2025"
+    version_date: "2025"
+    url: https://zapier.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["integrations", "ai_actions", "tables", "interfaces"]
+    best_for: ["no_code_automation", "integrations", "workflows"]
+
+  - id: make
+    name: Make
+    company: Make (Integromat)
+    category: automation
+    current_version: "2025"
+    version_date: "2025"
+    url: https://make.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["visual_workflows", "integrations", "complex_logic"]
+    best_for: ["complex_automations", "visual_builder", "power_users"]
+
+  - id: n8n
+    name: n8n
+    company: n8n
+    category: automation
+    current_version: "2025"
+    version_date: "2025"
+    url: https://n8n.io
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["self_hosted", "ai_nodes", "code", "open_source"]
+    best_for: ["developers", "self_hosting", "ai_workflows"]
+    video_ideas:
+      - "Build AI automations with n8n (FREE & self-hosted)"
+
+  - id: lindy
+    name: Lindy
+    company: Lindy
+    category: automation
+    current_version: "2025"
+    version_date: "2025"
+    url: https://lindy.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["ai_agents", "custom_bots", "integrations", "no_code"]
+    best_for: ["ai_assistants", "custom_workflows", "no_code"]
+    video_ideas:
+      - "Create your own AI employee with Lindy"
+
+  - id: bardeen
+    name: Bardeen
+    company: Bardeen
+    category: automation
+    current_version: "2025"
+    version_date: "2025"
+    url: https://bardeen.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["browser_automation", "ai_actions", "playbooks"]
+    best_for: ["browser_tasks", "scraping", "repetitive_work"]
+    video_ideas:
+      - "Automate any browser task with Bardeen"
+
+  - id: activepieces
+    name: Activepieces
+    company: Activepieces
+    category: automation
+    current_version: "2025"
+    version_date: "2025"
+    url: https://activepieces.com
+    pricing: free
+    hidden_gem: true
+    content_potential: high
+    features: ["open_source", "self_hosted", "ai_pieces", "visual"]
+    best_for: ["open_source", "self_hosting", "budget"]
+    video_ideas:
+      - "FREE Zapier alternative - Activepieces"
+
+  # ---------------------------------------------------------------------------
+  # DESIGN & CREATIVE
+  # ---------------------------------------------------------------------------
+  - id: canva-ai
+    name: Canva AI
+    company: Canva
+    category: design
+    current_version: "Magic Studio 2025"
+    version_date: "2025"
+    url: https://canva.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["magic_write", "magic_media", "background_remover", "resize"]
+    best_for: ["quick_design", "social_media", "presentations"]
+
+  - id: figma-ai
+    name: Figma AI
+    company: Figma
+    category: design
+    current_version: "2025"
+    version_date: "2025"
+    url: https://figma.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["ai_design", "prototyping", "dev_mode"]
+    best_for: ["ui_design", "prototyping", "collaboration"]
+
+  - id: napkin
+    name: Napkin.ai
+    company: Napkin
+    category: design
+    current_version: "2025"
+    version_date: "2025"
+    url: https://napkin.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["text_to_diagrams", "visuals", "auto_layout"]
+    best_for: ["diagrams", "explanations", "visual_content"]
+    video_ideas:
+      - "Turn text into diagrams instantly with Napkin.ai"
+
+  - id: relume
+    name: Relume
+    company: Relume
+    category: design
+    current_version: "2025"
+    version_date: "2025"
+    url: https://relume.io
+    pricing: paid
+    hidden_gem: true
+    content_potential: high
+    features: ["ai_site_builder", "wireframes", "figma_export", "sitemap"]
+    best_for: ["web_design", "wireframing", "sitemaps"]
+    video_ideas:
+      - "Build website wireframes in seconds with Relume"
+
+  - id: uizard
+    name: Uizard
+    company: Uizard
+    category: design
+    current_version: "2025"
+    version_date: "2025"
+    url: https://uizard.io
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["sketch_to_design", "wireframes", "prototypes"]
+    best_for: ["prototyping", "non_designers", "quick_mockups"]
+
+  - id: photoroom
+    name: PhotoRoom
+    company: PhotoRoom
+    category: design
+    current_version: "2025"
+    version_date: "2025"
+    url: https://photoroom.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["background_removal", "product_photos", "batch"]
+    best_for: ["ecommerce", "product_photos", "social_media"]
+
+  - id: remove-bg
+    name: Remove.bg
+    company: Kaleido AI
+    category: design
+    current_version: "2025"
+    version_date: "2025"
+    url: https://remove.bg
+    pricing: freemium
+    hidden_gem: false
+    content_potential: low
+    features: ["background_removal", "api", "batch"]
+    best_for: ["background_removal", "quick_edits"]
+
+  # ---------------------------------------------------------------------------
+  # MEETING & COLLABORATION
+  # ---------------------------------------------------------------------------
+  - id: otter
+    name: Otter.ai
+    company: Otter.ai
+    category: meeting
+    current_version: "2025"
+    version_date: "2025"
+    url: https://otter.ai
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["transcription", "summaries", "action_items", "live"]
+    best_for: ["meetings", "transcription", "collaboration"]
+
+  - id: fireflies
+    name: Fireflies.ai
+    company: Fireflies
+    category: meeting
+    current_version: "2025"
+    version_date: "2025"
+    url: https://fireflies.ai
+    pricing: freemium
+    hidden_gem: false
+    content_potential: medium
+    features: ["transcription", "summaries", "search", "analytics"]
+    best_for: ["meetings", "sales_calls", "analytics"]
+
+  - id: granola
+    name: Granola
+    company: Granola
+    category: meeting
+    current_version: "2025"
+    version_date: "2025"
+    url: https://granola.so
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["notepad", "transcription", "enhancement", "no_bot"]
+    best_for: ["active_notetakers", "privacy", "enhancement"]
+    video_ideas:
+      - "Granola - AI meeting notes WITHOUT a bot"
+
+  - id: fathom
+    name: Fathom
+    company: Fathom
+    category: meeting
+    current_version: "2025"
+    version_date: "2025"
+    url: https://fathom.video
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["recording", "highlights", "summaries", "free_tier"]
+    best_for: ["free_meeting_notes", "highlights", "zoom"]
+    video_ideas:
+      - "FREE meeting assistant - Fathom review"
+
+  - id: tldv
+    name: tl;dv
+    company: tl;dv
+    category: meeting
+    current_version: "2025"
+    version_date: "2025"
+    url: https://tldv.io
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["recording", "timestamps", "clips", "ai_notes"]
+    best_for: ["meeting_highlights", "sharing", "clips"]
+
+  - id: jamie
+    name: Jamie
+    company: Jamie
+    category: meeting
+    current_version: "2025"
+    version_date: "2025"
+    url: https://meetjamie.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["no_bot", "local_processing", "summaries", "private"]
+    best_for: ["privacy", "no_bot_required", "all_platforms"]
+    video_ideas:
+      - "Jamie - the private AI meeting assistant"
+
+  # ---------------------------------------------------------------------------
+  # AI AVATARS & PRESENTERS
+  # ---------------------------------------------------------------------------
+  - id: heygen
+    name: HeyGen
+    company: HeyGen
+    category: avatar
+    current_version: "2025"
+    version_date: "2025"
+    url: https://heygen.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: high
+    features: ["avatars", "translation", "voice_cloning", "templates"]
+    best_for: ["marketing_videos", "training", "localization"]
+
+  - id: synthesia
+    name: Synthesia
+    company: Synthesia
+    category: avatar
+    current_version: "2025"
+    version_date: "2025"
+    url: https://synthesia.io
+    pricing: paid
+    hidden_gem: false
+    content_potential: medium
+    features: ["avatars", "templates", "enterprise", "custom_avatars"]
+    best_for: ["training", "enterprise", "professional"]
+
+  - id: d-id
+    name: D-ID
+    company: D-ID
+    category: avatar
+    current_version: "2025"
+    version_date: "2025"
+    url: https://d-id.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["photo_animation", "avatars", "api"]
+    best_for: ["photo_animation", "creative", "api"]
+
+  - id: colossyan
+    name: Colossyan
+    company: Colossyan
+    category: avatar
+    current_version: "2025"
+    version_date: "2025"
+    url: https://colossyan.com
+    pricing: paid
+    hidden_gem: true
+    content_potential: medium
+    features: ["avatars", "learning", "branching", "compliance"]
+    best_for: ["corporate_training", "elearning", "compliance"]
+
+  # ---------------------------------------------------------------------------
+  # SOCIAL MEDIA
+  # ---------------------------------------------------------------------------
+  - id: buffer
+    name: Buffer
+    company: Buffer
+    category: social
+    current_version: "2025"
+    version_date: "2025"
+    url: https://buffer.com
+    pricing: freemium
+    hidden_gem: false
+    content_potential: low
+    features: ["scheduling", "ai_assistant", "analytics", "engagement"]
+    best_for: ["social_scheduling", "small_teams"]
+
+  - id: hootsuite
+    name: Hootsuite
+    company: Hootsuite
+    category: social
+    current_version: "2025"
+    version_date: "2025"
+    url: https://hootsuite.com
+    pricing: paid
+    hidden_gem: false
+    content_potential: low
+    features: ["scheduling", "monitoring", "analytics", "owly_ai"]
+    best_for: ["enterprise", "social_management"]
+
+  - id: feedhive
+    name: FeedHive
+    company: FeedHive
+    category: social
+    current_version: "2025"
+    version_date: "2025"
+    url: https://feedhive.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["ai_writing", "recycling", "templates", "analytics"]
+    best_for: ["content_recycling", "ai_writing", "creators"]
+    video_ideas:
+      - "FeedHive - AI social media scheduling"
+
+  - id: publer
+    name: Publer
+    company: Publer
+    category: social
+    current_version: "2025"
+    version_date: "2025"
+    url: https://publer.io
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["scheduling", "ai_assist", "bulk", "analytics"]
+    best_for: ["budget_scheduling", "multiple_accounts"]
+
+  - id: repurpose
+    name: Repurpose.io
+    company: Repurpose
+    category: social
+    current_version: "2025"
+    version_date: "2025"
+    url: https://repurpose.io
+    pricing: paid
+    hidden_gem: true
+    content_potential: high
+    features: ["auto_repurpose", "cross_posting", "workflows"]
+    best_for: ["content_repurposing", "multi_platform"]
+    video_ideas:
+      - "Repurpose content automatically across platforms"
+
+  # ---------------------------------------------------------------------------
+  # DATA & ANALYTICS
+  # ---------------------------------------------------------------------------
+  - id: julius
+    name: Julius
+    company: Julius AI
+    category: data
+    current_version: "2025"
+    version_date: "2025"
+    url: https://julius.ai
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["data_analysis", "visualizations", "natural_language", "reports"]
+    best_for: ["data_analysis", "non_technical", "visualization"]
+    video_ideas:
+      - "Analyze any data with AI - Julius"
+      - "No-code data analysis for beginners"
+
+  - id: rows
+    name: Rows
+    company: Rows
+    category: data
+    current_version: "2025"
+    version_date: "2025"
+    url: https://rows.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["ai_analyst", "spreadsheets", "integrations", "sharing"]
+    best_for: ["spreadsheets", "data_analysis", "collaboration"]
+
+  - id: akkio
+    name: Akkio
+    company: Akkio
+    category: data
+    current_version: "2025"
+    version_date: "2025"
+    url: https://akkio.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["predictive", "no_code_ml", "reports", "forecasting"]
+    best_for: ["predictions", "forecasting", "no_code_ml"]
+
+  - id: obviously-ai
+    name: Obviously AI
+    company: Obviously AI
+    category: data
+    current_version: "2025"
+    version_date: "2025"
+    url: https://obviously.ai
+    pricing: paid
+    hidden_gem: true
+    content_potential: medium
+    features: ["no_code_ml", "predictions", "analytics"]
+    best_for: ["no_code_ml", "business_predictions"]
+
+  # ---------------------------------------------------------------------------
+  # PRESENTATIONS & SLIDES
+  # ---------------------------------------------------------------------------
+  - id: gamma
+    name: Gamma
+    company: Gamma
+    category: presentation
+    current_version: "2025"
+    version_date: "2025"
+    url: https://gamma.app
+    pricing: freemium
+    hidden_gem: true
+    content_potential: high
+    features: ["ai_presentations", "docs", "websites", "templates"]
+    best_for: ["quick_decks", "beautiful_slides", "web_publishing"]
+    video_ideas:
+      - "Create presentations in seconds with Gamma"
+      - "Gamma vs PowerPoint - AI presentation showdown"
+
+  - id: beautiful-ai
+    name: Beautiful.ai
+    company: Beautiful.ai
+    category: presentation
+    current_version: "2025"
+    version_date: "2025"
+    url: https://beautiful.ai
+    pricing: paid
+    hidden_gem: true
+    content_potential: medium
+    features: ["smart_slides", "templates", "team", "auto_design"]
+    best_for: ["professional_decks", "teams", "branding"]
+
+  - id: tome
+    name: Tome
+    company: Tome
+    category: presentation
+    current_version: "2025"
+    version_date: "2025"
+    url: https://tome.app
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["ai_generation", "storytelling", "embedding", "sharing"]
+    best_for: ["storytelling", "creative_decks", "sharing"]
+
+  - id: slidesai
+    name: SlidesAI
+    company: SlidesAI
+    category: presentation
+    current_version: "2025"
+    version_date: "2025"
+    url: https://slidesai.io
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["google_slides", "text_to_slides", "themes"]
+    best_for: ["google_slides_users", "quick_decks"]
+
+  - id: pitch
+    name: Pitch
+    company: Pitch
+    category: presentation
+    current_version: "2025"
+    version_date: "2025"
+    url: https://pitch.com
+    pricing: freemium
+    hidden_gem: true
+    content_potential: medium
+    features: ["collaboration", "templates", "ai_draft", "recording"]
+    best_for: ["teams", "collaboration", "templates"]
+
+# =============================================================================
+# VERSION CHECK REMINDERS
+# =============================================================================
+version_check_notes: |
+  IMPORTANT: AI tools update frequently. When creating content:
+
+  1. Always verify the current version before filming
+  2. Check the tool's official website or changelog
+  3. Mention that viewers should check for updates
+  4. Focus on features, not version numbers when possible
+
+  Common version sources:
+  - OpenAI: openai.com/blog
+  - Anthropic: anthropic.com/news
+  - Google: blog.google/technology/ai
+  - Midjourney: midjourney.com/updates
+
+# =============================================================================
+# CONTENT GENERATION HINTS
+# =============================================================================
+content_hints:
+  hidden_gem_priority: true
+  min_tools_per_video: 1
+  max_tools_per_video: 5
+  avoid_recently_covered_days: 14
+  preferred_categories:
+    - research
+    - productivity
+    - automation
+    - data
+    - presentation

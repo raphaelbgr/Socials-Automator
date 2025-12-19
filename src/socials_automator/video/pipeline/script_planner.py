@@ -9,6 +9,7 @@ Duration is configurable via target_duration parameter.
 Uses LLMFallbackManager for automatic retry and provider switching.
 """
 
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -23,6 +24,32 @@ from .base import (
 )
 from ...services.llm_fallback import LLMFallbackManager, FallbackConfig
 from ...providers.config import load_provider_config
+
+logger = logging.getLogger("ai_calls")
+
+
+def get_ai_version_context() -> str:
+    """Get AI tool version context for prompts from the registry.
+
+    Returns:
+        Formatted string with current AI tool versions.
+    """
+    try:
+        from socials_automator.knowledge import get_ai_tools_registry
+        registry = get_ai_tools_registry()
+        return registry.get_version_context()
+    except Exception as e:
+        logger.debug(f"Could not load AI tools registry: {e}")
+        # Fallback to hardcoded versions
+        return """Current AI tool versions:
+- ChatGPT: GPT-5.2 (December 2025)
+- Claude: Opus 4.5 (November 2025)
+- Gemini: 3 Flash (December 2025)
+- Midjourney: V7 (June 2025)
+- Sora: Sora 2 (September 2025)
+- ElevenLabs: Eleven v3 (2025)
+
+Always verify versions before creating content about specific tools."""
 
 
 class ScriptPlanner(IScriptPlanner):
@@ -387,13 +414,14 @@ Each segment MUST have:
             for i in range(num_segments)
         ])
 
+        # Get AI tool version context from registry
+        ai_version_context = get_ai_version_context()
+
         prompt = f"""Write a {target_secs}-second video narration script for Instagram Reels about: {topic.topic}
 
 TODAY'S DATE: {current_date}
 {duration_adjustment_section}
-AI TOOL VERSIONS:
-When mentioning AI tools, use the version numbers found in the research findings below.
-If not found in research, use these fallbacks: ChatGPT=GPT-5.2, Claude=Opus 4.5, Gemini=3 Pro, Midjourney=V7
+{ai_version_context}
 
 Research findings:
 {key_points}

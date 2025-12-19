@@ -74,5 +74,45 @@
   {
     "theme": "Evening Wrap: Latest music news",
     "timestamp": "2025-12-18T19:46:54.369321"
+  },
+  {
+    "theme": "Evening Wrap: Movie news",
+    "timestamp": "2025-12-18T21:59:13.667349"
+  },
+  {
+    "theme": "Night Edition: Movie news",
+    "timestamp": "2025-12-18T22:02:42.723907"
+  },
+  {
+    "theme": "Night Edition: Music news",
+    "timestamp": "2025-12-18T22:25:51.635395"
+  },
+  {
+    "theme": "Night Edition: Entertainment news",
+    "timestamp": "2025-12-18T22:31:10.314300"
+  },
+  {
+    "theme": "Night Edition: Music news roundup",
+    "timestamp": "2025-12-18T22:36:17.561818"
+  },
+  {
+    "theme": "Night Edition: Entertainment news roundup",
+    "timestamp": "2025-12-18T22:47:24.798579"
+  },
+  {
+    "theme": "Night Edition: Movie news roundup",
+    "timestamp": "2025-12-18T22:59:07.839947"
+  },
+  {
+    "theme": "Night Edition: Latest movie news",
+    "timestamp": "2025-12-18T23:18:08.235223"
+  },
+  {
+    "theme": "Night Edition: Movie news highlights",
+    "timestamp": "2025-12-19T00:02:50.551410"
+  },
+  {
+    "theme": "Night Edition: Celebrity buzz",
+    "timestamp": "2025-12-19T00:16:56.597115"
   }
 ]

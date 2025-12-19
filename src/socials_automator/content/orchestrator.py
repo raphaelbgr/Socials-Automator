@@ -450,6 +450,9 @@ After searching, summarize the most relevant findings."""
                 f"time:{post.generation_time_seconds:.1f}s"
             )
 
+            # Track AI tools mentioned in this post
+            self.mark_tools_covered(topic, post_id)
+
             return post
 
         except Exception as e:
@@ -674,6 +677,8 @@ After searching, summarize the most relevant findings."""
     ) -> list[dict[str, Any]]:
         """Generate topics using AI when research fails.
 
+        Integrates with AIToolsRegistry to suggest hidden gems and uncovered tools.
+
         Args:
             count: Number of topics to generate.
             content_pillars: Available content pillars.
@@ -706,6 +711,9 @@ After searching, summarize the most relevant findings."""
         # Get recent posts context for variety
         recent_context = self.knowledge.get_recent_context(days=14)
 
+        # Get AI tools suggestions (hidden gems and video ideas)
+        ai_tools_suggestions = self._get_ai_tools_suggestions()
+
         # Get current date for context
         from datetime import datetime
         now = datetime.now()
@@ -727,6 +735,7 @@ CONTENT PILLARS (choose one for each topic):
 RECENT POST HISTORY (for context and variety):
 {recent_context}
 {avoid_str}
+{ai_tools_suggestions}
 
 REQUIREMENTS:
 - Each topic should be specific and actionable (e.g., "5 ChatGPT prompts for writing emails" not "AI email tips")
@@ -734,6 +743,7 @@ REQUIREMENTS:
 - Each topic should clearly fit one content pillar
 - Topics should be trendy and relevant to {now.year} (current year!)
 - Mix different formats: tutorials, tips, comparisons, myths debunked, etc.
+- PRIORITIZE hidden gem AI tools from the suggestions above - they make unique content!
 
 Return as JSON array:
 [
@@ -785,3 +795,126 @@ Return ONLY the JSON array, no other text."""
                 "topic": f"Top tips for {niche.replace('-', ' ').replace('_', ' ')}",
                 "content_pillar": pillar,
             }]
+
+    def _get_ai_tools_suggestions(self) -> str:
+        """Get AI tools suggestions for topic generation.
+
+        Fetches hidden gems and video ideas from the AIToolsStore,
+        filtering out recently covered tools.
+
+        Returns:
+            Formatted string with tool suggestions for the AI prompt.
+        """
+        try:
+            from ..knowledge import get_ai_tools_store, get_ai_tools_registry
+
+            # Get ai_tools_config from profile
+            ai_tools_config = self.profile_config.get("ai_tools_config", {})
+            if not ai_tools_config.get("enabled", True):
+                return ""
+
+            cooldown_days = ai_tools_config.get("cooldown_days", 14)
+            prioritize_gems = ai_tools_config.get("prioritize_hidden_gems", True)
+            favorite_categories = ai_tools_config.get("favorite_categories", [])
+
+            # Get the AI tools store for this profile
+            store = get_ai_tools_store(self.profile_path)
+            registry = get_ai_tools_registry()
+
+            # Get uncovered hidden gems
+            uncovered_gems = store.get_uncovered_gems(
+                days=cooldown_days,
+                limit=10,
+                high_potential_only=prioritize_gems,
+            )
+
+            # Get video topic ideas from uncovered tools
+            topic_ideas = store.suggest_next_topics(days=cooldown_days, limit=10)
+
+            # Build suggestions string
+            suggestions = []
+
+            if uncovered_gems:
+                gems_list = []
+                for tool in uncovered_gems[:5]:
+                    gem_info = f"  - {tool.name} ({tool.company}): {', '.join(tool.features[:2])}"
+                    if tool.video_ideas:
+                        gem_info += f" | Video idea: {tool.video_ideas[0]}"
+                    gems_list.append(gem_info)
+
+                suggestions.append(
+                    "\n\nHIDDEN GEM AI TOOLS (lesser-known tools for unique content):\n"
+                    + "\n".join(gems_list)
+                )
+
+            if topic_ideas:
+                suggestions.append(
+                    "\n\nSUGGESTED VIDEO/POST IDEAS:\n"
+                    + "\n".join(f"  - {idea}" for idea in topic_ideas[:5])
+                )
+
+            # Add version context
+            version_context = registry.get_version_context()
+            suggestions.append(f"\n\n{version_context}")
+
+            return "".join(suggestions)
+
+        except Exception as e:
+            _logger.debug(f"Could not get AI tools suggestions: {e}")
+            return ""
+
+    def _extract_tools_from_topic(self, topic: str) -> list[str]:
+        """Extract AI tool names mentioned in a topic.
+
+        Args:
+            topic: The topic string to analyze.
+
+        Returns:
+            List of tool IDs that were mentioned.
+        """
+        try:
+            from ..knowledge import get_ai_tools_registry
+            registry = get_ai_tools_registry()
+
+            mentioned_tools = []
+            topic_lower = topic.lower()
+
+            for tool in registry.get_all_tools():
+                # Check if tool name appears in topic
+                if tool.name.lower() in topic_lower:
+                    mentioned_tools.append(tool.id)
+                # Also check company name for tools like "OpenAI", "Anthropic"
+                elif tool.company.lower() in topic_lower:
+                    mentioned_tools.append(tool.id)
+
+            return mentioned_tools
+
+        except Exception as e:
+            _logger.debug(f"Could not extract tools from topic: {e}")
+            return []
+
+    def mark_tools_covered(self, topic: str, post_id: str) -> None:
+        """Mark AI tools mentioned in a topic as covered.
+
+        Should be called after a post is successfully generated.
+
+        Args:
+            topic: The topic that was covered.
+            post_id: The ID of the generated post.
+        """
+        try:
+            from ..knowledge import get_ai_tools_store
+
+            store = get_ai_tools_store(self.profile_path)
+            tool_ids = self._extract_tools_from_topic(topic)
+
+            for tool_id in tool_ids:
+                store.mark_tool_covered(
+                    tool_id=tool_id,
+                    post_id=post_id,
+                    context="carousel_post",
+                )
+                _logger.info(f"POST:{post_id} | TOOL_COVERED | {tool_id}")
+
+        except Exception as e:
+            _logger.debug(f"Could not mark tools as covered: {e}")

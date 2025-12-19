@@ -282,6 +282,42 @@ class VideoPipeline:
         if self.progress_callback:
             self.progress_callback(stage, progress, message)
 
+    def _mark_tools_covered(self, topic: str, post_id: str, profile_path: Path) -> None:
+        """Mark AI tools mentioned in the video topic as covered.
+
+        Args:
+            topic: The video topic.
+            post_id: The post/reel ID.
+            profile_path: Path to the profile directory.
+        """
+        try:
+            from socials_automator.knowledge import get_ai_tools_store, get_ai_tools_registry
+
+            store = get_ai_tools_store(profile_path)
+            registry = get_ai_tools_registry()
+
+            # Find tools mentioned in topic
+            topic_lower = topic.lower()
+            mentioned_tools = []
+
+            for tool in registry.get_all_tools():
+                if tool.name.lower() in topic_lower:
+                    mentioned_tools.append(tool.id)
+                elif tool.company.lower() in topic_lower and tool.company.lower() in ["openai", "anthropic", "google"]:
+                    mentioned_tools.append(tool.id)
+
+            # Mark each tool as covered
+            for tool_id in mentioned_tools:
+                store.mark_tool_covered(
+                    tool_id=tool_id,
+                    post_id=post_id,
+                    context="video_reel",
+                )
+                self.logger.info(f"REEL:{post_id} | TOOL_COVERED | {tool_id}")
+
+        except Exception as e:
+            self.logger.debug(f"Could not mark tools as covered: {e}")
+
     async def generate(
         self,
         profile_path: Path,
@@ -355,6 +391,7 @@ class VideoPipeline:
         # Create pipeline context
         context = PipelineContext(
             profile=profile,
+            profile_path=Path(profile_path),  # For AI tools store access
             post_id=post_id,
             output_dir=output_dir,
             temp_dir=temp_dir,
@@ -802,6 +839,14 @@ Return ONLY the keywords, one per line, no numbers or bullets."""
 
                 # Show AI summary before completion
                 self.display.show_ai_summary()
+
+                # Track AI tools mentioned in this video
+                if context.topic:
+                    self._mark_tools_covered(
+                        topic=context.topic.topic,
+                        post_id=post_id,
+                        profile_path=profile_path,
+                    )
 
                 self.display.end_pipeline(context.final_video_path, success=True)
                 return context.final_video_path

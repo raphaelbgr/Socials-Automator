@@ -41,6 +41,7 @@ def generate_reel(
     upload: bool = typer.Option(False, "--upload", help="Upload to Instagram after generating"),
     loop: bool = typer.Option(False, "--loop", help="Loop continuously"),
     loop_count: Optional[int] = typer.Option(None, "--loop-count", "-n", help="Number of videos to generate"),
+    loop_each: Optional[str] = typer.Option(None, "--loop-each", help="Interval between loops (e.g., 5m, 1h, 30s)"),
     gpu_accelerate: bool = typer.Option(False, "--gpu-accelerate", "-g", help="Use GPU acceleration"),
     gpu: Optional[int] = typer.Option(None, "--gpu", help="Specific GPU index"),
     # News-specific options
@@ -80,6 +81,7 @@ def generate_reel(
         upload=upload,
         loop=loop,
         loop_count=loop_count,
+        loop_each=loop_each,
         gpu_accelerate=gpu_accelerate,
         gpu=gpu,
         # News options
@@ -226,8 +228,9 @@ def _run_loop_mode(params: ReelGenerationParams) -> None:
                 break
 
             # Show progress and wait
-            show_loop_progress(console, video_count, loop_limit)
-            time.sleep(3)
+            wait_seconds = params.loop_each if params.loop_each else 3
+            show_loop_progress(console, video_count, loop_limit, wait_seconds)
+            time.sleep(wait_seconds)
 
     except KeyboardInterrupt:
         console.print(f"\n[yellow]Loop stopped. Generated {video_count} video(s).[/yellow]")

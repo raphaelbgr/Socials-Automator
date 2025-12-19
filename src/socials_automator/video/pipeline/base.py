@@ -178,6 +178,7 @@ class PipelineContext(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     profile: ProfileMetadata
+    profile_path: Optional[Path] = None  # Path to profile directory for AI tools store
     post_id: str
     output_dir: Path
     temp_dir: Path

@@ -84,7 +84,77 @@ src/socials_automator/cli/
 
 ### Config
 - `config/providers.yaml` - AI provider settings (priority, models, API keys)
-- `profiles/<name>/metadata.json` - Profile config (niches, hashtags, prompts)
+- `config/ai_tools.yaml` - AI tools database (100+ tools with versions, features, video ideas)
+- `profiles/<name>/metadata.json` - Profile config (niches, hashtags, prompts, ai_tools_config)
+
+## AI Tools Database
+
+The AI Tools Database keeps content generation up-to-date with current AI tool versions and provides "hidden gem" suggestions to create unique content.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `config/ai_tools.yaml` | 100+ AI tools with versions, features, video ideas |
+| `knowledge/ai_tools_registry.py` | Singleton registry with tool lookup/search |
+| `knowledge/ai_tools_store.py` | ChromaDB store for semantic search + usage tracking |
+| `knowledge/models.py` | AITool, VideoIdea, ToolCategory Pydantic models |
+
+### How It Works
+
+1. **Version Context**: Injected into all content generation prompts (carousels + reels)
+2. **Hidden Gems**: Lesser-known tools surfaced to AI for unique content ideas
+3. **Usage Tracking**: Per-profile tracking avoids repeating tools within cooldown (14 days)
+4. **Semantic Search**: ChromaDB enables finding tools by feature description
+
+### Integration Points
+
+| Component | What It Uses |
+|-----------|--------------|
+| `content/planner.py` | `get_ai_version_context()` in system prompt |
+| `content/orchestrator.py` | `_get_ai_tools_suggestions()` + `mark_tools_covered()` |
+| `video/pipeline/topic_selector.py` | `_get_version_context()` + `_get_hidden_gems_context()` |
+| `video/pipeline/orchestrator.py` | `_mark_tools_covered()` after video generation |
+
+### Updating the Database
+
+Edit `config/ai_tools.yaml` to add or update tools:
+
+```yaml
+tools:
+  - id: new-tool
+    name: "New Tool"
+    company: "Company Name"
+    current_version: "1.0"
+    category: "productivity"  # text, image, video, audio, productivity, coding, research
+    is_hidden_gem: true       # Set to surface in hidden gems suggestions
+    hidden_gem_score: 85      # 0-100, higher = more likely to be suggested
+    features:
+      - "Key feature 1"
+      - "Key feature 2"
+    video_ideas:
+      - "Video idea for this tool"
+```
+
+### Profile Configuration
+
+Profiles can customize AI tools behavior in `metadata.json`:
+
+```json
+"ai_tools_config": {
+  "enabled": true,
+  "prefer_hidden_gems": true,
+  "cooldown_days": 14,
+  "categories": ["text", "productivity", "coding"]
+}
+```
+
+### Usage Tracking
+
+Tools mentioned in generated content are tracked per-profile:
+- Stored in `profiles/<name>/data/ai_tools_usage.json`
+- ChromaDB index at `profiles/<name>/data/chroma_db/`
+- 14-day cooldown prevents repeating same tools
 
 ### Output Files (per post)
 - `caption.txt` - Threads-ready caption (<500 chars)
@@ -280,6 +350,7 @@ Instagram displays the first slide in a 4:3 container (cropped from 1:1). The ho
   - `--gpu-accelerate / -g` - Enable GPU acceleration
   - `--gpu <index>` - Specific GPU index
   - `--loop-count / -n <count>` - Generate multiple videos
+  - `--loop-each <interval>` - Interval between loops (e.g., 5m, 30m, 1h) - default: 3s
 
 **Upload Commands (USE --dry-run FOR TESTING):**
 - `upload-post <profile> [post_id]` - Upload carousel to Instagram

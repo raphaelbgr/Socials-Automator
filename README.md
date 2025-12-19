@@ -420,6 +420,7 @@ python -m socials_automator.cli generate-reel <profile> [OPTIONS]
 | `--upload` | | Upload to Instagram immediately after generation | False |
 | `--loop` | `-L` | Loop continuously until stopped (Ctrl+C) | False |
 | `--loop-count` | `-n` | Generate exactly N videos then stop (implies --loop) | None |
+| `--loop-each` | | Interval between loops (e.g., 5m, 1h, 30s) | 3s |
 | `--gpu-accelerate` | `-g` | Enable GPU acceleration with NVENC (requires NVIDIA GPU) | False |
 | `--gpu` | | GPU index to use (0, 1, etc.). Auto-selects if not specified | Auto |
 | `--news` | | Force news mode (auto-detected for profiles with news_sources) | False |
@@ -486,6 +487,15 @@ python -m socials_automator.cli generate-reel ai.for.mortals --loop
 
 # Generate exactly 10 videos then stop
 python -m socials_automator.cli generate-reel ai.for.mortals -n 10
+
+# Generate videos every 5 minutes
+python -m socials_automator.cli generate-reel ai.for.mortals --loop-each 5m
+
+# Generate and upload every 30 minutes
+python -m socials_automator.cli generate-reel ai.for.mortals --loop-each 30m --upload
+
+# Generate 10 videos with 1 hour interval between each
+python -m socials_automator.cli generate-reel ai.for.mortals -n 10 --loop-each 1h --upload
 
 # Generate 50 videos with custom length
 python -m socials_automator.cli generate-reel ai.for.mortals -n 50 --length 30s
@@ -1271,6 +1281,49 @@ Each profile has a `metadata.json` with:
 - Brand voice and style guidelines
 - Carousel settings (min/max slides)
 
+### AI Tools Database
+
+The project includes a database of 100+ AI tools (`config/ai_tools.yaml`) that keeps generated content up-to-date with current versions and surfaces "hidden gem" tools for unique content ideas.
+
+**Features:**
+- **Version Context**: AI prompts automatically include current tool versions (ChatGPT GPT-4o, Claude Opus 4.5, etc.)
+- **Hidden Gems**: Lesser-known tools are surfaced to AI to create unique, differentiated content
+- **Usage Tracking**: Per-profile tracking prevents repeating the same tools within 14 days
+- **Semantic Search**: Find tools by feature description using ChromaDB
+
+**Updating the Database:**
+
+Edit `config/ai_tools.yaml` to add or update tools:
+
+```yaml
+tools:
+  - id: new-tool
+    name: "New Tool"
+    company: "Company Name"
+    current_version: "1.0"
+    category: "productivity"  # text, image, video, audio, productivity, coding, research
+    is_hidden_gem: true       # Surface in hidden gems suggestions
+    hidden_gem_score: 85      # 0-100, higher = more likely to be suggested
+    features:
+      - "Key feature 1"
+      - "Key feature 2"
+    video_ideas:
+      - "Video idea for this tool"
+```
+
+**Profile Configuration:**
+
+Optionally customize AI tools behavior per profile in `metadata.json`:
+
+```json
+"ai_tools_config": {
+  "enabled": true,
+  "prefer_hidden_gems": true,
+  "cooldown_days": 14,
+  "categories": ["text", "productivity", "coding"]
+}
+```
+
 ## API Keys Setup
 
 You need **at least one text provider** and **one image provider** to use Socials Automator. The cheapest combination is Z.AI + fal.ai (~$0.02 per post).
@@ -1577,7 +1630,8 @@ The system handles these automatically with exponential backoff and ghost publis
 ```
 Socials-Automator/
 ├── config/
-│   └── providers.yaml      # AI provider configuration
+│   ├── providers.yaml      # AI provider configuration
+│   └── ai_tools.yaml       # AI tools database (100+ tools with versions)
 ├── profiles/
 │   └── ai.for.mortals/     # Example profile
 │       ├── metadata.json   # Profile configuration
@@ -1621,7 +1675,10 @@ Socials-Automator/
 │   │   └── executor.py     # Tool execution
 │   ├── research/           # Web research
 │   │   └── web_search.py   # DuckDuckGo parallel search
-│   └── knowledge/          # Knowledge base
+│   └── knowledge/          # AI tools database & knowledge base
+│       ├── ai_tools_registry.py  # Singleton registry for tool lookup
+│       ├── ai_tools_store.py     # ChromaDB store + usage tracking
+│       └── models.py             # AITool, VideoIdea, ToolCategory models
 ├── .env.example            # Example environment file
 ├── pyproject.toml          # Python package config
 └── README.md

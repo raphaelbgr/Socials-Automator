@@ -500,6 +500,24 @@
     ]
   },
 
+  "ai_tools_config": {
+    "enabled": true,
+    "prioritize_hidden_gems": true,
+    "version_check_enabled": true,
+    "min_content_potential": "medium",
+    "cooldown_days": 14,
+    "favorite_categories": [
+      "research",
+      "productivity",
+      "automation",
+      "coding",
+      "presentation",
+      "data"
+    ],
+    "excluded_tools": [],
+    "notes": "Use get_ai_tools_registry() to access tool database. Hidden gems are prioritized for unique content. Version checking is automatic in prompts."
+  },
+
   "platforms": {
     "instagram": {
       "enabled": true,

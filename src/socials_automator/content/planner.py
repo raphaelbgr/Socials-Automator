@@ -17,6 +17,31 @@ from ..knowledge import KnowledgeStore
 from ..services import StructuredExtractor
 from ..services.llm_fallback import LLMFallbackManager, FallbackConfig
 from .models import PostPlan, HookType, SlideType, GenerationProgress
+
+
+def get_ai_version_context() -> str:
+    """Get AI tool version context for prompts from the registry.
+
+    This ensures content is generated with accurate, up-to-date tool versions.
+
+    Returns:
+        Formatted string with current AI tool versions.
+    """
+    try:
+        from socials_automator.knowledge import get_ai_tools_registry
+        registry = get_ai_tools_registry()
+        return registry.get_version_context()
+    except Exception as e:
+        # Fallback to basic context if registry unavailable
+        logging.getLogger("ai_calls").debug(f"Could not load AI tools registry: {e}")
+        return """Current AI tool versions (verify before publishing):
+- ChatGPT: GPT-4o (latest)
+- Claude: Claude 3.5 Sonnet (latest)
+- Gemini: Gemini 1.5 Pro (latest)
+
+Always verify tool versions are current before creating content."""
+
+
 from .responses import (
     PlanningResponse,
     StructureResponse,
@@ -232,7 +257,7 @@ class ContentPlanner:
         return text
 
     def _get_system_prompt(self) -> str:
-        """Get the system prompt from profile config with current datetime context."""
+        """Get the system prompt from profile config with current datetime and AI version context."""
         from datetime import datetime
 
         prompts = self.ai_config.get("prompts", {})
@@ -245,7 +270,10 @@ class ContentPlanner:
             f"({now.strftime('%A, %B %d, %Y')})"
         )
 
-        return base_prompt + datetime_context
+        # Add AI tool version context
+        version_context = "\n\n" + get_ai_version_context()
+
+        return base_prompt + datetime_context + version_context
 
     def _get_hook_templates(self, hook_type: HookType) -> list[str]:
         """Get hook templates for a type."""

@@ -35,6 +35,9 @@ def show_reel_config(console: Console, params: ReelGenerationParams) -> None:
             loop_info = f"\nLoop: [yellow]{params.loop_count} videos[/yellow]"
         else:
             loop_info = "\nLoop: [yellow]Infinite (Ctrl+C to stop)[/yellow]"
+        if params.loop_each:
+            interval_str = format_duration(params.loop_each)
+            loop_info += f"\nInterval: [yellow]{interval_str}[/yellow]"
 
     gpu_style = "green" if params.gpu_accelerate else "dim"
 
@@ -189,17 +192,19 @@ def show_loop_progress(
     console: Console,
     video_count: int,
     loop_limit: Optional[int],
+    wait_seconds: int = 3,
 ) -> None:
     """Display loop progress info."""
+    wait_str = format_duration(wait_seconds) if wait_seconds >= 60 else f"{wait_seconds} seconds"
     if loop_limit:
         remaining = loop_limit - video_count
         console.print(
-            f"\n[dim]Starting next video in 3 seconds... "
+            f"\n[dim]Starting next video in {wait_str}... "
             f"({remaining} remaining) (Ctrl+C to stop)[/dim]"
         )
     else:
         console.print(
-            "\n[dim]Starting next video in 3 seconds... (Ctrl+C to stop)[/dim]"
+            f"\n[dim]Starting next video in {wait_str}... (Ctrl+C to stop)[/dim]"
         )
 
 

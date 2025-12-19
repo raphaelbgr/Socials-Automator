@@ -90,7 +90,9 @@
       "WebFetch(domain:smashballoon.com)",
       "WebFetch(domain:graph.facebook.com)",
       "Bash(cmd /c \"for /f %d in (''dir /b /o-n C:\\Users\\rbgnr\\git\\Socials-Automator\\profiles\\news.but.quick\\reels\\2025\\12\\posted 2^>nul ^| findstr /n . ^| findstr /b \"1: 2: 3:\"'') do @echo === %~nd === && type C:\\Users\\rbgnr\\git\\Socials-Automator\\profiles\\news.but.quick\\reels\\2025\\12\\posted\\%~nd\\caption+hashtags.txt 2>nul && echo.\")",
-      "Bash(cmd /c type \"C:\\Users\\rbgnr\\git\\Socials-Automator\\profiles\\news.but.quick\\reels\\2025\\12\\posted\\18-003-reel\\metadata.json\")"
+      "Bash(cmd /c type \"C:\\Users\\rbgnr\\git\\Socials-Automator\\profiles\\news.but.quick\\reels\\2025\\12\\posted\\18-003-reel\\metadata.json\")",
+      "WebFetch(domain:help.pexels.com)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

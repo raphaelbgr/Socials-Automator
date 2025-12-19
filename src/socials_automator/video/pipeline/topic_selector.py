@@ -4,10 +4,13 @@ Selects a topic based on:
 - Content pillars and their frequency weights
 - Trending keywords
 - AI-driven topic generation
+- Hidden gems from AI tools registry
 """
 
+import logging
 import random
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from .base import (
@@ -17,6 +20,8 @@ from .base import (
     TopicInfo,
     TopicSelectionError,
 )
+
+logger = logging.getLogger("ai_calls")
 
 
 class TopicSelector(ITopicSelector):
@@ -43,7 +48,7 @@ class TopicSelector(ITopicSelector):
         self.log_start("Selecting topic from profile...")
 
         try:
-            topic = await self.select_topic(context.profile)
+            topic = await self.select_topic(context.profile, context.profile_path)
             context.topic = topic
 
             self.log_success(
@@ -56,11 +61,16 @@ class TopicSelector(ITopicSelector):
             self.log_error(f"Topic selection failed: {e}")
             raise TopicSelectionError(f"Failed to select topic: {e}") from e
 
-    async def select_topic(self, profile: ProfileMetadata) -> TopicInfo:
+    async def select_topic(
+        self,
+        profile: ProfileMetadata,
+        profile_path: Optional[Path] = None,
+    ) -> TopicInfo:
         """Select a topic based on profile configuration.
 
         Args:
             profile: Profile metadata.
+            profile_path: Optional path to profile directory for AI tools filtering.
 
         Returns:
             Selected topic information.
@@ -75,7 +85,7 @@ class TopicSelector(ITopicSelector):
         # Generate topic - use AI if available, otherwise use templates
         if self.ai_client:
             self.log_progress("Using AI to generate topic...")
-            topic_text = await self._generate_topic_with_ai(pillar, profile)
+            topic_text = await self._generate_topic_with_ai(pillar, profile, profile_path)
         else:
             topic_text = self._generate_topic(pillar, profile.trending_keywords)
 
@@ -96,12 +106,16 @@ class TopicSelector(ITopicSelector):
         self,
         pillar: dict,
         profile: ProfileMetadata,
+        profile_path: Optional[Path] = None,
     ) -> str:
         """Generate a topic using AI.
+
+        Integrates with AIToolsRegistry for accurate version info and hidden gems.
 
         Args:
             pillar: Selected content pillar.
             profile: Profile metadata.
+            profile_path: Optional path to profile directory for filtering covered tools.
 
         Returns:
             AI-generated topic string.
@@ -117,15 +131,15 @@ class TopicSelector(ITopicSelector):
             current_date = now.strftime("%B %d, %Y")  # e.g., "December 16, 2025"
             current_year = now.year
 
+            # Get version context and hidden gems from registry/store
+            version_context = self._get_version_context()
+            hidden_gems_context = self._get_hidden_gems_context(profile_path)
+
             prompt = f"""Generate ONE compelling video topic for a 60-second Instagram Reel.
 
 TODAY'S DATE: {current_date}
 
-AI TOOL VERSION FALLBACKS (use if you don't know the current version):
-- ChatGPT: GPT-5.2 | Claude: Opus 4.5 | Gemini: Gemini 3 Pro
-- Midjourney: V7 | DALL-E: 3 | Stable Diffusion: SD 3.5
-- Flux: 1.1 Pro | Cursor | v0 | Sora | Runway: Gen-3
-NOTE: These may be outdated. When in doubt, use generic names (e.g., "ChatGPT" instead of "GPT-5.2").
+{version_context}
 
 Profile: {profile.display_name}
 Niche: {profile.niche_id}
@@ -136,6 +150,7 @@ Example topics from this pillar:
 {examples_text}
 
 Trending keywords: {keywords}
+{hidden_gems_context}
 
 Requirements:
 - Topic must be specific and actionable (not vague)
@@ -147,12 +162,13 @@ Requirements:
 - NO selling, NO courses, NO paid products - just free value!
 - When mentioning AI tools, reference their CURRENT versions (listed above)
 - Content should feel fresh and up-to-date for {current_year}
+- PRIORITIZE hidden gem tools for unique content that stands out!
 
 Respond with ONLY the topic text, nothing else. No quotes, no explanation.
 Example good responses:
-- 5 GPT-5.2 prompts that save 2 hours daily
+- 5 ChatGPT prompts that save 2 hours daily
 - Claude Opus 4.5 just changed everything
-- Gemini 3 Pro vs GPT-5.2: which one wins?
+- This AI tool replaces 5 apps (NotebookLM)
 - 3 free AI tools you need to try in {current_year}"""
 
             # Use the TextProvider to generate
@@ -171,6 +187,63 @@ Example good responses:
         except Exception as e:
             self.log_detail(f"AI generation failed: {e}, using template")
             return self._generate_topic(pillar, profile.trending_keywords)
+
+    def _get_version_context(self) -> str:
+        """Get AI tool version context from registry.
+
+        Returns:
+            Formatted string with current AI tool versions.
+        """
+        try:
+            from socials_automator.knowledge import get_ai_tools_registry
+            registry = get_ai_tools_registry()
+            return registry.get_version_context()
+        except Exception as e:
+            logger.debug(f"Could not load AI tools registry for versions: {e}")
+            # Fallback to basic versions
+            return """AI TOOL VERSIONS (verify before publishing):
+- ChatGPT: GPT-4o | Claude: Opus 4.5 | Gemini: Gemini 1.5 Pro
+- Midjourney: V7 | DALL-E: 3 | Sora | Runway: Gen-3
+NOTE: Always verify current versions before creating content."""
+
+    def _get_hidden_gems_context(self, profile_path: Optional[Path] = None) -> str:
+        """Get hidden gems suggestions, filtering out recently covered tools.
+
+        Args:
+            profile_path: Optional path to profile directory for filtering.
+
+        Returns:
+            Formatted string with hidden gem tool suggestions.
+        """
+        try:
+            # If we have profile_path, use the store to filter recently covered tools
+            if profile_path:
+                from socials_automator.knowledge import get_ai_tools_store
+                store = get_ai_tools_store(profile_path)
+
+                # Get uncovered hidden gems (filters out tools covered in last 14 days)
+                gems = store.get_uncovered_gems(days=14, limit=5, high_potential_only=True)
+            else:
+                # Fallback to registry without filtering
+                from socials_automator.knowledge import get_ai_tools_registry
+                registry = get_ai_tools_registry()
+                gems = registry.get_hidden_gems(limit=5, high_potential_only=True)
+
+            if not gems:
+                return ""
+
+            gems_list = []
+            for tool in gems:
+                gem_info = f"- {tool.name}: {', '.join(tool.features[:2])}"
+                if tool.video_ideas:
+                    gem_info += f" (Idea: {tool.video_ideas[0]})"
+                gems_list.append(gem_info)
+
+            return "\n\nHIDDEN GEM AI TOOLS (lesser-known, great for unique content):\n" + "\n".join(gems_list)
+
+        except Exception as e:
+            logger.debug(f"Could not load hidden gems: {e}")
+            return ""
 
     def _select_pillar(self, pillars: list[dict]) -> dict:
         """Select a content pillar based on frequency weights.
@@ -326,35 +399,40 @@ Example good responses:
 
         return unique[:10]
 
-    # Known AI tools with their current versions for search queries
-    # Last updated: December 2025
-    AI_TOOL_VERSIONS = {
-        "chatgpt": "GPT-5.2",
-        "gpt-5": "GPT-5.2",
-        "gpt5": "GPT-5.2",
-        "gpt-4": "GPT-5.2",  # Redirect old references to current
-        "gpt4": "GPT-5.2",
-        "openai": "GPT-5.2",
-        "claude": "Claude Opus 4.5",
-        "anthropic": "Claude Opus 4.5",
-        "gemini": "Gemini 3 Pro",
-        "bard": "Gemini 3 Pro",
-        "google ai": "Gemini 3 Pro",
-        "midjourney": "Midjourney V7",
-        "dall-e": "DALL-E 3",
-        "dalle": "DALL-E 3",
-        "stable diffusion": "Stable Diffusion 3.5",
-        "sd3": "Stable Diffusion 3.5",
-        "sdxl": "Stable Diffusion 3.5",
-        "flux": "Flux 1.1 Pro",
-        "cursor": "Cursor AI",
-        "copilot": "GitHub Copilot",
-        "perplexity": "Perplexity AI",
-        "notion ai": "Notion AI",
-        "jasper": "Jasper AI",
-        "sora": "Sora",
-        "runway": "Runway Gen-3",
-    }
+    def _get_ai_tool_versions(self) -> dict[str, str]:
+        """Get AI tool versions from registry.
+
+        Returns:
+            Dictionary mapping tool name variations to their current version.
+        """
+        try:
+            from socials_automator.knowledge import get_ai_tools_registry
+            registry = get_ai_tools_registry()
+
+            versions = {}
+            for tool in registry.get_all_tools():
+                # Add primary name
+                versions[tool.name.lower()] = f"{tool.name} {tool.current_version}"
+                # Add tool ID
+                versions[tool.id.lower()] = f"{tool.name} {tool.current_version}"
+                # Add company name for major tools
+                if tool.company.lower() in ["openai", "anthropic", "google", "meta"]:
+                    versions[tool.company.lower()] = f"{tool.name} {tool.current_version}"
+
+            return versions
+
+        except Exception as e:
+            logger.debug(f"Could not load tool versions from registry: {e}")
+            # Fallback to hardcoded versions
+            return {
+                "chatgpt": "ChatGPT GPT-4o",
+                "claude": "Claude Opus 4.5",
+                "gemini": "Gemini 1.5 Pro",
+                "midjourney": "Midjourney V7",
+                "dall-e": "DALL-E 3",
+                "sora": "Sora",
+                "runway": "Runway Gen-3",
+            }
 
     def _build_search_queries(self, topic: str, pillar: dict) -> list[str]:
         """Build search queries for research phase.
@@ -380,7 +458,8 @@ Example good responses:
 
         # Detect AI tools in topic and add version-specific queries
         topic_lower = topic.lower()
-        for tool_name, version in self.AI_TOOL_VERSIONS.items():
+        tool_versions = self._get_ai_tool_versions()
+        for tool_name, version in tool_versions.items():
             if tool_name in topic_lower:
                 # Add version-specific search
                 queries.append(f"{version} features {current_year}")

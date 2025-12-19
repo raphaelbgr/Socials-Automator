@@ -27,6 +27,7 @@ class ReelGenerationParams:
     upload_after: bool
     loop: bool
     loop_count: Optional[int]
+    loop_each: Optional[int]  # Interval in seconds between loops
     gpu_accelerate: bool
     gpu_index: Optional[int]
     # News-specific parameters
@@ -53,6 +54,7 @@ class ReelGenerationParams:
         upload: bool = False,
         loop: bool = False,
         loop_count: Optional[int] = None,
+        loop_each: Optional[str] = None,
         gpu_accelerate: bool = False,
         gpu: Optional[int] = None,
         # News-specific options
@@ -66,7 +68,7 @@ class ReelGenerationParams:
 
         This is a factory method that handles all parsing logic.
         """
-        from ..core.parsers import parse_length, parse_voice_preset
+        from ..core.parsers import parse_interval, parse_length, parse_voice_preset
         from ..core.paths import get_profile_path
 
         profile_path = get_profile_path(profile)
@@ -81,6 +83,9 @@ class ReelGenerationParams:
 
         # Detect if this is a news profile (auto-detect or explicit)
         is_news = news or _is_news_profile(profile_path)
+
+        # Parse loop interval if provided
+        loop_each_seconds = parse_interval(loop_each) if loop_each else None
 
         return cls(
             profile=profile,
@@ -97,8 +102,9 @@ class ReelGenerationParams:
             output_dir=Path(output_dir) if output_dir else None,
             dry_run=dry_run,
             upload_after=upload,
-            loop=loop or loop_count is not None,
+            loop=loop or loop_count is not None or loop_each_seconds is not None,
             loop_count=loop_count,
+            loop_each=loop_each_seconds,
             gpu_accelerate=gpu_accelerate,
             gpu_index=gpu,
             # News params
