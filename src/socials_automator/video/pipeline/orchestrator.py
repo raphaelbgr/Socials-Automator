@@ -17,6 +17,7 @@ run in parallel since both only depend on the script, not each other.
 import asyncio
 import json
 import logging
+import os
 import shutil
 import subprocess
 import tempfile
@@ -331,9 +332,17 @@ class VideoPipeline:
         self.display.start_pipeline(profile.display_name, total_steps=len(self.steps))
         self.display.info(f"Post ID: {post_id}")
 
-        # Create temp directory for intermediate files
+        # Create temp directory for intermediate files (system temp)
         temp_dir = Path(tempfile.mkdtemp(prefix=f"video_{post_id}_"))
         self.display.debug(f"Temp directory: {temp_dir}")
+
+        # Create post-specific subfolder in project temp for ffmpeg operations
+        from socials_automator.constants import get_temp_dir
+        project_temp_subdir = get_temp_dir() / post_id
+        project_temp_subdir.mkdir(parents=True, exist_ok=True)
+        # Set env vars so ffmpeg and other tools use this post-specific folder
+        os.environ["TEMP"] = str(project_temp_subdir)
+        os.environ["TMP"] = str(project_temp_subdir)
 
         # Determine output directory
         if output_dir is None:
@@ -814,9 +823,20 @@ Return ONLY the keywords, one per line, no numbers or bullets."""
             raise PipelineError(f"Video generation failed: {e}") from e
 
         finally:
-            # Optionally clean up temp directory
-            # Keeping it for debugging; add cleanup flag if needed
-            self.display.debug(f"Temp files preserved at: {temp_dir}")
+            # Cleanup system temp directory
+            if temp_dir.exists():
+                try:
+                    shutil.rmtree(temp_dir)
+                except Exception:
+                    pass
+
+            # Cleanup project temp subfolder (ffmpeg temp files)
+            if project_temp_subdir.exists():
+                try:
+                    shutil.rmtree(project_temp_subdir)
+                    self.display.debug(f"Cleaned up temp folder: {project_temp_subdir.name}")
+                except Exception:
+                    pass
 
     def generate_sync(
         self,
