@@ -253,3 +253,178 @@ def show_cleanup_result(
             title="Cleanup Complete",
             border_style=border,
         ))
+
+
+# ============================================================================
+# Caption Audit Display Functions
+# ============================================================================
+
+
+def show_audit_header(
+    console: Console,
+    profile: str,
+    verify_api: bool,
+) -> None:
+    """Display caption audit header."""
+    mode = "[cyan]+API verify[/cyan]" if verify_api else "[dim]log-based[/dim]"
+
+    console.print()
+    console.print(Panel(
+        f"[bold]Caption Audit[/bold]\n\n"
+        f"Profile: [cyan]{profile}[/cyan]\n"
+        f"Mode: {mode}",
+        title=">>> AUDIT CAPTIONS",
+        border_style="cyan",
+    ))
+    console.print()
+
+
+def show_audit_progress(
+    console: Console,
+    current: int,
+    total: int,
+    reel_name: str,
+    status: str,
+) -> None:
+    """Display audit progress for a single reel."""
+    status_icon = {
+        "checking": "[dim][...][/dim]",
+        "issue": "[yellow][!][/yellow]",
+        "ok": "[green][OK][/green]",
+        "error": "[red][X][/red]",
+    }.get(status, "[?]")
+
+    console.print(f"  [{current:3d}/{total}] {status_icon} {reel_name[:60]}")
+
+
+def show_audit_issue(
+    console: Console,
+    reel_name: str,
+    issue_type: str,
+    permalink: str,
+) -> None:
+    """Display a single audit issue."""
+    type_color = {
+        "rate_limit": "yellow",
+        "api_error": "red",
+        "mismatch": "magenta",
+        "empty": "red",
+        "unknown": "dim",
+    }.get(issue_type, "white")
+
+    console.print(f"  [yellow][!][/yellow] [{type_color}]{issue_type}[/{type_color}]: {reel_name[:40]}")
+    console.print(f"      [dim]{permalink}[/dim]")
+
+
+def show_audit_result(
+    console: Console,
+    total_scanned: int,
+    issues_found: int,
+    report_path: Optional[str],
+    verify_api: bool,
+) -> None:
+    """Display caption audit result."""
+    if issues_found == 0:
+        console.print()
+        console.print(Panel(
+            f"[bold green]No caption issues detected![/bold green]\n\n"
+            f"Scanned: [cyan]{total_scanned}[/cyan] reels\n"
+            f"Issues: [green]0[/green]",
+            title="Audit Complete",
+            border_style="green",
+        ))
+    else:
+        border = "yellow"
+        verify_note = "\n[dim]Use --verify to confirm via Instagram API[/dim]" if not verify_api else ""
+        report_note = f"\n\nReport: [cyan]{report_path}[/cyan]" if report_path else ""
+
+        console.print()
+        console.print(Panel(
+            f"[bold yellow]Caption issues found![/bold yellow]\n\n"
+            f"Scanned: [cyan]{total_scanned}[/cyan] reels\n"
+            f"Issues: [yellow]{issues_found}[/yellow]{verify_note}{report_note}",
+            title="Audit Complete",
+            border_style=border,
+        ))
+
+
+# ============================================================================
+# Caption Sync Display Functions
+# ============================================================================
+
+
+def show_sync_header(
+    console: Console,
+    profile: str,
+    total_reels: int,
+) -> None:
+    """Display caption sync header."""
+    console.print()
+    console.print(Panel(
+        f"[bold]Caption Sync[/bold]\n\n"
+        f"Profile: [cyan]{profile}[/cyan]\n"
+        f"Reels to sync: [white]{total_reels}[/white]",
+        title=">>> SYNC CAPTIONS",
+        border_style="cyan",
+    ))
+    console.print()
+
+
+def show_sync_progress(
+    console: Console,
+    current: int,
+    total: int,
+    reel_name: str,
+    status: str,
+) -> None:
+    """Display sync progress for a single reel."""
+    status_icon = {
+        "synced": "[green][OK][/green]",
+        "empty": "[red][EMPTY][/red]",
+        "mismatch": "[yellow][DIFF][/yellow]",
+        "error": "[red][X][/red]",
+        "skipped": "[dim][--][/dim]",
+    }.get(status, "[?]")
+
+    console.print(f"  [{current:3d}/{total}] {status_icon} {reel_name[:55]}")
+
+
+def show_sync_result(
+    console: Console,
+    total_reels: int,
+    synced: int,
+    empty_captions: int,
+    mismatched: int,
+    errors: int,
+    skipped: int,
+    report_path: Optional[str],
+) -> None:
+    """Display caption sync result."""
+    issues = empty_captions + mismatched
+
+    if issues == 0:
+        console.print()
+        console.print(Panel(
+            f"[bold green]All captions synced successfully![/bold green]\n\n"
+            f"Total reels: [cyan]{total_reels}[/cyan]\n"
+            f"Synced (matching): [green]{synced}[/green]\n"
+            f"Skipped (no media_id): [dim]{skipped}[/dim]\n"
+            f"Errors: [dim]{errors}[/dim]",
+            title="Sync Complete",
+            border_style="green",
+        ))
+    else:
+        report_note = f"\n\nReport: [cyan]{report_path}[/cyan]" if report_path else ""
+
+        console.print()
+        console.print(Panel(
+            f"[bold yellow]Caption issues found![/bold yellow]\n\n"
+            f"Total reels: [cyan]{total_reels}[/cyan]\n"
+            f"Synced (matching): [green]{synced}[/green]\n"
+            f"[red]Empty captions: {empty_captions}[/red]\n"
+            f"[yellow]Mismatched: {mismatched}[/yellow]\n"
+            f"Skipped: [dim]{skipped}[/dim]\n"
+            f"Errors: [dim]{errors}[/dim]{report_note}",
+            title="Sync Complete",
+            border_style="yellow",
+        ))

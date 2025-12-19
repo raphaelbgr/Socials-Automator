@@ -11,6 +11,9 @@ from ..core.console import console
 from ..core.paths import get_profile_path, get_profiles_dir
 from .display import (
     show_artifacts_update_result,
+    show_audit_header,
+    show_audit_issue,
+    show_audit_result,
     show_cleanup_header,
     show_cleanup_progress,
     show_cleanup_result,
@@ -19,6 +22,9 @@ from .display import (
     show_platform_migration_result,
     show_profile_created,
     show_profile_status,
+    show_sync_header,
+    show_sync_progress,
+    show_sync_result,
     show_token_refreshed,
     show_token_status,
 )
@@ -321,4 +327,199 @@ def cleanup_posted_reels(
     )
 
     if summary.errors > 0:
+        raise typer.Exit(1)
+
+
+def audit_captions_cmd(
+    profile: str = typer.Argument(..., help="Profile name"),
+    verify: bool = typer.Option(False, "--verify", "-v", help="Verify captions via Instagram API (slower, accurate)"),
+    no_report: bool = typer.Option(False, "--no-report", help="Skip generating fix_captions.md report"),
+) -> None:
+    """Audit captions for potential issues.
+
+    Scans posted reels and cross-references with Instagram API logs to find
+    reels that may have missing or incorrect captions due to rate limiting
+    or API errors.
+
+    By default, uses fast log-based detection. Use --verify to confirm
+    issues by fetching actual captions from Instagram API.
+
+    Generates a fix_captions.md report in the posted folder with:
+    - Direct reel URLs (clickable)
+    - Full caption text to copy-paste
+    - Issue details
+
+    Examples:
+        # Quick log-based audit
+        audit-captions news.but.quick
+
+        # Thorough API-verified audit
+        audit-captions news.but.quick --verify
+
+        # Just show issues, no report file
+        audit-captions news.but.quick --no-report
+    """
+    import asyncio
+    import os
+
+    from dotenv import load_dotenv
+
+    from socials_automator.utils.caption_audit import (
+        CaptionAuditor,
+        generate_caption_fix_report,
+    )
+
+    load_dotenv()
+
+    profile_path = get_profile_path(profile)
+
+    if not profile_path.exists():
+        console.print(f"[red]Profile not found: {profile}[/red]")
+        raise typer.Exit(1)
+
+    # Show header
+    show_audit_header(console, profile, verify)
+
+    # Create auditor
+    auditor = CaptionAuditor(
+        profile_path=profile_path,
+        profile_name=profile,
+    )
+
+    # Progress callback for API verification
+    def progress_callback(current: int, total: int, reel_name: str) -> None:
+        console.print(f"  [{current:3d}/{total}] Verifying: {reel_name[:50]}...")
+
+    # Run audit
+    if verify:
+        access_token = os.getenv("INSTAGRAM_ACCESS_TOKEN")
+        if not access_token:
+            console.print("[red]INSTAGRAM_ACCESS_TOKEN not set. Cannot verify via API.[/red]")
+            raise typer.Exit(1)
+
+        result = asyncio.run(auditor.audit_with_verification(
+            access_token=access_token,
+            progress_callback=progress_callback,
+        ))
+    else:
+        result = auditor.audit()
+
+    # Show issues found
+    if result.issues:
+        console.print("[bold]Issues found:[/bold]")
+        console.print()
+        for issue in result.issues:
+            show_audit_issue(console, issue.reel_name, issue.issue_type, issue.permalink)
+        console.print()
+
+    # Generate report
+    report_path = None
+    if result.issues and not no_report:
+        report_path = generate_caption_fix_report(profile, result)
+
+    # Show result
+    show_audit_result(
+        console,
+        total_scanned=result.total_reels_scanned,
+        issues_found=result.issues_found,
+        report_path=str(report_path) if report_path else None,
+        verify_api=verify,
+    )
+
+    if result.issues_found > 0:
+        raise typer.Exit(1)
+
+
+def sync_captions_cmd(
+    profile: str = typer.Argument(..., help="Profile name"),
+    no_report: bool = typer.Option(False, "--no-report", help="Skip generating fix_captions.md report"),
+) -> None:
+    """Sync actual Instagram captions to local metadata.
+
+    Fetches the real caption from Instagram for each posted reel and
+    stores it in metadata.json under instagram.actual_caption. This allows
+    accurate detection of reels with empty or mismatched captions.
+
+    Generates a fix_captions.md report with URLs and captions to paste.
+
+    Examples:
+        # Sync captions for a profile
+        sync-captions ai.for.mortals
+
+        # Sync without generating report
+        sync-captions ai.for.mortals --no-report
+    """
+    import asyncio
+    import os
+
+    from dotenv import load_dotenv
+
+    from socials_automator.utils.caption_audit import CaptionSyncer
+
+    load_dotenv()
+
+    profile_path = get_profile_path(profile)
+
+    if not profile_path.exists():
+        console.print(f"[red]Profile not found: {profile}[/red]")
+        raise typer.Exit(1)
+
+    access_token = os.getenv("INSTAGRAM_ACCESS_TOKEN")
+    if not access_token:
+        console.print("[red]INSTAGRAM_ACCESS_TOKEN not set.[/red]")
+        raise typer.Exit(1)
+
+    # Create syncer
+    syncer = CaptionSyncer(access_token=access_token)
+
+    # Find total reels first for header
+    posted_reels = syncer._find_posted_reels(profile_path)
+    total_reels = len(posted_reels)
+
+    if total_reels == 0:
+        console.print("[yellow]No posted reels found.[/yellow]")
+        return
+
+    # Show header
+    show_sync_header(console, profile, total_reels)
+
+    # Progress callback
+    def progress_callback(current: int, total: int, reel_name: str) -> None:
+        # We'll show progress after each reel in the result loop
+        pass
+
+    # Run sync
+    result = asyncio.run(syncer.sync_profile(
+        profile_name=profile,
+        progress_callback=progress_callback,
+    ))
+
+    # Show individual results
+    for idx, reel in enumerate(result.reels, 1):
+        show_sync_progress(
+            console,
+            current=idx,
+            total=result.total_reels,
+            reel_name=reel.reel_name,
+            status=reel.status,
+        )
+
+    # Generate report if there are issues
+    report_path = None
+    if (result.empty_captions > 0 or result.mismatched > 0) and not no_report:
+        report_path = syncer.generate_fix_report(result)
+
+    # Show summary
+    show_sync_result(
+        console,
+        total_reels=result.total_reels,
+        synced=result.synced,
+        empty_captions=result.empty_captions,
+        mismatched=result.mismatched,
+        errors=result.errors,
+        skipped=result.skipped,
+        report_path=str(report_path) if report_path else None,
+    )
+
+    if result.empty_captions > 0 or result.mismatched > 0:
         raise typer.Exit(1)

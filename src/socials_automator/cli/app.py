@@ -135,12 +135,14 @@ def register_commands() -> None:
 
     # Import and register maintenance commands
     from .maintenance.commands import (
+        audit_captions_cmd,
         cleanup_posted_reels,
         init,
         list_niches,
         migrate_platform_status,
         new_profile,
         status,
+        sync_captions_cmd,
         token,
         update_artifacts,
     )
@@ -153,6 +155,8 @@ def register_commands() -> None:
     app.command(name="update-artifacts")(update_artifacts)
     app.command(name="migrate-platform-status")(migrate_platform_status)
     app.command(name="cleanup-reels")(cleanup_posted_reels)
+    app.command(name="audit-captions")(audit_captions_cmd)
+    app.command(name="sync-captions")(sync_captions_cmd)
 
 
 def setup_logging() -> None:

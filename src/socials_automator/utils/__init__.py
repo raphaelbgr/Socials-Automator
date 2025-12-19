@@ -1,5 +1,24 @@
 """Utility modules for Socials Automator."""
 
+from .caption_audit import (
+    # Audit classes
+    CaptionAuditor,
+    CaptionIssue,
+    CaptionAuditResult,
+    LogError,
+    # Audit functions
+    audit_profile_captions,
+    audit_and_verify_captions,
+    generate_caption_fix_report,
+    # Sync classes
+    CaptionSyncer,
+    ReelSyncStatus,
+    SyncResult,
+    # Sync functions
+    sync_profile_captions,
+    sync_all_captions,
+)
+
 from .text_fitting import (
     TextFitter,
     FitResult,
@@ -50,6 +69,14 @@ from .timestamps import (
 )
 
 __all__ = [
+    # Caption audit
+    "CaptionAuditor",
+    "CaptionIssue",
+    "CaptionAuditResult",
+    "LogError",
+    "audit_profile_captions",
+    "audit_and_verify_captions",
+    "generate_caption_fix_report",
     # Text fitting
     "TextFitter",
     "FitResult",
