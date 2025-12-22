@@ -126,6 +126,7 @@ class VideoPipeline:
         gpu_accelerate: bool = False,
         gpu_index: Optional[int] = None,
         video_first: bool = True,
+        profile_path: Optional[Path] = None,
     ):
         """Initialize video pipeline.
 
@@ -148,6 +149,7 @@ class VideoPipeline:
             video_first: Use video-first mode where videos define segment boundaries.
                 When True (default), selects videos to fill audio duration without repetition.
                 When False, uses legacy segment-based mode where segments define video boundaries.
+            profile_path: Path to profile directory for session-based AI context.
         """
         self.logger = logging.getLogger("video.pipeline")
         self.video_first = video_first
@@ -161,9 +163,13 @@ class VideoPipeline:
         self.gpu_accelerate = gpu_accelerate
         self.gpu_index = gpu_index
         self.gpu_info: Optional[GPUInfo] = None
+        self.profile_path = profile_path
 
         # Initialize debug logger
         self.debug_logger = PipelineDebugLogger()
+
+        # Initialize AI session for profile-scoped context
+        self._script_session = None
 
         # Setup CLI display
         self.display = setup_display(
@@ -194,14 +200,34 @@ class VideoPipeline:
             self.logger.info(f"Using text AI: {text_ai}")
             self.display.info(f"Text AI provider: {text_ai}")
 
+            # Create session for profile-scoped AI context
+            if profile_path:
+                try:
+                    from ...ai_sessions import ScriptSession
+                    self._script_session = ScriptSession(
+                        profile_path=profile_path,
+                        target_duration=target_duration,
+                        provider_override=text_ai,
+                        event_callback=self.display.ai_event_callback,
+                        history_days=14,
+                    )
+                    self.display.info(f"AI session enabled for profile: {profile_path.name}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to create AI session: {e}")
+
         # Initialize pipeline steps
         # Structured for parallel execution after script planning
 
         # Sequential: Topic selection -> Research -> Script planning
         self.sequential_steps: list[PipelineStep] = [
             TopicSelector(ai_client=self.ai_client),
-            TopicResearcher(),
-            ScriptPlanner(ai_client=self.ai_client, target_duration=target_duration),
+            TopicResearcher(ai_client=self.ai_client),
+            ScriptPlanner(
+                ai_client=self.ai_client,
+                target_duration=target_duration,
+                session=self._script_session,
+                preferred_provider=text_ai,  # Use CLI --text-ai setting
+            ),
         ]
 
         # Parallel branch A: Voice generation (determines final duration)
@@ -223,14 +249,14 @@ class VideoPipeline:
                 GPUVideoAssembler(gpu=self.gpu_info),  # GPU NVENC assembly
                 ThumbnailGenerator(font=subtitle_font, font_size=90),  # Thumbnail from clean video (90px for grid visibility)
                 GPUSubtitleRenderer(gpu=self.gpu_info, font=subtitle_font, font_size=subtitle_size),  # GPU with ASS karaoke
-                CaptionGenerator(ai_client=self.ai_client),
+                CaptionGenerator(ai_client=self.ai_client, preferred_provider=text_ai),
             ]
         else:
             self.final_steps: list[PipelineStep] = [
                 VideoAssembler(),  # Uses audio duration as source of truth
                 ThumbnailGenerator(font=subtitle_font, font_size=90),  # Thumbnail from clean video (90px for grid visibility)
                 SubtitleRenderer(font=subtitle_font, font_size=subtitle_size),
-                CaptionGenerator(ai_client=self.ai_client),
+                CaptionGenerator(ai_client=self.ai_client, preferred_provider=text_ai),
             ]
 
         # Collect all steps for display setup and counting
@@ -433,6 +459,8 @@ class VideoPipeline:
             script_planner = self.sequential_steps[-1]  # ScriptPlanner
             duration_attempt = 0
             duration_feedback: Optional[dict] = None  # Feedback for AI about duration adjustment
+            script_step_counted = False  # Track if ScriptPlanner step was counted
+            voice_step_counted = False  # Track if VoiceGenerator step was counted
 
             while duration_attempt < self.MAX_DURATION_RETRIES:
                 duration_attempt += 1
@@ -447,8 +475,10 @@ class VideoPipeline:
                     # Pass duration feedback to script planner
                     if hasattr(script_planner, 'duration_feedback'):
                         script_planner.duration_feedback = duration_feedback
+                else:
+                    # Only show step header on first attempt
+                    self.display.start_step(step_name, description)
 
-                self.display.start_step(step_name, description)
                 self.debug_logger.start_step(step_name)
                 self._update_progress(step_name, progress, f"Starting {step_name}...")
 
@@ -471,7 +501,10 @@ class VideoPipeline:
                         "duration": f"{context.script.total_duration:.1f}s",
                     })
 
-                step_counter += 1
+                # Only count the ScriptPlanner step once
+                if not script_step_counted:
+                    step_counter += 1
+                    script_step_counted = True
                 self._update_progress(step_name, step_counter / total_steps, f"Completed {step_name}")
 
                 # Run VoiceGenerator to get actual audio duration
@@ -479,7 +512,9 @@ class VideoPipeline:
                 step_name = voice_step.name
                 description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
 
-                self.display.start_step(step_name, description)
+                # Only show step header on first attempt
+                if not voice_step_counted:
+                    self.display.start_step(step_name, description)
                 self.debug_logger.start_step(step_name)
 
                 context = await voice_step.execute(context)
@@ -538,7 +573,27 @@ class VideoPipeline:
                     self.display.warning("Could not verify audio duration")
                     break
 
-            step_counter += 1  # For voice step
+                # Mark voice step as counted (for display tracking on retry)
+                voice_step_counted = True
+
+            step_counter += 1  # For voice step (only counted once after loop)
+
+            # === DURATION CONTRACT ===
+            # Set the required video duration from actual audio - this is the SOURCE OF TRUTH
+            # All downstream steps (VideoSelector, VideoAssembler, SubtitleRenderer) must meet this
+            if context.audio_path and context.audio_path.exists():
+                context.required_video_duration = self._get_audio_duration(context.audio_path)
+                self.display.info("")
+                self.display.info("=" * 60)
+                self.display.info(f"  DURATION CONTRACT: {context.required_video_duration:.1f}s")
+                self.display.info("  Source: Voiceover audio (immutable)")
+                self.display.info("  All video steps must meet this duration")
+                self.display.info("=" * 60)
+                self.display.info("")
+            else:
+                # Fallback to target duration if no audio (shouldn't happen)
+                context.required_video_duration = self.target_duration
+                self.display.warning(f"No audio file - using target duration as contract: {self.target_duration:.1f}s")
 
             # Phase 2: Video search/download
             if self.video_first:
@@ -555,8 +610,11 @@ class VideoPipeline:
                 3. Download only the selected videos
                 4. Only the last video is trimmed to fit exactly
                 """
-                # Get audio duration
-                audio_duration = self._get_audio_duration(ctx.audio_path) if ctx.audio_path else 60.0
+                # Use duration contract (set after voice generation) - this is SOURCE OF TRUTH
+                if ctx.required_video_duration is None:
+                    raise ValueError("Duration contract not set! Voice generation must run first.")
+                audio_duration = ctx.required_video_duration
+                self.display.info(f"[Contract] VideoSearcher using required duration: {audio_duration:.1f}s")
 
                 # Step 1: Get candidate pool
                 self.display.start_step("VideoSearcher", "Building candidate video pool from Pexels + local index")
@@ -658,8 +716,11 @@ class VideoPipeline:
                 3. Merge new unique clips with existing collection
                 4. Stop when we have enough or hit max retries
                 """
-                # Get audio duration using ffprobe (ctx has audio_path, not audio object)
-                audio_duration = self._get_audio_duration(ctx.audio_path) if ctx.audio_path else 60.0
+                # Use duration contract (set after voice generation) - this is SOURCE OF TRUTH
+                if ctx.required_video_duration is None:
+                    raise ValueError("Duration contract not set! Voice generation must run first.")
+                audio_duration = ctx.required_video_duration
+                self.display.info(f"[Contract] VideoSearcher using required duration: {audio_duration:.1f}s")
                 max_retries = 10
                 retry_count = 0
 

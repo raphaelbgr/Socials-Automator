@@ -1,9 +1,15 @@
-"""Topic research using web search.
+"""Topic research using multi-source web search.
 
-Searches the web for information about the selected topic
-and extracts key points for the video script.
+Enhanced research with:
+- AI-generated diverse search queries
+- Multiple search engines (DuckDuckGo, Bing, Yahoo)
+- Multi-language support (EN, ES, PT)
+- Parallel searching for speed
+- Category-based queries (tutorials, reviews, comparisons, news)
 """
 
+import asyncio
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -14,28 +20,60 @@ from .base import (
     ResearchResult,
     TopicInfo,
 )
+from .research_queries import ResearchQueryGenerator, ResearchQuery
+
+logger = logging.getLogger("ai_calls")
+
+
+# Search engine configurations
+SEARCH_ENGINES = {
+    "duckduckgo": {"enabled": True, "priority": 1},
+    "bing": {"enabled": True, "priority": 2},
+    "yahoo": {"enabled": True, "priority": 3},
+}
 
 
 class TopicResearcher(ITopicResearcher):
-    """Researches topics using web search and AI summarization."""
+    """Researches topics using multi-source web search and AI summarization.
+
+    Features:
+    - AI-generated diverse search queries
+    - Parallel search across multiple engines
+    - Multi-language queries (EN, ES, PT)
+    - Category-based research (tutorials, reviews, comparisons)
+    """
 
     def __init__(
         self,
         search_client: Optional[object] = None,
         ai_client: Optional[object] = None,
-        max_results: int = 5,
+        max_results: int = 10,
+        use_enhanced_search: bool = True,
     ):
         """Initialize topic researcher.
 
         Args:
-            search_client: Web search client (e.g., DuckDuckGo).
-            ai_client: AI client for summarization.
-            max_results: Maximum search results to process.
+            search_client: Web search client (optional, uses WebSearcher if None).
+            ai_client: AI client for summarization and query generation.
+            max_results: Maximum search results per query.
+            use_enhanced_search: If True, use AI-generated multi-source search.
         """
         super().__init__()
         self.search_client = search_client
         self.ai_client = ai_client
         self.max_results = max_results
+        self.use_enhanced_search = use_enhanced_search
+        self._query_generator: Optional[ResearchQueryGenerator] = None
+        self._web_searcher = None
+        self._content_pillar: str = "general"
+
+    @property
+    def query_generator(self) -> ResearchQueryGenerator:
+        """Lazy-load the query generator."""
+        if self._query_generator is None:
+            # Pass the AI client to use the same provider as the rest of the pipeline
+            self._query_generator = ResearchQueryGenerator(text_provider=self.ai_client)
+        return self._query_generator
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """Execute research step.
@@ -50,6 +88,12 @@ class TopicResearcher(ITopicResearcher):
             raise ResearchError("No topic selected for research")
 
         self.log_start(f"Researching topic: {context.topic.topic}")
+
+        # Capture content pillar from topic if available
+        if hasattr(context.topic, "pillar_id") and context.topic.pillar_id:
+            self._content_pillar = context.topic.pillar_id
+        elif hasattr(context.topic, "pillar") and context.topic.pillar:
+            self._content_pillar = context.topic.pillar
 
         try:
             research = await self.research(context.topic)
@@ -73,7 +117,13 @@ class TopicResearcher(ITopicResearcher):
         Returns:
             Research results with summary and key points.
         """
-        self.log_progress("Searching the web...")
+        if self.use_enhanced_search:
+            return await self._enhanced_research(topic)
+        return await self._basic_research(topic)
+
+    async def _basic_research(self, topic: TopicInfo) -> ResearchResult:
+        """Basic research using simple queries (fallback mode)."""
+        self.log_progress("Searching the web (basic mode)...")
 
         all_results = []
         current_year = datetime.now().year
@@ -91,26 +141,146 @@ class TopicResearcher(ITopicResearcher):
         results = await self._web_search(version_query)
         all_results.extend(results)
 
-        self.log_progress(f"Found {len(all_results)} results")
+        return await self._process_results(topic.topic, all_results)
+
+    async def _enhanced_research(self, topic: TopicInfo) -> ResearchResult:
+        """Enhanced research with AI-generated queries and multi-source search."""
+        self.log_progress("Generating AI-powered research queries...")
+
+        # Generate diverse queries using AI
+        research_queries = await self.query_generator.generate_queries(
+            topic=topic.topic,
+            pillar=self._content_pillar,
+            count=12,
+        )
+
+        # Log query breakdown
+        en_queries = [q for q in research_queries if q.language == "en"]
+        es_queries = [q for q in research_queries if q.language == "es"]
+        pt_queries = [q for q in research_queries if q.language == "pt"]
+        self.log_detail(
+            f"Generated {len(research_queries)} queries: "
+            f"{len(en_queries)} EN, {len(es_queries)} ES, {len(pt_queries)} PT"
+        )
+
+        # Sort by priority (1 = highest)
+        research_queries.sort(key=lambda q: q.priority)
+
+        # Take top queries by priority
+        top_queries = research_queries[:8]
+
+        self.log_progress("Searching across multiple sources in parallel...")
+
+        # Search in parallel for speed
+        all_results = await self._parallel_search(top_queries)
+
+        # Deduplicate results by URL
+        unique_results = self._deduplicate_results(all_results)
+        self.log_detail(
+            f"Found {len(all_results)} total -> {len(unique_results)} unique results"
+        )
+
+        # Add current AI versions context
+        current_year = datetime.now().year
+        current_month = datetime.now().strftime("%B")
+        version_query = f"ChatGPT Claude Gemini latest version {current_month} {current_year}"
+        self.log_detail(f"Version context search: {version_query}")
+        version_results = await self._web_search(version_query)
+        unique_results.extend(version_results)
+
+        return await self._process_results(topic.topic, unique_results)
+
+    async def _parallel_search(self, queries: list[ResearchQuery]) -> list[dict]:
+        """Search multiple queries in parallel.
+
+        Args:
+            queries: List of ResearchQuery objects.
+
+        Returns:
+            Combined results from all queries.
+        """
+        async def search_one(query: ResearchQuery) -> list[dict]:
+            """Search a single query."""
+            try:
+                results = await self._web_search(query.query)
+                # Tag results with query metadata
+                for r in results:
+                    r["_query_language"] = query.language
+                    r["_query_category"] = query.category
+                return results
+            except Exception as e:
+                self.log_detail(f"Search failed for '{query.query}': {e}")
+                return []
+
+        # Run all searches in parallel
+        tasks = [search_one(q) for q in queries]
+        results_list = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Flatten results
+        all_results = []
+        for result in results_list:
+            if isinstance(result, list):
+                all_results.extend(result)
+            elif isinstance(result, Exception):
+                self.log_detail(f"Parallel search error: {result}")
+
+        return all_results
+
+    def _deduplicate_results(self, results: list[dict]) -> list[dict]:
+        """Remove duplicate results by URL.
+
+        Args:
+            results: List of search results.
+
+        Returns:
+            Deduplicated results.
+        """
+        seen_urls = set()
+        unique = []
+
+        for result in results:
+            url = result.get("href", "")
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                unique.append(result)
+            elif not url:
+                # Keep results without URLs (from fallback)
+                unique.append(result)
+
+        return unique
+
+    async def _process_results(
+        self, topic_str: str, results: list[dict]
+    ) -> ResearchResult:
+        """Process search results into a ResearchResult.
+
+        Args:
+            topic_str: Topic string.
+            results: Search results.
+
+        Returns:
+            Processed ResearchResult.
+        """
+        self.log_progress(f"Processing {len(results)} results...")
 
         # Extract content from results
-        raw_content = self._extract_content(all_results)
+        raw_content = self._extract_content(results)
 
         self.log_progress("Summarizing content...")
 
         # Summarize and extract key points
         summary, key_points = await self._summarize_content(
-            topic.topic,
+            topic_str,
             raw_content,
         )
 
         return ResearchResult(
-            topic=topic.topic,
+            topic=topic_str,
             summary=summary,
             key_points=key_points,
             sources=[
                 {"title": r.get("title", ""), "url": r.get("href", "")}
-                for r in all_results[:5]
+                for r in results[:5]
             ],
             raw_content=raw_content[:5000],  # Limit size
         )

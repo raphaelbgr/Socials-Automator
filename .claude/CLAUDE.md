@@ -24,6 +24,10 @@ cli/ -> video/pipeline/orchestrator.py -> script_planner.py -> text.py (AI calls
 | `providers/image.py` | DALL-E, ComfyUI, fal.ai |
 | `instagram/client.py` | Instagram Graph API client |
 | `instagram/uploader.py` | Cloudinary video/image uploader |
+| `hashtag/` | Hashtag validation module (Instagram limit: 5) |
+| `hashtag/constants.py` | INSTAGRAM_MAX_HASHTAGS = 5 |
+| `hashtag/sanitizer.py` | HashtagSanitizer class for trimming/removal |
+| `hashtag/validator.py` | validate_hashtags_in_caption() for pipelines |
 
 ## CLI Architecture (Modular, Feature-Based)
 
@@ -81,6 +85,54 @@ src/socials_automator/cli/
 ### Logging
 - `logs/ai_calls.log` - **Full AI request/response I/O**
 - `logs/instagram_api.log` - Instagram API calls
+- `C:\Users\rbgnr\.lmstudio\server-logs` - **LMStudio server logs** (for debugging local AI)
+
+### Real-Time AI Provider Logging
+
+All AI calls show provider/model info in the CLI output:
+
+```
+Step 2/10: NewsCurator
+Curating and ranking stories with AI
+------------------------------------------------------------
+  [>] lmstudio/local-model (news_curation)...
+  [OK] lmstudio/gemma-the-writer-9b: OK (13071ms)
+```
+
+**Components with provider logging:**
+| Component | Task Name | Uses |
+|-----------|-----------|------|
+| NewsCurator | `news_curation` | TextProvider (provider_override) |
+| NewsScriptPlanner | `news_script` | TextProvider (preferred_provider) |
+| CaptionGenerator | `caption` | LLMFallbackManager (preferred_provider) |
+| ScriptPlanner | `script_planning` | LLMFallbackManager (preferred_provider) |
+| ResearchQueryGenerator | `research_query_generation` | TextProvider |
+| TopicSelector | `topic_selection` | TextProvider |
+
+**All components respect `--text-ai` flag:**
+- Passed via `text_ai` parameter to orchestrators
+- NewsOrchestrator passes to: NewsCurator (via CurationConfig.provider_override), NewsScriptPlanner, CaptionGenerator
+- VideoPipeline passes to: TopicResearcher, ScriptPlanner, CaptionGenerator
+
+### LMStudio Model Selection
+
+**Reasoning models** (GLM-4.5, GLM-4.6v, Qwen3, o1, etc.) "think" first which can cause:
+- Slow responses (2+ minutes)
+- Empty `content` field (output goes to `reasoning_content`)
+- Timeout disconnects
+
+**To disable thinking in LMStudio UI:**
+1. Go to **Developer tab** (bottom of sidebar)
+2. Navigate to **Inference → Custom Fields**
+3. Set **Enable Thinking → OFF**
+
+The code also sends `enable_thinking: false` via API, but the UI setting is most reliable.
+
+**Fast instruction-tuned models** (no thinking):
+- `Qwen2.5-7B-Instruct` - fast, excellent for JSON
+- `Llama-3.1-8B-Instruct` - reliable, general purpose
+- `Mistral-7B-Instruct-v0.3` - very fast
+- `Phi-3-medium-instruct` - lightweight
 
 ### Config
 - `config/providers.yaml` - AI provider settings (priority, models, API keys)
@@ -320,6 +372,43 @@ The `--loop-each` flag makes the script run continuously. It should NEVER stop o
 - Catches ALL exceptions including typer.Exit
 - Resets backoff counter on successful iteration
 - Rate limit errors (code 9) wait 5 minutes before retry
+
+## Hashtag Validation (Instagram Limit: 5)
+
+Instagram reduced the hashtag limit from 30 to **5 maximum** in December 2025. The hashtag module handles this automatically.
+
+### How It Works
+
+1. **Generation** (`generate-reel --hashtags N`):
+   - AI generates up to N hashtags (default: 5)
+   - `caption_service.py` uses `INSTAGRAM_MAX_HASHTAGS` constant
+   - `artifacts.py` limits hashtags when building caption+hashtags.txt
+
+2. **Upload** (`upload-reel`):
+   - `validate_hashtags_in_caption()` trims excess hashtags
+   - Logs validation result: `[OK] Hashtags: 3/5` or `[!] Trimmed: 8 -> 5`
+   - Updates caption+hashtags.txt if trimmed
+   - If upload fails with caption error, retries WITHOUT hashtags
+
+### Key Functions
+
+| Function | File | Purpose |
+|----------|------|---------|
+| `HashtagSanitizer.trim_hashtags()` | sanitizer.py | Remove excess hashtags |
+| `HashtagSanitizer.remove_all_hashtags()` | sanitizer.py | Strip all hashtags |
+| `validate_hashtags_in_caption()` | validator.py | Validate and auto-trim |
+| `remove_hashtags_from_caption()` | validator.py | Fallback for failed uploads |
+
+### CLI Logging
+
+```
+Hashtag validation:
+  [OK] Hashtags: 3/5
+  -- or --
+  [!] Trimmed hashtags: 8 -> 5
+  Removed: #six, #seven, #eight
+  [OK] Updated caption+hashtags.txt
+```
 
 ### Content Generation Rules
 

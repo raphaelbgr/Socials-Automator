@@ -114,7 +114,7 @@ class NewsPipeline:
         gpu_index: Optional[int] = None,
         # News-specific options
         edition: Optional[NewsEdition] = None,
-        story_count: int = 4,
+        story_count: Optional[int] = None,  # None = auto (AI decides)
         max_news_age_hours: int = 24,
         news_categories: Optional[list[NewsCategory]] = None,
         profile_name: Optional[str] = None,  # For theme history tracking
@@ -137,7 +137,7 @@ class NewsPipeline:
             gpu_accelerate: Enable GPU acceleration.
             gpu_index: GPU index to use.
             edition: News edition (morning, midday, evening, night).
-            story_count: Number of stories per video.
+            story_count: Number of stories per video (None = auto).
             max_news_age_hours: Maximum article age in hours.
             news_categories: Filter to specific categories.
             profile_name: Profile name for theme history tracking.
@@ -188,12 +188,17 @@ class NewsPipeline:
                     self.gpu_accelerate = False
 
         # Initialize news components
-        self.news_aggregator = NewsAggregator(profile_path=profile_path)
+        self.news_aggregator = NewsAggregator(
+            profile_path=profile_path,
+            profile_name=profile_name,
+            use_dynamic_queries=True,  # AI-generated queries based on topic history
+        )
         self.news_curator = NewsCurator(
             config=CurationConfig(
                 stories_per_brief=story_count,
+                target_duration=target_duration,  # For auto story count calculation
                 provider_override=text_ai,
-                profile_name=profile_name,  # For theme history tracking
+                profile_name=profile_name,  # For theme/story/topic history tracking
             )
         )
 
@@ -228,7 +233,7 @@ class NewsPipeline:
         # Use larger font for thumbnails (90px) for better visibility on Instagram grid
         # Regular reels use 72px, but news hooks are often longer so we use 90px
         self.thumbnail_step = ThumbnailGenerator(font=subtitle_font, font_size=90)
-        self.caption_step = CaptionGenerator()
+        self.caption_step = CaptionGenerator(preferred_provider=text_ai)
 
         # Connect all steps to the display system for logging
         self._connect_step_displays()

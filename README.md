@@ -181,6 +181,26 @@ py -X utf8 -m socials_automator.cli generate-reel news.but.quick --text-ai lmstu
 6. Generate voiceover and karaoke-style subtitles
 7. Output final news briefing video
 
+**Real-Time AI Provider Logging:**
+
+All AI calls show which provider/model is being used in real-time:
+
+```
+Step 2/10: NewsCurator
+Curating and ranking stories with AI
+------------------------------------------------------------
+  [>] lmstudio/local-model (news_curation)...
+  [OK] lmstudio/gemma-the-writer-9b: OK (13071ms)
+
+Step 3/10: NewsScriptPlanner
+Planning video script from curated news
+------------------------------------------------------------
+  [>] lmstudio/local-model (news_script)...
+  [OK] lmstudio/gemma-the-writer-9b: OK (7611ms)
+```
+
+This helps verify your `--text-ai` setting is being used correctly across all pipeline steps.
+
 **Note:** Windows users should use `py -X utf8` to handle Unicode characters in news content.
 
 ---
@@ -417,6 +437,7 @@ python -m socials_automator.cli generate-reel <profile> [OPTIONS]
 | `--subtitle-size` | | Subtitle font size in pixels | 80 |
 | `--font` | | Subtitle font from /fonts folder | Montserrat-Bold.ttf |
 | `--length` | `-l` | Target video length (e.g., 30s, 1m, 90s) | 1m |
+| `--hashtags` | `-H` | Max hashtags to generate (Instagram limit: 5) | 5 |
 | `--output` | `-o` | Output directory | Auto |
 | `--dry-run` | | Only run first few steps without full video generation | False |
 | `--upload` | | Upload to Instagram immediately after generation | False |
@@ -524,6 +545,12 @@ python -m socials_automator.cli generate-reel ai.for.mortals -n 5 --upload
 # Full pipeline: GPU acceleration, custom voice, auto-upload
 python -m socials_automator.cli generate-reel ai.for.mortals --text-ai lmstudio -g --voice adam_excited --upload
 
+# Control hashtag count (Instagram limit is 5 as of Dec 2025)
+python -m socials_automator.cli generate-reel ai.for.mortals --hashtags 3
+
+# Generate with maximum allowed hashtags
+python -m socials_automator.cli generate-reel ai.for.mortals --hashtags 5 --upload
+
 # --- News Briefing Examples ---
 
 # Generate news briefing (auto-detected for news profiles)
@@ -580,6 +607,13 @@ py -X utf8 -m socials_automator.cli generate-reel news.but.quick -n 25 -g --uplo
 - If duration exceeds 1.5x target (e.g., >90s for 1m target), script is regenerated
 - AI receives feedback to write shorter content
 - Up to 10 regeneration attempts to hit target duration
+
+**Hashtag Validation (Instagram Limit: 5):**
+- Instagram reduced hashtag limit from 30 to 5 in December 2025
+- Hashtags are validated and trimmed during both generation and upload
+- `--hashtags` flag controls max hashtags generated (default: 5)
+- During upload, excess hashtags are automatically trimmed
+- If upload fails due to caption issues, system retries without hashtags
 
 **GPU Acceleration (`-g`):**
 - Uses NVIDIA NVENC for hardware-accelerated video encoding
@@ -1237,7 +1271,7 @@ Report saved to: docs/empty_captions/ai.for.mortals.md
 }
 ```
 
-**Use with fix_empty_captions.py:**
+**Use with fix_captions.py:**
 After syncing, run the Chrome automation script to fix empty captions (see [Caption Fixing Scripts](#caption-fixing-scripts) below).
 
 ---
@@ -1307,81 +1341,127 @@ When reels are uploaded during Instagram rate limiting, they may be published wi
 ### Workflow
 
 ```
-1. sync-captions      Fetch actual captions from Instagram
-                      -> Stores in metadata.json
-                      -> Generates docs/empty_captions/<profile>.md
+1. sync-captions             Fetch actual captions from Instagram
+                             -> Stores in metadata.json
 
-2. fix_empty_captions.py   Chrome automation to edit captions
-                           -> Uses Selenium with your logged-in Chrome
-                           -> Retries without hashtags on failure
+2. fix_captions.py           Chrome automation to edit captions
+                             -> Auto-launches Chrome with correct settings
+                             -> Each profile has unique port (no conflicts)
+                             -> Retries without hashtags on failure
 
 3. sync-captions --only-empty   Quick re-check after fixing
 ```
 
-### fix_empty_captions.py
+### fix_captions.py
 
-Chrome automation script that edits reel captions using your logged-in Instagram session.
+Chrome automation script that edits reel captions using Instagram's web interface.
 
-**Setup:**
-1. Close ALL Chrome windows completely
-2. Start Chrome with remote debugging:
-   ```bash
-   # Windows
-   chrome.exe --remote-debugging-port=9222 --user-data-dir=ChromeDebug
+**Key Features:**
+- Auto-launches Chrome with correct port/profile settings
+- Each profile gets a unique Chrome instance (run multiple accounts simultaneously)
+- Interactive profile selection with status table
+- Rich CLI with progress display and error handling
 
-   # Mac
-   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=ChromeDebug
-
-   # Linux
-   google-chrome --remote-debugging-port=9222 --user-data-dir=ChromeDebug
-   ```
-3. Log in to Instagram in that Chrome window
-4. Run the script
+**Installation:**
+```bash
+pip install selenium typer rich
+```
 
 **Usage:**
 ```bash
-# Fix all empty captions for a profile
-py scripts/fix_empty_captions.py ai.for.mortals
+# Interactive mode (shows profile table, lets you pick)
+py scripts/fix_captions.py
+
+# Fix specific profile
+py scripts/fix_captions.py fix ai.for.mortals
+
+# Preview what would be fixed (dry run)
+py scripts/fix_captions.py fix ai.for.mortals --dry-run
+
+# Limit to 5 reels (good for testing)
+py scripts/fix_captions.py fix ai.for.mortals -n 5
+
+# Check status of all profiles
+py scripts/fix_captions.py status
 ```
 
-**What the script does (6 steps per reel):**
-1. Load the reel page
-2. Click "..." (more options)
-3. Click "Manage"
-4. Click "Edit"
-5. Set caption text (with proper newlines)
-6. Click "Done"
-
-**Retry logic:**
-- If Instagram shows "Something went wrong", retries WITHOUT hashtags
-- Failed reels are removed from tracking (can be re-run)
-- 5-second delay after clicking Done for Instagram to save
-
-**Output:**
+**What happens when you run it:**
 ```
-[1/10] 18-001-ai-tips
-    [Step 1/6] Loading reel page...
-    [Step 2/6] Clicking more options (...)...
-    [Step 3/6] Clicking Manage...
-    [Step 4/6] Clicking Edit...
-    [Step 5/6] Setting caption text...
-    [..] Waiting for autocomplete to settle...
-    [Step 6/6] Clicking Done...
-    [OK] Caption updated and marked as fixed!
++--------------------------- >>> FIX CAPTIONS ----------------------------+
+| Instagram Reel Caption Fixer                                            |
++-------------------------------------------------------------------------+
+
+                    Available Profiles
++---------------------------------------------------------+
+| #   | Profile        | Empty Captions | Port | Chrome   |
+|-----+----------------+----------------+------+----------|
+| 1   | ai.for.mortals |             41 | 9275 | Stopped  |
+| 2   | news.but.quick |             10 | 9279 | Stopped  |
++---------------------------------------------------------+
+
+Select profile number: 1
+
+Launching Chrome on port 9275...
+Chrome launched successfully
+
++------------------------------ >>> LOGIN --------------------------------+
+| ACTION REQUIRED                                                         |
+|                                                                         |
+| 1. A Chrome window should now be open                                   |
+| 2. Log in to Instagram with the account for ai.for.mortals              |
+| 3. Make sure you're on instagram.com and logged in                      |
+| 4. Come back here and confirm when ready                                |
++-------------------------------------------------------------------------+
+
+Are you logged in to Instagram as ai.for.mortals? [y/n]: y
+
+Fixing 41 reels...
+  [  1/41] [OK] 18-003-some-reel-topic
+  [  2/41] [OK] 18-004-another-reel
+  [  3/41] [RETRY] 18-005-hashtag-issue - without hashtags
+  [  3/41] [OK] 18-005-hashtag-issue
+  ...
+```
+
+**Multi-Account Support:**
+
+Each profile automatically gets a unique Chrome port and user-data directory:
+
+| Profile | Port | Chrome Data Dir |
+|---------|------|-----------------|
+| ai.for.mortals | 9275 | ~/ChromeDebug/ai.for.mortals |
+| news.but.quick | 9279 | ~/ChromeDebug/news.but.quick |
+
+Run simultaneously in separate terminals:
+```bash
+# Terminal 1
+py scripts/fix_captions.py fix ai.for.mortals
+
+# Terminal 2
+py scripts/fix_captions.py fix news.but.quick
 ```
 
 **After fixing, verify:**
 ```bash
 # Re-sync only previously empty captions
-python -m socials_automator.cli sync-captions ai.for.mortals --only-empty
-
-# If any still empty, run the script again
-py scripts/fix_empty_captions.py ai.for.mortals
+py -m socials_automator.cli sync-captions ai.for.mortals --only-empty
 ```
 
-**Requirements:**
-- `pip install selenium pyperclip`
-- Chrome browser
+**Commands Reference:**
+```
+fix_captions.py [COMMAND]
+
+Commands:
+  fix               Fix empty captions (default)
+  status            Show all profiles and Chrome port assignments
+  launch-chrome-cmd Launch Chrome for a specific profile
+
+fix Options:
+  PROFILE           Profile name (interactive if omitted)
+  --dry-run, -d     Preview without making changes
+  --no-hashtags     Remove hashtags from captions
+  --limit, -n INT   Limit number of reels to fix
+```
 
 ### generate_empty_captions_report.py
 
@@ -1812,12 +1892,13 @@ Instagram has these posting limits:
 - **25-50 posts per day** (varies by account age/standing)
 - **Carousels**: Up to 10 images per carousel
 - **Captions**: Up to 2,200 characters
+- **Hashtags**: Maximum 5 per post (reduced from 30 in December 2025)
 
 ### Known Meta API Quirks
 
 **Ghost Publish Issue:** Meta's API can return a rate limit error AFTER successfully publishing your post. The system automatically detects this by checking your recent Instagram posts. If you see a rate limit error, don't panic - check Instagram first before retrying.
 
-**Empty Caption Issue:** During ghost publish, the caption may be lost. Use `sync-captions` to detect empty captions and `fix_empty_captions.py` to fix them. See [Caption Fixing Scripts](#caption-fixing-scripts).
+**Empty Caption Issue:** During ghost publish, the caption may be lost. Use `sync-captions` to detect empty captions and `fix_captions.py` to fix them. See [Caption Fixing Scripts](#caption-fixing-scripts).
 
 **Rate Limit Error Codes:**
 - Error 4: Application daily limit reached
@@ -1867,6 +1948,10 @@ Socials-Automator/
 │   │   ├── text.py         # Text generation (with tool calling)
 │   │   ├── image.py        # Image generation
 │   │   └── config.py       # Provider config
+│   ├── hashtag/            # Hashtag validation (Instagram limit: 5)
+│   │   ├── constants.py    # INSTAGRAM_MAX_HASHTAGS = 5
+│   │   ├── sanitizer.py    # HashtagSanitizer class
+│   │   └── validator.py    # Validation for upload pipeline
 │   ├── instagram/          # Instagram posting
 │   │   ├── client.py       # Instagram Graph API client
 │   │   ├── uploader.py     # Cloudinary image uploader
@@ -1881,7 +1966,7 @@ Socials-Automator/
 │       ├── ai_tools_store.py     # ChromaDB store + usage tracking
 │       └── models.py             # AITool, VideoIdea, ToolCategory models
 ├── scripts/
-│   ├── fix_empty_captions.py        # Chrome automation to fix empty captions
+│   ├── fix_captions.py              # Chrome automation to fix empty captions
 │   └── generate_empty_captions_report.py  # Generate markdown reports
 ├── docs/
 │   └── empty_captions/              # Markdown reports of empty captions
@@ -2245,6 +2330,21 @@ The aggregator displays source diversity in the CLI:
 - JSON parsing failed and fallback content was used
 - Usually resolved by automatic retry
 - Try running the command again
+
+### Debugging LMStudio (Local AI)
+
+When using LMStudio for local AI, check these log locations:
+
+| Log Location | Purpose |
+|--------------|---------|
+| `logs/ai_calls.log` | Application AI request/response logs |
+| `C:\Users\rbgnr\.lmstudio\server-logs` | **LMStudio server logs** - detailed inference logs, GPU usage, token stats |
+
+The LMStudio server logs show:
+- Request/response JSON payloads
+- Model loading and GPU memory allocation
+- Token processing speed (tokens/second)
+- Sampling parameters and generation stats
 
 ## Cost Estimation
 

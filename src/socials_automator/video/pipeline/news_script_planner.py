@@ -11,6 +11,7 @@ Structure:
 
 import json
 import logging
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -206,6 +207,15 @@ class NewsScriptPlanner(PipelineStep):
             stories_text=stories_text,
         )
 
+        # Get provider info for logging
+        providers = self.text_provider._get_providers()
+        provider_name = providers[0][0] if providers else "unknown"
+        provider_config = providers[0][1] if providers else None
+        model_id = provider_config.litellm_model.split("/")[-1] if provider_config else "unknown"
+
+        print(f"  [>] {provider_name}/{model_id} (news_script)...")
+        start_time = time.time()
+
         # Generate script with AI
         try:
             response = await self.text_provider.generate(
@@ -216,9 +226,16 @@ class NewsScriptPlanner(PipelineStep):
                 max_tokens=1500,
             )
 
+            duration_ms = int((time.time() - start_time) * 1000)
+            actual_provider = self.text_provider._current_provider or provider_name
+            actual_model = self.text_provider._current_model or model_id
+            print(f"  [OK] {actual_provider}/{actual_model}: OK ({duration_ms}ms)")
+
             script = self._parse_script_response(response, brief)
 
         except Exception as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            print(f"  [X] {provider_name}: {str(e)[:60]}...")
             logger.warning(f"AI script generation failed: {e}, using fallback")
             script = self._fallback_script(brief, profile_handle)
 
