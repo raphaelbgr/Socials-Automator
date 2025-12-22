@@ -92,14 +92,17 @@ text_providers:
     api_key_env: "ANTHROPIC_API_KEY"
     timeout: 60
 
-  # Local providers (disabled - enable if running locally)
+  # Local providers
+  # NOTE: GLM-4.6v-flash has built-in reasoning (~60-120s thinking time)
+  # that cannot be disabled via API. Use a non-reasoning model like
+  # hermes-3-llama-3.1-8b or mistral for faster responses.
   lmstudio:
-    priority: 10
-    enabled: false
+    priority: 10  # Lower priority - ZAI is faster (no thinking overhead)
+    enabled: true  # Auto-detects loaded model
     litellm_model: "openai/local-model"
     base_url: "http://localhost:1234/v1"
     api_key: "lm-studio"
-    timeout: 120
+    timeout: 180  # 3 min for reasoning models
 
   ollama:
     priority: 11

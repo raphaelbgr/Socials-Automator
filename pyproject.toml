@@ -22,7 +22,8 @@ dependencies = [
     "httpx>=0.26.0",
     "aiofiles>=23.2.1",
 
-    # LLM Providers - Direct SDK (no grpcio needed)
+    # LLM Providers - Agno framework (unified interface)
+    "agno>=1.0.0",
     "openai>=1.12.0",
     "google-genai>=1.0.0",
 
