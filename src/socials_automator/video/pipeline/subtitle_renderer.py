@@ -111,6 +111,12 @@ class SubtitleRenderer(ISubtitleRenderer):
         if not self.profile_handle and context.profile.instagram_handle:
             self.profile_handle = context.profile.instagram_handle
 
+        # === DURATION CONTRACT VALIDATION ===
+        if context.required_video_duration is not None:
+            self.log_progress(f"[Contract] Required final duration: {context.required_video_duration:.1f}s")
+        else:
+            self.log_progress("[Contract] WARNING: No duration contract set")
+
         self.log_start("Rendering subtitles and combining audio...")
 
         try:
@@ -338,11 +344,12 @@ class SubtitleRenderer(ISubtitleRenderer):
         self.log_detail(f"Created {len(text_clips)} subtitle clips")
 
         # Create watermark clips if profile handle is set
+        # Use audio.duration as source of truth (voice determines video length)
         watermark_clips = []
         if self.profile_handle:
             self.log_detail(f"Adding watermark: {self.profile_handle}")
             watermark_clips = self._create_watermark_clips(
-                video_width, video_height, video.duration
+                video_width, video_height, audio.duration  # Voice is source of truth
             )
             self.log_detail(f"Created {len(watermark_clips)} watermark clips")
 
@@ -749,12 +756,37 @@ class SubtitleRenderer(ISubtitleRenderer):
         video = VideoFileClip(str(video_path))
         audio = AudioFileClip(str(audio_path))
 
-        # Trim audio to video length if needed
+        # === DURATION CONTRACT ENFORCEMENT ===
+        self.log_progress(f"[Contract] Video: {video.duration:.1f}s | Audio: {audio.duration:.1f}s")
+
+        # CRITICAL: Audio (narration) is the source of truth for duration
+        # If video is shorter than audio, extend video by freezing last frame
         if audio.duration > video.duration:
-            if hasattr(audio, 'subclipped'):
-                audio = audio.subclipped(0, video.duration)
+            gap = audio.duration - video.duration
+            self.log_progress(f"[Contract] ENFORCING: Video {gap:.1f}s short - freezing last frame to extend")
+
+            try:
+                from moviepy import concatenate_videoclips, ImageClip
+            except ImportError:
+                from moviepy.editor import concatenate_videoclips, ImageClip
+
+            # Get the last frame of the video
+            last_frame = video.get_frame(video.duration - 0.01)
+
+            # Create a still image clip from the last frame
+            freeze_clip = ImageClip(last_frame).with_duration(gap)
+
+            # Set FPS on freeze clip to match video
+            if hasattr(freeze_clip, 'with_fps'):
+                freeze_clip = freeze_clip.with_fps(video.fps)
             else:
-                audio = audio.subclip(0, video.duration)
+                freeze_clip = freeze_clip.set_fps(video.fps)
+
+            # Concatenate original video with freeze frame
+            video = concatenate_videoclips([video, freeze_clip], method="compose")
+            self.log_progress(f"[Contract] FULFILLED: Extended video to {video.duration:.1f}s")
+        else:
+            self.log_progress(f"[Contract] OK: Video >= Audio, no extension needed")
 
         # Set audio (with_audio for MoviePy 2.x, set_audio for 1.x)
         if hasattr(video, 'with_audio'):

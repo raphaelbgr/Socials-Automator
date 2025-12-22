@@ -318,9 +318,10 @@ class ReelValidator:
 
                     caption = caption_path.read_text(encoding="utf-8").strip()
 
-                    # Get hashtags
+                    # Get hashtags (limit to Instagram max)
+                    from socials_automator.hashtag import INSTAGRAM_MAX_HASHTAGS
                     if profile_hashtags:
-                        hashtag_str = " ".join(f"#{tag}" if not tag.startswith("#") else tag for tag in profile_hashtags[:15])
+                        hashtag_str = " ".join(f"#{tag}" if not tag.startswith("#") else tag for tag in profile_hashtags[:INSTAGRAM_MAX_HASHTAGS])
                     else:
                         hashtag_result = await caption_service.generate_hashtags(
                             topic=topic,

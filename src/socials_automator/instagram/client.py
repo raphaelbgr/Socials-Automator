@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Awaitable
@@ -24,6 +25,101 @@ _api_logger.propagate = False  # Don't propagate to root logger (no console outp
 _file_handler = logging.FileHandler(_log_dir / "instagram_api.log", encoding="utf-8")
 _file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
 _api_logger.addHandler(_file_handler)
+
+
+def _sanitize_caption(caption: str) -> str:
+    """Sanitize caption to remove problematic characters for Instagram API.
+
+    Handles:
+    - Unicode normalization (NFC)
+    - Emojis (removed - can cause encoding issues on Windows)
+    - Zero-width characters
+    - Control characters (except newlines)
+    - Smart quotes -> regular quotes
+    - Non-breaking spaces -> regular spaces
+
+    Args:
+        caption: Raw caption text
+
+    Returns:
+        Sanitized caption safe for Instagram API
+    """
+    import re
+
+    if not caption:
+        return ""
+
+    # First, remove emojis using regex (most reliable method)
+    # This pattern covers most emoji ranges including:
+    # - Emoticons, Dingbats, Symbols
+    # - Supplementary planes (U+1F000 and above)
+    # - Regional indicators, skin tones, etc.
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F300-\U0001F9FF"  # Misc Symbols, Emoticons, etc.
+        "\U0001FA00-\U0001FAFF"  # Extended-A symbols
+        "\U00002702-\U000027B0"  # Dingbats
+        "\U0000FE00-\U0000FE0F"  # Variation selectors
+        "\U0001F1E0-\U0001F1FF"  # Flags (regional indicators)
+        "\U00002600-\U000026FF"  # Misc symbols
+        "\U00002300-\U000023FF"  # Misc technical
+        "\U0000200D"             # Zero-width joiner (used in emoji sequences)
+        "]+",
+        flags=re.UNICODE
+    )
+    caption = emoji_pattern.sub('', caption)
+
+    # Normalize Unicode to NFC (composed form)
+    caption = unicodedata.normalize('NFC', caption)
+
+    # Replace problematic characters with safe alternatives
+    replacements = {
+        '\u2018': "'",   # Left single quote
+        '\u2019': "'",   # Right single quote
+        '\u201c': '"',   # Left double quote
+        '\u201d': '"',   # Right double quote
+        '\u2014': '-',   # Em dash
+        '\u2013': '-',   # En dash
+        '\u2026': '...',  # Ellipsis
+        '\u00a0': ' ',   # Non-breaking space
+        '\u200b': '',    # Zero-width space
+        '\u200c': '',    # Zero-width non-joiner
+        '\ufeff': '',    # BOM
+        '\u00ad': '',    # Soft hyphen
+        '\u2028': '\n',  # Line separator
+        '\u2029': '\n',  # Paragraph separator
+    }
+
+    for old, new in replacements.items():
+        caption = caption.replace(old, new)
+
+    # Remove remaining control/format characters and any chars above BMP
+    cleaned = []
+    for char in caption:
+        if char in '\n\r\t':
+            cleaned.append(char)
+        elif unicodedata.category(char) == 'Cc':  # Control characters
+            continue
+        elif unicodedata.category(char) == 'Cf':  # Format characters
+            continue
+        elif unicodedata.category(char) == 'So':  # Symbol, Other
+            continue
+        elif ord(char) > 0xFFFF:  # Supplementary plane chars
+            continue
+        else:
+            cleaned.append(char)
+
+    caption = ''.join(cleaned)
+
+    # Clean up double spaces left by emoji removal
+    while '  ' in caption:
+        caption = caption.replace('  ', ' ')
+
+    # Normalize multiple newlines to max 2
+    while '\n\n\n' in caption:
+        caption = caption.replace('\n\n\n', '\n\n')
+
+    return caption.strip()
 
 
 class InstagramAPIError(Exception):
@@ -328,7 +424,7 @@ class InstagramClient:
         params = {
             "media_type": "CAROUSEL",
             "children": ",".join(children_ids),
-            "caption": caption[:2200],  # Instagram caption limit
+            "caption": _sanitize_caption(caption)[:2200],  # Sanitize + limit
         }
 
         result = await self._make_request("POST", endpoint, params=params)
@@ -833,7 +929,7 @@ class InstagramClient:
         params = {
             "media_type": "REELS",
             "video_url": video_url,
-            "caption": caption[:2200],  # Instagram caption limit
+            "caption": _sanitize_caption(caption)[:2200],  # Sanitize + limit
             "share_to_feed": "true" if share_to_feed else "false",
         }
 

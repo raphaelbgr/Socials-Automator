@@ -194,6 +194,10 @@ class PipelineContext(BaseModel):
     final_video_path: Optional[Path] = None
     metadata: Optional[VideoMetadata] = None
 
+    # Duration contract - set after voice generation, immutable thereafter
+    # This is the SOURCE OF TRUTH for video duration - all downstream steps must meet this
+    required_video_duration: Optional[float] = None  # Seconds, from actual audio file
+
 
 # =============================================================================
 # Abstract Base Classes (Interfaces)

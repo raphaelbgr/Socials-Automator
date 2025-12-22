@@ -104,9 +104,15 @@ class VideoAssembler(IVideoAssembler):
         if not context.audio_path:
             raise VideoAssemblyError("No audio available - narration is source of truth for duration")
 
-        # Get actual audio duration - this is the source of truth for video length
-        audio_duration = self._get_audio_duration(context.audio_path)
-        self.log_progress(f"Audio duration: {audio_duration:.1f}s (source of truth)")
+        # === DURATION CONTRACT ===
+        # Use the contract set after voice generation - this is immutable source of truth
+        if context.required_video_duration is not None:
+            audio_duration = context.required_video_duration
+            self.log_progress(f"[Contract] Using required duration: {audio_duration:.1f}s")
+        else:
+            # Fallback to measuring audio (shouldn't happen if orchestrator runs correctly)
+            audio_duration = self._get_audio_duration(context.audio_path)
+            self.log_progress(f"[Contract] WARNING: No contract set, measured audio: {audio_duration:.1f}s")
 
         # Check for video-first mode
         selected_videos = getattr(context, '_selected_videos', None)

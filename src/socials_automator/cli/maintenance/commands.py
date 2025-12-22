@@ -507,55 +507,47 @@ def sync_captions_cmd(
     # Show header
     show_sync_header(console, profile, total_reels)
 
-    # Run sync - either filtered or full
-    if only_empty and posted_reels:
-        # Sync only the filtered reels
-        from socials_automator.utils.caption_audit import SyncResult
+    # Run sync with real-time progress display
+    from socials_automator.utils.caption_audit import SyncResult
 
-        async def sync_filtered():
-            reels = []
-            for idx, reel_path in enumerate(posted_reels, 1):
-                console.print(f"  [{idx:3d}/{total_reels}] Syncing {reel_path.name[:50]}...")
-                status = await syncer.sync_reel(reel_path)
-                reels.append(status)
+    async def sync_with_progress():
+        reels = []
+        for idx, reel_path in enumerate(posted_reels, 1):
+            # Show progress BEFORE syncing (so user knows it's working)
+            console.print(f"  [{idx:3d}/{total_reels}] Syncing {reel_path.name[:50]}...", end="")
 
-            synced = sum(1 for r in reels if r.status == "synced")
-            empty_captions = sum(1 for r in reels if r.status == "empty")
-            mismatched = sum(1 for r in reels if r.status == "mismatch")
-            errors = sum(1 for r in reels if r.status == "error")
-            skipped = sum(1 for r in reels if r.status == "skipped")
+            # Sync the reel
+            status = await syncer.sync_reel(reel_path)
+            reels.append(status)
 
-            return SyncResult(
-                profile=profile,
-                total_reels=total_reels,
-                synced=synced,
-                empty_captions=empty_captions,
-                mismatched=mismatched,
-                errors=errors,
-                skipped=skipped,
-                reels=reels,
-            )
+            # Show result on same line
+            status_icon = {
+                "synced": "[green][OK][/green]",
+                "empty": "[red][EMPTY][/red]",
+                "mismatch": "[yellow][DIFF][/yellow]",
+                "error": "[red][X][/red]",
+                "skipped": "[dim][--][/dim]",
+            }.get(status.status, "[?]")
+            console.print(f" {status_icon}")
 
-        result = asyncio.run(sync_filtered())
-    else:
-        # Full sync
-        def progress_callback(current: int, total: int, reel_name: str) -> None:
-            pass
+        synced = sum(1 for r in reels if r.status == "synced")
+        empty_captions = sum(1 for r in reels if r.status == "empty")
+        mismatched = sum(1 for r in reels if r.status == "mismatch")
+        errors = sum(1 for r in reels if r.status == "error")
+        skipped = sum(1 for r in reels if r.status == "skipped")
 
-        result = asyncio.run(syncer.sync_profile(
-            profile_name=profile,
-            progress_callback=progress_callback,
-        ))
-
-    # Show individual results
-    for idx, reel in enumerate(result.reels, 1):
-        show_sync_progress(
-            console,
-            current=idx,
-            total=result.total_reels,
-            reel_name=reel.reel_name,
-            status=reel.status,
+        return SyncResult(
+            profile=profile,
+            total_reels=total_reels,
+            synced=synced,
+            empty_captions=empty_captions,
+            mismatched=mismatched,
+            errors=errors,
+            skipped=skipped,
+            reels=reels,
         )
+
+    result = asyncio.run(sync_with_progress())
 
     # Generate report if there are issues
     report_path = None

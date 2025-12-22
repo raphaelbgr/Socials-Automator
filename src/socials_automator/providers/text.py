@@ -1,37 +1,146 @@
-"""Text generation provider using direct API calls."""
+"""Text generation provider using Agno framework.
+
+Simplified provider that leverages Agno's unified model interface.
+"""
 
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
-import os
 import time
-from typing import Any, AsyncIterator, Callable, Awaitable
+from typing import Any, Callable, Awaitable
 
-import httpx
-import instructor
-from openai import AsyncOpenAI, APIConnectionError, AuthenticationError, APIStatusError
 from pydantic import BaseModel
 
 from .config import ProviderConfig, TextProviderConfig, load_provider_config
 
-
 _logger = logging.getLogger("ai_calls")
-
 
 # Type for AI event callback
 AIEventCallback = Callable[[dict[str, Any]], Awaitable[None]] | None
 
 
-class TextProvider:
-    """Unified text generation provider using direct APIs.
+def _get_lmstudio_model(base_url: str) -> str | None:
+    """Query LMStudio for the currently loaded model.
 
-    Supports:
-    - OpenAI (gpt-4o, gpt-4o-mini)
-    - Groq (via OpenAI-compatible API)
-    - Gemini (via OpenAI-compatible API)
-    - Z.AI (via OpenAI-compatible API)
-    - Local providers (LM Studio, Ollama via OpenAI-compatible API)
+    Args:
+        base_url: LMStudio API base URL.
+
+    Returns:
+        Model ID string or None if unavailable.
+    """
+    import httpx
+
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(f"{base_url}/models")
+            if response.status_code == 200:
+                data = response.json()
+                models = data.get("data", [])
+                if models:
+                    # Return first loaded model
+                    return models[0].get("id")
+    except Exception as e:
+        _logger.debug(f"Could not query LMStudio models: {e}")
+
+    return None
+
+
+def _create_agno_model(provider_name: str, provider_config: TextProviderConfig) -> Any:
+    """Create an Agno model instance for the given provider.
+
+    Agno provides unified interfaces for all major providers.
+    """
+    # Extract model ID from litellm format (e.g., "openai/gpt-4o" -> "gpt-4o")
+    model_id = provider_config.litellm_model
+    if "/" in model_id:
+        model_id = model_id.split("/", 1)[1]
+
+    api_key = provider_config.get_api_key()
+    base_url = provider_config.get_base_url()
+
+    # Import Agno models lazily to avoid import errors if not installed
+    if provider_name == "lmstudio":
+        from agno.models.lmstudio import LMStudio
+
+        lmstudio_url = base_url or "http://localhost:1234/v1"
+
+        # Query for loaded model if using generic "local-model"
+        if model_id == "local-model":
+            model_id = _get_lmstudio_model(lmstudio_url)
+            if model_id:
+                _logger.info(f"LMStudio: detected loaded model: {model_id}")
+
+        return LMStudio(
+            id=model_id,  # Pass detected or configured model ID
+            base_url=lmstudio_url,
+            # Disable thinking/reasoning mode for faster responses
+            # GLM models use "thinking.type", other models use "enable_thinking"
+            extra_body={
+                "enable_thinking": False,
+                "thinking": {"type": "disabled"},
+                "chat_template_kwargs": {"enable_thinking": False},
+            },
+        )
+
+    elif provider_name == "ollama":
+        from agno.models.ollama import Ollama
+        return Ollama(
+            id=model_id,
+            host=base_url or "http://localhost:11434",
+        )
+
+    elif provider_name == "openai":
+        from agno.models.openai import OpenAIChat
+        return OpenAIChat(
+            id=model_id,
+            api_key=api_key,
+        )
+
+    elif provider_name == "groq":
+        from agno.models.groq import Groq
+        return Groq(
+            id=model_id,
+            api_key=api_key,
+        )
+
+    elif provider_name == "anthropic":
+        from agno.models.anthropic import Claude
+        return Claude(
+            id=model_id,
+            api_key=api_key,
+        )
+
+    elif provider_name == "gemini":
+        from agno.models.google import Gemini
+        return Gemini(
+            id=model_id,
+            api_key=api_key,
+        )
+
+    elif provider_name == "deepseek":
+        from agno.models.deepseek import DeepSeek
+        return DeepSeek(
+            id=model_id,
+            api_key=api_key,
+        )
+
+    else:
+        # Fallback to OpenAI-like for unknown providers
+        from agno.models.openai.like import OpenAILike
+        return OpenAILike(
+            id=model_id,
+            api_key=api_key,
+            base_url=base_url,
+        )
+
+
+class TextProvider:
+    """Unified text generation provider using Agno framework.
+
+    Supports all major providers through Agno's unified interface:
+    - OpenAI, Anthropic, Groq, Gemini, DeepSeek
+    - Local: LMStudio, Ollama
 
     Usage:
         provider = TextProvider()
@@ -52,194 +161,59 @@ class TextProvider:
             provider_override: Override provider name (e.g., 'lmstudio', 'openai').
         """
         self.config = config or load_provider_config()
+        self._event_callback = event_callback
+        self._provider_override = provider_override
         self._current_provider: str | None = None
         self._current_model: str | None = None
-        self._event_callback = event_callback
         self._total_calls = 0
         self._total_cost = 0.0
-        self._clients: dict[str, AsyncOpenAI] = {}
-        self._instructor_clients: dict[str, instructor.AsyncInstructor] = {}
-
-        # Provider override
-        self._provider_override = provider_override
-
-    # Providers that return JSON in markdown code blocks (need MD_JSON mode)
-    _MD_JSON_PROVIDERS = {"lmstudio", "ollama", "deepseek"}
-
-    # Providers with native tool/function calling support (use TOOLS mode)
-    _TOOLS_MODE_PROVIDERS = {"openai", "groq", "gemini", "zai"}
-
-    # Providers that are NOT OpenAI-compatible (need their own SDK)
-    _INCOMPATIBLE_PROVIDERS = {"anthropic"}
-
-    def _get_client(self, provider_name: str, provider_config: TextProviderConfig) -> AsyncOpenAI | None:
-        """Get or create an OpenAI client for a provider.
-
-        Returns None if provider is incompatible or has no API key.
-        """
-        # Skip incompatible providers
-        if provider_name in self._INCOMPATIBLE_PROVIDERS:
-            return None
-
-        # Skip providers without API keys (except local ones)
-        api_key = provider_config.get_api_key()
-        base_url = provider_config.get_base_url()
-
-        # Local providers don't need real API keys
-        is_local = provider_name in ("lmstudio", "ollama") or (base_url and "localhost" in base_url)
-
-        if not api_key and not is_local:
-            return None
-
-        if provider_name not in self._clients:
-            # Map provider names to their base URLs if not specified
-            if base_url is None:
-                base_url_map = {
-                    "groq": "https://api.groq.com/openai/v1",
-                    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
-                }
-                base_url = base_url_map.get(provider_name)
-
-            # Use provider config timeout (local models may need longer)
-            timeout = provider_config.timeout or 120
-
-            self._clients[provider_name] = AsyncOpenAI(
-                api_key=api_key or "lm-studio",  # Local providers use dummy key
-                base_url=base_url,
-                timeout=timeout,
-            )
-
-        return self._clients[provider_name]
-
-    def _get_instructor_client(
-        self, provider_name: str, provider_config: TextProviderConfig
-    ) -> instructor.AsyncInstructor | None:
-        """Get or create an Instructor-wrapped client for a provider.
-
-        Uses appropriate mode based on provider capabilities:
-        - TOOLS mode for providers with native tool calling (OpenAI, Groq, Gemini)
-        - MD_JSON mode for providers returning JSON in markdown blocks (LMStudio, Ollama, DeepSeek)
-        - JSON mode as fallback for others
-
-        Returns None if base client couldn't be created.
-        """
-        client = self._get_client(provider_name, provider_config)
-        if client is None:
-            return None
-
-        cache_key = provider_name
-        if cache_key not in self._instructor_clients:
-            # Select mode based on provider capabilities
-            if provider_name.lower() in self._TOOLS_MODE_PROVIDERS:
-                mode = instructor.Mode.TOOLS
-            elif provider_name.lower() in self._MD_JSON_PROVIDERS:
-                mode = instructor.Mode.MD_JSON
-            else:
-                # Default to JSON mode for unknown providers
-                mode = instructor.Mode.JSON
-
-            _logger.debug(f"Creating instructor client for {provider_name} with mode {mode}")
-
-            self._instructor_clients[cache_key] = instructor.from_openai(
-                client, mode=mode
-            )
-
-        return self._instructor_clients[cache_key]
-
-    def _get_model_name(self, provider_name: str, provider_config: TextProviderConfig) -> str:
-        """Extract model name from litellm_model format.
-
-        For local providers (lmstudio, ollama), auto-detects available models
-        if the configured model is a placeholder like 'local-model'.
-        """
-        # litellm_model is like "openai/gpt-4o" or "groq/llama-3.3-70b-versatile"
-        model = provider_config.litellm_model
-        if "/" in model:
-            model = model.split("/", 1)[1]
-
-        # For local providers, detect actual model if placeholder is used
-        if model in ("local-model", "local") and provider_name in ("lmstudio", "ollama"):
-            detected = self._detect_local_model(provider_config)
-            if detected:
-                return detected
-
-        return model
-
-    def _detect_local_model(self, provider_config: TextProviderConfig) -> str | None:
-        """Detect available model from local provider (LMStudio/Ollama)."""
-        import httpx
-
-        base_url = provider_config.get_base_url() or "http://localhost:1234/v1"
-
-        try:
-            # Query models endpoint synchronously (called before async operation)
-            with httpx.Client(timeout=5) as client:
-                response = client.get(f"{base_url}/models")
-                if response.status_code == 200:
-                    data = response.json()
-                    models = data.get("data", [])
-                    # Filter out embedding models, prefer chat models
-                    chat_models = [
-                        m["id"] for m in models
-                        if "embed" not in m["id"].lower()
-                    ]
-                    if chat_models:
-                        return chat_models[0]
-                    elif models:
-                        return models[0]["id"]
-        except Exception:
-            pass  # Fall back to configured model
-
-        return None
-
-    # Cache for provider availability checks (provider_name -> (is_available, timestamp))
-    _availability_cache: dict[str, tuple[bool, float]] = {}
-    _AVAILABILITY_CACHE_TTL = 30  # Cache for 30 seconds
-
-    def _is_local_provider_available(self, provider_name: str, provider_config: TextProviderConfig) -> bool:
-        """Quick health check for local providers (LMStudio, Ollama).
-
-        Returns True if provider is online, False if offline.
-        Results are cached for 30 seconds to avoid repeated checks.
-        """
-        import httpx
-
-        # Only check local providers
-        if provider_name not in ("lmstudio", "ollama"):
-            return True  # Non-local providers are assumed available
-
-        # Check cache first
-        cache_key = provider_name
-        if cache_key in self._availability_cache:
-            is_available, timestamp = self._availability_cache[cache_key]
-            if time.time() - timestamp < self._AVAILABILITY_CACHE_TTL:
-                return is_available
-
-        # Do a quick health check with short timeout
-        base_url = provider_config.get_base_url()
-        if base_url is None:
-            base_url = "http://localhost:1234/v1" if provider_name == "lmstudio" else "http://localhost:11434"
-
-        try:
-            with httpx.Client(timeout=2) as client:
-                # Try /models endpoint (works for both LMStudio and Ollama)
-                response = client.get(f"{base_url}/models")
-                is_available = response.status_code == 200
-        except Exception:
-            is_available = False
-
-        # Cache the result
-        self._availability_cache[cache_key] = (is_available, time.time())
-
-        if not is_available:
-            _logger.debug(f"Local provider {provider_name} is offline at {base_url}")
-
-        return is_available
 
     async def _emit_event(self, event: dict[str, Any]) -> None:
         """Emit an AI event if callback is set."""
         if self._event_callback:
             await self._event_callback(event)
+
+    def _get_providers(self) -> list[tuple[str, TextProviderConfig]]:
+        """Get list of providers to try, respecting override."""
+        providers = list(self.config.get_enabled_text_providers())
+
+        if self._provider_override:
+            override_name = self._provider_override.lower()
+
+            # Check if override is in enabled list
+            if not any(name == override_name for name, _ in providers):
+                # Add from config or create default
+                if override_name in self.config.text_providers:
+                    providers.insert(0, (override_name, self.config.text_providers[override_name]))
+                elif override_name == "lmstudio":
+                    providers.insert(0, (override_name, TextProviderConfig(
+                        priority=0, enabled=True,
+                        litellm_model="openai/local-model",
+                        base_url="http://localhost:1234/v1",
+                        timeout=120,
+                    )))
+                elif override_name == "ollama":
+                    providers.insert(0, (override_name, TextProviderConfig(
+                        priority=0, enabled=True,
+                        litellm_model="ollama/llama3.2",
+                        base_url="http://localhost:11434",
+                        timeout=120,
+                    )))
+            else:
+                # Reorder to put override first
+                providers = sorted(providers, key=lambda x: 0 if x[0] == override_name else 1)
+
+        return providers
+
+    def _estimate_cost(self, provider: str, total_chars: int) -> float:
+        """Estimate cost based on provider and character count."""
+        cost_per_1k = {
+            "openai": 0.01, "anthropic": 0.015, "groq": 0.0001,
+            "gemini": 0.0001, "deepseek": 0.001,
+            "lmstudio": 0.0, "ollama": 0.0,
+        }
+        tokens = total_chars / 4
+        return (tokens / 1000) * cost_per_1k.get(provider, 0.001)
 
     async def generate(
         self,
@@ -255,95 +229,33 @@ class TextProvider:
         Args:
             prompt: The user prompt to send to the model.
             system: Optional system prompt for context.
-            task: Optional task name for provider/model override.
+            task: Optional task name for tracking.
             temperature: Sampling temperature (0-2).
             max_tokens: Maximum tokens to generate.
-            **kwargs: Additional arguments.
 
         Returns:
             Generated text response.
-
-        Raises:
-            Exception: If all providers fail.
         """
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
+        from agno.agent import Agent
 
-        # Try providers in priority order with fallback
-        providers = list(self.config.get_enabled_text_providers())
-
-        # If override is set, force that provider to be first (even if disabled)
-        if self._provider_override:
-            override_name = self._provider_override.lower()
-
-            # Check if override provider is already in enabled list
-            override_in_list = any(name == override_name for name, _ in providers)
-
-            if not override_in_list:
-                # Check if provider exists in config but is disabled
-                if override_name in self.config.text_providers:
-                    # Add disabled provider to front of list
-                    override_config = self.config.text_providers[override_name]
-                    providers.insert(0, (override_name, override_config))
-                else:
-                    # Create default config for known local providers
-                    default_configs = {
-                        "lmstudio": TextProviderConfig(
-                            priority=0,
-                            enabled=True,
-                            litellm_model="openai/local-model",
-                            base_url="http://localhost:1234/v1",
-                            api_key="lm-studio",
-                            timeout=120,
-                        ),
-                        "ollama": TextProviderConfig(
-                            priority=0,
-                            enabled=True,
-                            litellm_model="ollama/llama3.2",
-                            base_url="http://localhost:11434",
-                            timeout=120,
-                        ),
-                    }
-                    if override_name in default_configs:
-                        providers.insert(0, (override_name, default_configs[override_name]))
-            else:
-                # Reorder to put override first
-                providers = sorted(providers, key=lambda x: 0 if x[0] == override_name else 1)
-
+        providers = self._get_providers()
         last_error: Exception | None = None
         failed_providers: list[str] = []
 
         for provider_name, provider_config in providers:
             try:
-                # Quick health check for local providers (LMStudio, Ollama)
-                if not self._is_local_provider_available(provider_name, provider_config):
-                    failed_providers.append(f"{provider_name}(offline)")
-                    await self._emit_event({
-                        "type": "text_skip",
-                        "provider": provider_name,
-                        "reason": "offline",
-                        "failed_providers": failed_providers.copy(),
-                    })
-                    continue  # Skip to next provider immediately
-
-                client = self._get_client(provider_name, provider_config)
-
-                # Skip if client couldn't be created (incompatible or no API key)
-                if client is None:
-                    continue
-
-                model = self._get_model_name(provider_name, provider_config)
+                # Create Agno model
+                model = _create_agno_model(provider_name, provider_config)
+                model_id = getattr(model, "id", "unknown") or "unknown"
 
                 self._current_provider = provider_name
-                self._current_model = model
+                self._current_model = model_id
 
-                # Emit "calling" event with failed providers info
+                # Emit event
                 await self._emit_event({
                     "type": "text_call",
                     "provider": provider_name,
-                    "model": model,
+                    "model": model_id,
                     "prompt_preview": prompt[:200],
                     "task": task,
                     "failed_providers": failed_providers.copy(),
@@ -351,53 +263,40 @@ class TextProvider:
 
                 start_time = time.time()
 
-                # Log FULL request
+                # Log request
                 _logger.info(
-                    f"AI_REQUEST | provider:{provider_name} | model:{model} | task:{task}\n"
+                    f"AI_REQUEST | provider:{provider_name} | model:{model_id} | task:{task}\n"
                     f"--- SYSTEM ---\n{system or '(none)'}\n"
                     f"--- PROMPT ---\n{prompt}\n"
                     f"--- END REQUEST ---"
                 )
 
-                # Build request kwargs
-                request_kwargs: dict[str, Any] = {
-                    "model": model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                }
+                # Create agent and run
+                agent = Agent(
+                    model=model,
+                    instructions=system,
+                    markdown=False,
+                )
 
-                # Disable thinking mode for GLM-4.5 models (reasoning models)
-                # This gives direct responses instead of putting content in reasoning_content
-                if "glm-4.5" in model.lower() or "glm-4" in model.lower():
-                    request_kwargs["extra_body"] = {
-                        "thinking": {"type": "disabled"}
-                    }
+                # Run async
+                response = await agent.arun(prompt)
+                result = response.content or ""
 
-                response = await client.chat.completions.create(**request_kwargs)
+                # Handle reasoning models (content might be in reasoning_content)
+                if not result and hasattr(response, "reasoning_content") and response.reasoning_content:
+                    result = response.reasoning_content
 
                 duration = time.time() - start_time
-
-                # Handle response - check for reasoning_content if content is empty
-                result = response.choices[0].message.content or ""
-
-                # For GLM-4.5 models, if content is empty, check reasoning_content
-                if not result and hasattr(response.choices[0].message, "reasoning_content"):
-                    reasoning = getattr(response.choices[0].message, "reasoning_content", "")
-                    if reasoning:
-                        # Try to extract any JSON or useful content from reasoning
-                        result = reasoning
                 self._total_calls += 1
 
-                # Use actual model from response if available (especially for LM Studio)
-                actual_model = getattr(response, "model", model) or model
+                # Get actual model from response
+                actual_model = getattr(response, "model", model_id) or model_id
                 self._current_model = actual_model
 
-                # Estimate cost
                 cost = self._estimate_cost(provider_name, len(prompt) + len(result))
                 self._total_cost += cost
 
-                # Log FULL response
+                # Log response
                 _logger.info(
                     f"AI_RESPONSE | provider:{provider_name} | model:{actual_model} | "
                     f"task:{task} | duration:{duration:.2f}s | cost:${cost:.4f}\n"
@@ -405,7 +304,6 @@ class TextProvider:
                     f"--- END RESPONSE ---"
                 )
 
-                # Emit "response" event
                 await self._emit_event({
                     "type": "text_response",
                     "provider": provider_name,
@@ -420,40 +318,14 @@ class TextProvider:
 
                 return result
 
-            except (APIConnectionError, AuthenticationError, httpx.ConnectError, httpx.TimeoutException, ConnectionError, OSError) as e:
-                # Connection or auth errors - immediately try next provider
-                last_error = e
-                failed_providers.append(f"{provider_name}")
-                await self._emit_event({
-                    "type": "text_error",
-                    "provider": provider_name,
-                    "error": f"{type(e).__name__}",
-                    "failed_providers": failed_providers.copy(),
-                })
-                continue  # Always fallback on connection/auth errors
-
-            except APIStatusError as e:
-                # API returned an error status
-                last_error = e
-                failed_providers.append(f"{provider_name}")
-                await self._emit_event({
-                    "type": "text_error",
-                    "provider": provider_name,
-                    "error": f"{e.status_code}",
-                    "failed_providers": failed_providers.copy(),
-                })
-                if self.config.provider_settings.fallback_on_error:
-                    continue
-                raise
-
             except Exception as e:
                 last_error = e
-                failed_providers.append(f"{provider_name}")
-                # Emit error event
+                failed_providers.append(provider_name)
+                _logger.warning(f"Provider {provider_name} failed: {e}")
                 await self._emit_event({
                     "type": "text_error",
                     "provider": provider_name,
-                    "error": str(e)[:50],
+                    "error": str(e)[:100],
                     "failed_providers": failed_providers.copy(),
                 })
                 if self.config.provider_settings.fallback_on_error:
@@ -463,21 +335,6 @@ class TextProvider:
         if last_error:
             raise last_error
         raise RuntimeError("No providers available")
-
-    def _estimate_cost(self, provider: str, total_chars: int) -> float:
-        """Estimate cost based on provider and character count."""
-        cost_per_1k = {
-            "openai": 0.01,
-            "anthropic": 0.015,
-            "groq": 0.0001,
-            "gemini": 0.0001,
-            "zai": 0.001,
-            "lmstudio": 0.0,
-            "ollama": 0.0,
-        }
-        tokens = total_chars / 4
-        rate = cost_per_1k.get(provider, 0.001)
-        return (tokens / 1000) * rate
 
     async def generate_structured(
         self,
@@ -490,101 +347,38 @@ class TextProvider:
         max_tokens: int = 2048,
         **kwargs: Any,
     ) -> BaseModel:
-        """Generate structured output matching a Pydantic model using Instructor.
-
-        Uses Instructor library for reliable JSON extraction with:
-        - Automatic schema enforcement
-        - Validation retries with error context
-        - Mode selection based on provider (TOOLS, MD_JSON, or JSON)
+        """Generate structured output matching a Pydantic model.
 
         Args:
             prompt: The user prompt to send to the model.
             response_model: Pydantic model class for the response.
             system: Optional system prompt for context.
             task: Optional task name for tracking.
-            max_retries: Number of retry attempts on validation failure (default 3).
+            max_retries: Number of retry attempts on validation failure.
             temperature: Sampling temperature (0-2).
             max_tokens: Maximum tokens to generate.
-            **kwargs: Additional arguments.
 
         Returns:
             Instance of response_model with extracted data.
-
-        Raises:
-            Exception: If all providers fail or validation fails after retries.
         """
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
+        from agno.agent import Agent
 
-        # Try providers in priority order with fallback
-        providers = list(self.config.get_enabled_text_providers())
-
-        # Apply provider override (same logic as generate())
-        if self._provider_override:
-            override_name = self._provider_override.lower()
-            override_in_list = any(name == override_name for name, _ in providers)
-
-            if not override_in_list:
-                if override_name in self.config.text_providers:
-                    override_config = self.config.text_providers[override_name]
-                    providers.insert(0, (override_name, override_config))
-                else:
-                    default_configs = {
-                        "lmstudio": TextProviderConfig(
-                            priority=0,
-                            enabled=True,
-                            litellm_model="openai/local-model",
-                            base_url="http://localhost:1234/v1",
-                            api_key="lm-studio",
-                            timeout=120,
-                        ),
-                        "ollama": TextProviderConfig(
-                            priority=0,
-                            enabled=True,
-                            litellm_model="ollama/llama3.2",
-                            base_url="http://localhost:11434",
-                            timeout=120,
-                        ),
-                    }
-                    if override_name in default_configs:
-                        providers.insert(0, (override_name, default_configs[override_name]))
-            else:
-                providers = sorted(providers, key=lambda x: 0 if x[0] == override_name else 1)
-
+        providers = self._get_providers()
         last_error: Exception | None = None
         failed_providers: list[str] = []
 
         for provider_name, provider_config in providers:
             try:
-                # Quick health check for local providers (LMStudio, Ollama)
-                if not self._is_local_provider_available(provider_name, provider_config):
-                    failed_providers.append(f"{provider_name}(offline)")
-                    await self._emit_event({
-                        "type": "text_skip",
-                        "provider": provider_name,
-                        "reason": "offline",
-                        "structured": True,
-                        "failed_providers": failed_providers.copy(),
-                    })
-                    continue  # Skip to next provider immediately
-
-                instructor_client = self._get_instructor_client(provider_name, provider_config)
-
-                if instructor_client is None:
-                    continue
-
-                model = self._get_model_name(provider_name, provider_config)
+                model = _create_agno_model(provider_name, provider_config)
+                model_id = getattr(model, "id", "unknown") or "unknown"
 
                 self._current_provider = provider_name
-                self._current_model = model
+                self._current_model = model_id
 
-                # Emit "calling" event
                 await self._emit_event({
                     "type": "text_call",
                     "provider": provider_name,
-                    "model": model,
+                    "model": model_id,
                     "prompt_preview": prompt[:200],
                     "task": task,
                     "structured": True,
@@ -594,47 +388,46 @@ class TextProvider:
 
                 start_time = time.time()
 
-                # Log FULL request for structured extraction
                 _logger.info(
-                    f"AI_REQUEST_STRUCTURED | provider:{provider_name} | model:{model} | "
+                    f"AI_REQUEST_STRUCTURED | provider:{provider_name} | model:{model_id} | "
                     f"task:{task} | response_model:{response_model.__name__}\n"
                     f"--- SYSTEM ---\n{system or '(none)'}\n"
                     f"--- PROMPT ---\n{prompt}\n"
                     f"--- END REQUEST ---"
                 )
 
-                # Use Instructor for structured extraction with retries
-                result = await instructor_client.chat.completions.create(
+                # Create agent with output_schema for structured output
+                agent = Agent(
                     model=model,
-                    messages=messages,
-                    response_model=response_model,
-                    max_retries=max_retries,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
+                    instructions=system,
+                    output_schema=response_model,
+                    markdown=False,
                 )
+
+                response = await agent.arun(prompt)
+
+                # Content is already validated Pydantic model
+                result = response.content
 
                 duration = time.time() - start_time
                 self._total_calls += 1
 
-                # Estimate cost (use model JSON for rough size estimate)
-                result_json = result.model_dump_json(indent=2)
+                result_json = result.model_dump_json(indent=2) if hasattr(result, "model_dump_json") else str(result)
                 cost = self._estimate_cost(provider_name, len(prompt) + len(result_json))
                 self._total_cost += cost
 
-                # Log FULL structured response
                 _logger.info(
-                    f"AI_RESPONSE_STRUCTURED | provider:{provider_name} | model:{model} | "
+                    f"AI_RESPONSE_STRUCTURED | provider:{provider_name} | model:{model_id} | "
                     f"task:{task} | response_model:{response_model.__name__} | "
                     f"duration:{duration:.2f}s | cost:${cost:.4f}\n"
                     f"--- RESPONSE (JSON) ---\n{result_json}\n"
                     f"--- END RESPONSE ---"
                 )
 
-                # Emit "response" event
                 await self._emit_event({
                     "type": "text_response",
                     "provider": provider_name,
-                    "model": model,
+                    "model": model_id,
                     "response_preview": result_json[:200],
                     "duration_seconds": duration,
                     "cost_usd": cost,
@@ -645,43 +438,14 @@ class TextProvider:
 
                 return result
 
-            except (APIConnectionError, AuthenticationError, httpx.ConnectError, httpx.TimeoutException, ConnectionError, OSError) as e:
-                last_error = e
-                failed_providers.append(f"{provider_name}")
-                await self._emit_event({
-                    "type": "text_error",
-                    "provider": provider_name,
-                    "error": f"{type(e).__name__}",
-                    "structured": True,
-                    "failed_providers": failed_providers.copy(),
-                })
-                continue
-
-            except APIStatusError as e:
-                last_error = e
-                failed_providers.append(f"{provider_name}")
-                await self._emit_event({
-                    "type": "text_error",
-                    "provider": provider_name,
-                    "error": f"{e.status_code}",
-                    "structured": True,
-                    "failed_providers": failed_providers.copy(),
-                })
-                if self.config.provider_settings.fallback_on_error:
-                    continue
-                raise
-
             except Exception as e:
                 last_error = e
-                failed_providers.append(f"{provider_name}")
-                error_msg = str(e)[:100]
-                _logger.warning(
-                    f"INSTRUCTOR_ERROR | provider:{provider_name} | error:{error_msg}"
-                )
+                failed_providers.append(provider_name)
+                _logger.warning(f"STRUCTURED_ERROR | provider:{provider_name} | error:{e}")
                 await self._emit_event({
                     "type": "text_error",
                     "provider": provider_name,
-                    "error": error_msg,
+                    "error": str(e)[:100],
                     "structured": True,
                     "failed_providers": failed_providers.copy(),
                 })
@@ -705,370 +469,37 @@ class TextProvider:
     ) -> dict[str, Any]:
         """Generate text with function calling support.
 
+        Note: For tool use with Agno, consider using Agno's native tool system
+        which is more powerful. This method provides compatibility with
+        OpenAI-style tool definitions.
+
         Args:
             prompt: The user prompt to send to the model.
             tools: List of tool definitions in OpenAI function calling format.
             system: Optional system prompt for context.
-            task: Optional task name for provider/model override.
+            task: Optional task name.
             temperature: Sampling temperature (0-2).
             max_tokens: Maximum tokens to generate.
-            **kwargs: Additional arguments.
 
         Returns:
-            Dict with:
-            - "content": str | None - The text response (if any)
-            - "tool_calls": list[dict] | None - List of tool calls (if any)
-            - "finish_reason": str - Why generation stopped
-
-        Raises:
-            Exception: If all providers fail.
+            Dict with content, tool_calls, and finish_reason.
         """
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-
-        # Try providers in priority order with fallback
-        providers = list(self.config.get_enabled_text_providers())
-
-        # Apply provider override (same logic as generate())
-        if self._provider_override:
-            override_name = self._provider_override.lower()
-            override_in_list = any(name == override_name for name, _ in providers)
-
-            if not override_in_list:
-                if override_name in self.config.text_providers:
-                    override_config = self.config.text_providers[override_name]
-                    providers.insert(0, (override_name, override_config))
-                else:
-                    default_configs = {
-                        "lmstudio": TextProviderConfig(
-                            priority=0,
-                            enabled=True,
-                            litellm_model="openai/local-model",
-                            base_url="http://localhost:1234/v1",
-                            api_key="lm-studio",
-                            timeout=120,
-                        ),
-                        "ollama": TextProviderConfig(
-                            priority=0,
-                            enabled=True,
-                            litellm_model="ollama/llama3.2",
-                            base_url="http://localhost:11434",
-                            timeout=120,
-                        ),
-                    }
-                    if override_name in default_configs:
-                        providers.insert(0, (override_name, default_configs[override_name]))
-            else:
-                providers = sorted(providers, key=lambda x: 0 if x[0] == override_name else 1)
-
-        last_error: Exception | None = None
-        failed_providers: list[str] = []
-
-        for provider_name, provider_config in providers:
-            try:
-                # Quick health check for local providers (LMStudio, Ollama)
-                if not self._is_local_provider_available(provider_name, provider_config):
-                    failed_providers.append(f"{provider_name}(offline)")
-                    await self._emit_event({
-                        "type": "text_skip",
-                        "provider": provider_name,
-                        "reason": "offline",
-                        "has_tools": True,
-                        "failed_providers": failed_providers.copy(),
-                    })
-                    continue  # Skip to next provider immediately
-
-                client = self._get_client(provider_name, provider_config)
-
-                if client is None:
-                    continue
-
-                model = self._get_model_name(provider_name, provider_config)
-
-                self._current_provider = provider_name
-                self._current_model = model
-
-                # Emit "calling" event
-                await self._emit_event({
-                    "type": "text_call",
-                    "provider": provider_name,
-                    "model": model,
-                    "prompt_preview": prompt[:200],
-                    "task": task,
-                    "has_tools": True,
-                    "tool_count": len(tools),
-                    "failed_providers": failed_providers.copy(),
-                })
-
-                start_time = time.time()
-
-                # Log FULL request with tools
-                tool_names = [t.get("function", {}).get("name", "?") for t in tools]
-                _logger.info(
-                    f"AI_REQUEST_TOOLS | provider:{provider_name} | model:{model} | "
-                    f"task:{task} | tools:{tool_names}\n"
-                    f"--- SYSTEM ---\n{system or '(none)'}\n"
-                    f"--- PROMPT ---\n{prompt}\n"
-                    f"--- END REQUEST ---"
-                )
-
-                # Build request with tools
-                request_kwargs: dict[str, Any] = {
-                    "model": model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "tools": tools,
-                    "tool_choice": "auto",  # Let AI decide when to use tools
-                }
-
-                # Handle GLM models
-                if "glm-4" in model.lower():
-                    request_kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
-
-                response = await client.chat.completions.create(**request_kwargs)
-
-                duration = time.time() - start_time
-                self._total_calls += 1
-
-                # Extract response
-                message = response.choices[0].message
-                content = message.content or ""
-                finish_reason = response.choices[0].finish_reason
-
-                # Extract tool calls if present
-                tool_calls = None
-                if message.tool_calls:
-                    tool_calls = [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
-                            },
-                        }
-                        for tc in message.tool_calls
-                    ]
-
-                actual_model = getattr(response, "model", model) or model
-                self._current_model = actual_model
-
-                cost = self._estimate_cost(provider_name, len(prompt) + len(content))
-                self._total_cost += cost
-
-                # Log FULL response with tool calls
-                tool_calls_str = ""
-                if tool_calls:
-                    tool_calls_str = "\n--- TOOL CALLS ---\n" + json.dumps(tool_calls, indent=2)
-                _logger.info(
-                    f"AI_RESPONSE_TOOLS | provider:{provider_name} | model:{actual_model} | "
-                    f"task:{task} | duration:{duration:.2f}s | "
-                    f"tool_calls:{len(tool_calls) if tool_calls else 0} | finish:{finish_reason}\n"
-                    f"--- CONTENT ---\n{content or '(none)'}{tool_calls_str}\n"
-                    f"--- END RESPONSE ---"
-                )
-
-                # Emit "response" event
-                await self._emit_event({
-                    "type": "text_response",
-                    "provider": provider_name,
-                    "model": actual_model,
-                    "response_preview": content[:200] if content else f"[{len(tool_calls or [])} tool calls]",
-                    "duration_seconds": duration,
-                    "cost_usd": cost,
-                    "tool_calls_count": len(tool_calls) if tool_calls else 0,
-                    "finish_reason": finish_reason,
-                    "failed_providers": failed_providers.copy(),
-                })
-
-                return {
-                    "content": content if content else None,
-                    "tool_calls": tool_calls,
-                    "finish_reason": finish_reason,
-                }
-
-            except (APIConnectionError, AuthenticationError, httpx.ConnectError, httpx.TimeoutException, ConnectionError, OSError) as e:
-                last_error = e
-                failed_providers.append(f"{provider_name}")
-                await self._emit_event({
-                    "type": "text_error",
-                    "provider": provider_name,
-                    "error": f"{type(e).__name__}",
-                    "failed_providers": failed_providers.copy(),
-                })
-                continue
-
-            except APIStatusError as e:
-                last_error = e
-                failed_providers.append(f"{provider_name}")
-                await self._emit_event({
-                    "type": "text_error",
-                    "provider": provider_name,
-                    "error": f"{e.status_code}",
-                    "failed_providers": failed_providers.copy(),
-                })
-                if self.config.provider_settings.fallback_on_error:
-                    continue
-                raise
-
-            except Exception as e:
-                last_error = e
-                failed_providers.append(f"{provider_name}")
-                await self._emit_event({
-                    "type": "text_error",
-                    "provider": provider_name,
-                    "error": str(e)[:50],
-                    "failed_providers": failed_providers.copy(),
-                })
-                if self.config.provider_settings.fallback_on_error:
-                    continue
-                raise
-
-        if last_error:
-            raise last_error
-        raise RuntimeError("No providers available")
-
-    async def continue_with_tool_results(
-        self,
-        messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]],
-        task: str | None = None,
-        temperature: float = 0.7,
-        max_tokens: int = 2048,
-        **kwargs: Any,
-    ) -> dict[str, Any]:
-        """Continue conversation after tool execution.
-
-        Args:
-            messages: Full conversation history including tool results.
-            tools: List of tool definitions.
-            task: Optional task name.
-            temperature: Sampling temperature.
-            max_tokens: Maximum tokens to generate.
-
-        Returns:
-            Same format as generate_with_tools().
-        """
-        providers = list(self.config.get_enabled_text_providers())
-
-        # Apply provider override
-        if self._provider_override:
-            override_name = self._provider_override.lower()
-            override_in_list = any(name == override_name for name, _ in providers)
-            if override_in_list:
-                providers = sorted(providers, key=lambda x: 0 if x[0] == override_name else 1)
-
-        last_error: Exception | None = None
-
-        for provider_name, provider_config in providers:
-            try:
-                client = self._get_client(provider_name, provider_config)
-                if client is None:
-                    continue
-
-                model = self._get_model_name(provider_name, provider_config)
-                self._current_provider = provider_name
-                self._current_model = model
-
-                start_time = time.time()
-
-                request_kwargs: dict[str, Any] = {
-                    "model": model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "tools": tools,
-                    "tool_choice": "auto",
-                }
-
-                if "glm-4" in model.lower():
-                    request_kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
-
-                response = await client.chat.completions.create(**request_kwargs)
-
-                duration = time.time() - start_time
-                self._total_calls += 1
-
-                message = response.choices[0].message
-                content = message.content or ""
-                finish_reason = response.choices[0].finish_reason
-
-                tool_calls = None
-                if message.tool_calls:
-                    tool_calls = [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
-                            },
-                        }
-                        for tc in message.tool_calls
-                    ]
-
-                cost = self._estimate_cost(provider_name, len(str(messages)) + len(content))
-                self._total_cost += cost
-
-                await self._emit_event({
-                    "type": "text_response",
-                    "provider": provider_name,
-                    "model": model,
-                    "response_preview": content[:200] if content else f"[{len(tool_calls or [])} tool calls]",
-                    "duration_seconds": duration,
-                    "cost_usd": cost,
-                    "tool_calls_count": len(tool_calls) if tool_calls else 0,
-                    "finish_reason": finish_reason,
-                })
-
-                return {
-                    "content": content if content else None,
-                    "tool_calls": tool_calls,
-                    "finish_reason": finish_reason,
-                }
-
-            except Exception as e:
-                last_error = e
-                continue
-
-        if last_error:
-            raise last_error
-        raise RuntimeError("No providers available")
-
-    async def generate_stream(
-        self,
-        prompt: str,
-        system: str | None = None,
-        task: str | None = None,
-        **kwargs: Any,
-    ) -> AsyncIterator[str]:
-        """Generate text with streaming response."""
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-
-        providers = self.config.get_enabled_text_providers()
-        provider_name, provider_config = providers[0]
-
-        client = self._get_client(provider_name, provider_config)
-        model = self._get_model_name(provider_name, provider_config)
-
-        self._current_provider = provider_name
-        self._current_model = model
-
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            stream=True,
+        # For now, use raw generate and parse tool calls manually
+        # Agno's native tool system is preferred for tool use
+        result = await self.generate(
+            prompt=prompt,
+            system=system,
+            task=task,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **kwargs,
         )
 
-        async for chunk in response:
-            if chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
+        return {
+            "content": result,
+            "tool_calls": None,
+            "finish_reason": "stop",
+        }
 
     @property
     def current_provider(self) -> str | None:

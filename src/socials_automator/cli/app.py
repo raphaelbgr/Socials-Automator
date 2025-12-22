@@ -100,10 +100,12 @@ def _patched_get_event_loop():
 asyncio.get_event_loop = _patched_get_event_loop
 
 # Create Typer app
+# Disable Rich tracebacks on Windows to avoid Unicode encoding errors (cp1252)
 app = typer.Typer(
     name="socials",
     help="AI-powered Instagram content generator",
     add_completion=False,
+    pretty_exceptions_enable=sys.platform != "win32",
 )
 
 

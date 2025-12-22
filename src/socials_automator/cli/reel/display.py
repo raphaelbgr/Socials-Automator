@@ -45,10 +45,17 @@ def show_reel_config(console: Console, params: ReelGenerationParams) -> None:
     news_info = ""
     if params.is_news_profile:
         edition = params.news_edition or "auto"
+        if params.news_story_count:
+            stories = str(params.news_story_count)
+        else:
+            # Calculate what auto will produce based on duration
+            from socials_automator.news.curator import calculate_stories_for_duration
+            auto_count = calculate_stories_for_duration(params.target_duration)
+            stories = f"auto (~{auto_count} for {format_duration(params.target_duration)})"
         news_info = (
             f"\n[bold magenta]News Mode:[/bold magenta] Enabled\n"
             f"Edition: [magenta]{edition}[/magenta]\n"
-            f"Stories: [magenta]{params.news_story_count}[/magenta]\n"
+            f"Stories: [magenta]{stories}[/magenta]\n"
             f"Max Age: [magenta]{params.news_max_age_hours}h[/magenta]"
         )
 

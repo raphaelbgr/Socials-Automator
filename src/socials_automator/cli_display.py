@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import sys
+
 from rich.panel import Panel
 from rich.console import Console
 
 from .content.models import GenerationProgress
 
-console = Console()
+# Use safe_box on Windows to avoid Unicode encoding errors
+_safe_box = sys.platform == "win32"
+console = Console(safe_box=_safe_box)
 
 
 class ContentGenerationDisplay:

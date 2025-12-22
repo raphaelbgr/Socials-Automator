@@ -202,6 +202,7 @@ class ReelGeneratorService:
             target_duration=params.target_duration,
             gpu_accelerate=params.gpu_accelerate,
             gpu_index=params.gpu_index,
+            profile_path=params.profile_path,
         )
 
         try:
@@ -259,6 +260,7 @@ class ReelGeneratorService:
             progress_callback=progress_callback,
             gpu_accelerate=params.gpu_accelerate,
             gpu_index=params.gpu_index,
+            profile_path=params.profile_path,
         )
 
     def _create_news_pipeline(self, params: ReelGenerationParams, progress_callback):
@@ -326,10 +328,10 @@ class ReelGeneratorService:
             folder_name = output_dir.name
             shutil.rmtree(output_dir)
             console.print()
-            console.print(f"[dim]{'─' * 60}[/dim]")
+            console.print(f"[dim]{'-' * 60}[/dim]")
             console.print(f"[bold yellow]>>> CLEANUP[/bold yellow]")
             console.print(f"[yellow][!][/yellow] Removed failed output folder: [cyan]{folder_name}[/cyan]")
-            console.print(f"[dim]{'─' * 60}[/dim]")
+            console.print(f"[dim]{'-' * 60}[/dim]")
         except Exception as e:
             console.print(f"[red][X] Failed to cleanup: {e}[/red]")
 
@@ -1317,11 +1319,53 @@ class ReelUploaderService:
             caption_hashtags_path = reel_path / "caption+hashtags.txt"
             caption_path = reel_path / "caption.txt"
             if caption_hashtags_path.exists():
-                caption = caption_hashtags_path.read_text(encoding="utf-8")
+                caption = caption_hashtags_path.read_text(encoding="utf-8").strip()
             elif caption_path.exists():
-                caption = caption_path.read_text(encoding="utf-8")
+                caption = caption_path.read_text(encoding="utf-8").strip()
             else:
-                caption = metadata.get("caption", "")
+                caption = metadata.get("caption", "").strip()
+
+            # If caption is empty/too short, attempt to regenerate
+            if len(caption) < 10:
+                log("[yellow]Caption is empty or too short, attempting to regenerate...[/yellow]")
+                from .artifacts import _regenerate_caption_with_hashtags, _regenerate_caption
+
+                # Try to regenerate caption+hashtags.txt first (includes AI generation)
+                if _regenerate_caption_with_hashtags(reel_path, params.profile_path):
+                    log("[green][REGEN] Regenerated caption+hashtags.txt[/green]")
+                    caption = caption_hashtags_path.read_text(encoding="utf-8").strip()
+                # Fallback to regenerating just caption.txt
+                elif _regenerate_caption(reel_path, use_ai=True):
+                    log("[green][REGEN] Regenerated caption.txt[/green]")
+                    caption = caption_path.read_text(encoding="utf-8").strip()
+
+            # Validate caption is not empty (minimum 10 characters)
+            if len(caption) < 10:
+                result["error"] = "Caption is empty or too short (< 10 chars)"
+                console.print(f"  [bold red][X] Caption is empty or too short[/bold red]")
+                console.print(f"  [dim]Caption should have at least 10 characters[/dim]")
+                console.print(f"  [dim]Could not regenerate from metadata/script/AI[/dim]")
+                console.print(f"  [dim]Found: '{caption[:50]}...' ({len(caption)} chars)[/dim]" if caption else "  [dim]Found: (empty)[/dim]")
+                return result
+
+            # Hashtag validation step - trim to Instagram limit (5 max)
+            from socials_automator.hashtag import validate_hashtags_in_caption, INSTAGRAM_MAX_HASHTAGS
+            hashtag_result = validate_hashtags_in_caption(caption, auto_trim=True)
+
+            log(f"[cyan]Hashtag validation:[/cyan]")
+            if hashtag_result.was_trimmed:
+                log(f"  [yellow][!] Trimmed hashtags: {hashtag_result.original_count} -> {hashtag_result.final_count}[/yellow]")
+                log(f"  [dim]Removed: {', '.join(hashtag_result.removed_hashtags)}[/dim]")
+                # Update caption with trimmed version
+                caption = hashtag_result.caption_after
+                # Also update the file for consistency
+                if caption_hashtags_path.exists():
+                    caption_hashtags_path.write_text(caption, encoding="utf-8")
+                    log(f"  [green][OK] Updated caption+hashtags.txt[/green]")
+            elif hashtag_result.original_count == 0:
+                log(f"  [dim]No hashtags in caption[/dim]")
+            else:
+                log(f"  [green][OK] Hashtags: {hashtag_result.original_count}/{INSTAGRAM_MAX_HASHTAGS}[/green]")
 
             if not video_path.exists():
                 result["error"] = "Video file not found"
@@ -1362,6 +1406,32 @@ class ReelUploaderService:
                     reel_folder_name=reel_path.name,  # For scoped Cloudinary uploads
                 )
 
+                # If upload failed and we have hashtags, try fallback without hashtags
+                if not platform_result.get("success") and hashtag_result.original_count > 0:
+                    error_msg = platform_result.get("error", "").lower()
+                    # Check if error might be caption/hashtag related
+                    if any(hint in error_msg for hint in ["caption", "hashtag", "invalid", "param", "encoding", "character"]):
+                        from socials_automator.hashtag import remove_hashtags_from_caption
+                        caption_no_hashtags = remove_hashtags_from_caption(caption)
+                        log(f"[yellow][!] Upload failed, retrying without hashtags...[/yellow]")
+                        log(f"[dim]Removed {hashtag_result.original_count} hashtags from caption[/dim]")
+
+                        # Retry upload without hashtags
+                        platform_result = await self._upload_to_platform(
+                            platform_name=platform_name,
+                            video_path=video_path,
+                            thumbnail_path=thumbnail_path,
+                            caption=caption_no_hashtags,
+                            profile_path=params.profile_path,
+                            log_fn=log,
+                            reel_folder_name=reel_path.name,
+                        )
+
+                        if platform_result.get("success"):
+                            log(f"[green][OK] Fallback succeeded (no hashtags)[/green]")
+                            platform_result["fallback_used"] = True
+                            platform_result["original_hashtag_count"] = hashtag_result.original_count
+
                 result["platforms"][platform_name] = platform_result
 
                 # Update platform_status in metadata
@@ -1379,6 +1449,8 @@ class ReelUploaderService:
                     console.print(f"  [bold green][OK] {platform_name}: Published![/bold green]")
                     if platform_result.get("permalink"):
                         console.print(f"  [cyan]{platform_result['permalink']}[/cyan]")
+                    if platform_result.get("fallback_used"):
+                        console.print(f"  [dim](uploaded without hashtags due to error)[/dim]")
                 else:
                     console.print(f"  [bold red][X] {platform_name}: Failed[/bold red]")
                     if platform_result.get("error"):

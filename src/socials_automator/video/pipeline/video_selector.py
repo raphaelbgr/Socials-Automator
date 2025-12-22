@@ -113,21 +113,28 @@ class VideoSelector(PipelineStep):
 
         # Calculate total duration and mark trim on last video
         total = sum(v["duration"] for v in selected)
+
+        # === DURATION CONTRACT VALIDATION ===
+        self.log_progress(f"[Contract] Required: {target_duration:.1f}s | Selected: {total:.1f}s")
+
         if total > target_duration:
-            # Trim last video
+            # Trim last video - good, we have enough
             excess = total - target_duration
             last_video = selected[-1]
             last_video["trim_to"] = last_video["duration"] - excess
             last_video["trimmed"] = True
+            self.log_progress(f"[Contract] OK - {excess:.1f}s excess (last video will be trimmed)")
             self.log_detail(
                 f"Last video trimmed: {last_video['duration']:.1f}s -> {last_video['trim_to']:.1f}s"
             )
         elif total < target_duration:
-            # Not enough footage - warn but continue
+            # Not enough footage - this will require frame extension
             gap = target_duration - total
-            self.log_detail(f"[WARNING] {gap:.1f}s short of target - may need to extend last video")
-            # Mark last video to extend if possible
+            self.log_progress(f"[Contract] WARNING - {gap:.1f}s SHORT! Last frame will be frozen to extend.")
+            # Mark last video to extend
             selected[-1]["extend_by"] = gap
+        else:
+            self.log_progress(f"[Contract] OK - exact match")
 
         # Log selection summary
         durations_str = " + ".join(f"{v['duration']:.0f}s" for v in selected)
@@ -234,6 +241,8 @@ class VideoSelector(PipelineStep):
                 duration = c["duration"]
                 candidate_info.append(f"{i+1}. [{c['id']}] \"{desc}\" ({duration:.0f}s)")
 
+            # Request 10% buffer to ensure we don't end up short
+            buffer_duration = target_duration * 1.10
             prompt = f"""Select stock videos to create a {target_duration:.0f}-second video.
 
 TOPIC: {topic}
@@ -243,14 +252,15 @@ AVAILABLE VIDEOS:
 {chr(10).join(candidate_info)}
 
 RULES:
-1. Select videos that sum to approximately {target_duration:.0f} seconds
+1. Select videos that sum to AT LEAST {target_duration:.0f} seconds (aim for {buffer_duration:.0f}s to be safe)
 2. Choose videos that MATCH the topic/narration thematically
 3. Create a LOGICAL visual flow (don't jump randomly between unrelated scenes)
 4. Each video can only be used ONCE
-5. The LAST video can be trimmed, so going slightly over is OK
+5. The LAST video will be trimmed, so going OVER is preferred to going under
+6. NEVER go under {target_duration:.0f} seconds total - the audio is {target_duration:.0f}s!
 
 Example output for 60s target:
-1, 5, 3, 12, 8, 15 (videos in viewing order)
+1, 5, 3, 12, 8, 15 (videos in viewing order, totaling 65-70s)
 
 Respond with ONLY the video numbers in order, comma-separated.
 Think about: What visual story matches this narration?"""
@@ -276,14 +286,31 @@ Think about: What visual story matches this narration?"""
                             used_ids.add(video["id"])
                             current_duration += video["duration"]
 
-                            # Stop if we have enough
-                            if current_duration >= target_duration:
+                            # Stop if we have enough (with 10% buffer)
+                            if current_duration >= target_duration * 1.10:
                                 break
                 except (ValueError, IndexError):
                     continue
 
             if selected:
-                self.log_detail(f"AI selected {len(selected)} videos")
+                self.log_detail(f"AI selected {len(selected)} videos, {current_duration:.1f}s total")
+
+                # If still short of target, add more videos greedily
+                if current_duration < target_duration:
+                    self.log_detail(f"AI selection short ({current_duration:.1f}s < {target_duration:.1f}s), adding more...")
+                    remaining_needed = target_duration - current_duration
+                    used_ids_set = set(v["id"] for v in selected)
+
+                    # Try to add more candidates
+                    for c in candidates:
+                        if c["id"] not in used_ids_set:
+                            selected.append(c)
+                            used_ids_set.add(c["id"])
+                            current_duration += c["duration"]
+                            self.log_detail(f"  Added [{c['id']}] ({c['duration']:.0f}s) -> {current_duration:.1f}s")
+                            if current_duration >= target_duration:
+                                break
+
                 return selected
             else:
                 self.log_detail("AI selection failed, using greedy fallback")

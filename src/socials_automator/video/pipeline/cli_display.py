@@ -7,12 +7,16 @@ Provides:
 """
 
 import logging
+import sys
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 from rich.console import Console
+
+# Use safe_box on Windows to avoid Unicode encoding errors
+_SAFE_BOX = sys.platform == "win32"
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.text import Text
@@ -69,7 +73,7 @@ class PipelineDisplay:
             show_timestamps: Show timestamps on each line.
             verbose: Show detailed progress (usually only in file).
         """
-        self.console = console or Console()
+        self.console = console or Console(safe_box=_SAFE_BOX)
         self.show_timestamps = show_timestamps
         self.verbose = verbose
         self._current_step: Optional[str] = None
@@ -211,13 +215,13 @@ class PipelineDisplay:
         self._current_step = step_name
 
         self.console.print()
-        self.console.print(f"[dim]{'─' * 60}[/dim]")
+        self.console.print(f"[dim]{'-' * 60}[/dim]")
         self.console.print(
             f"[bold white]Step {self._step_number}/{self._total_steps}:[/bold white] "
             f"[bold cyan]{step_name}[/bold cyan]"
         )
         self.console.print(f"[dim]{description}[/dim]")
-        self.console.print(f"[dim]{'─' * 60}[/dim]")
+        self.console.print(f"[dim]{'-' * 60}[/dim]")
 
         self._log_to_file(LogLevel.INFO, f"=== Step {self._step_number}: {step_name} - {description} ===")
 

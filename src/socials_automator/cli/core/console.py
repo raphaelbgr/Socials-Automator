@@ -1,9 +1,14 @@
 """Rich console singleton for CLI output."""
 
+import sys
 from rich.console import Console
 
+# Use safe_box on Windows to avoid Unicode encoding errors
+# Windows cp1252 encoding doesn't support Unicode box drawing characters
+_safe_box = sys.platform == "win32"
+
 # Global console instance - used across all CLI modules
-console = Console()
+console = Console(safe_box=_safe_box)
 
 
 def print_error(message: str, details: dict | None = None) -> None:

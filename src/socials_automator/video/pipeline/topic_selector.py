@@ -5,11 +5,14 @@ Selects a topic based on:
 - Trending keywords
 - AI-driven topic generation
 - Hidden gems from AI tools registry
+- Topic history to avoid repetition
 """
 
+import json
 import logging
 import random
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -22,6 +25,93 @@ from .base import (
 )
 
 logger = logging.getLogger("ai_calls")
+
+
+# =============================================================================
+# Topic History (prevents repeating the same topics)
+# =============================================================================
+
+def get_topic_history_path(profile_path: Path) -> Path:
+    """Get path to topic history file for a profile."""
+    return profile_path / "reel_topic_history.json"
+
+
+def load_topic_history(profile_path: Path, hours: int = 72) -> list[str]:
+    """Load recently used topics.
+
+    Args:
+        profile_path: Path to profile directory.
+        hours: How far back to look (default 72h = 3 days).
+
+    Returns:
+        List of recent topic strings.
+    """
+    history_path = get_topic_history_path(profile_path)
+    if not history_path.exists():
+        return []
+
+    try:
+        with open(history_path, "r", encoding="utf-8") as f:
+            all_history = json.load(f)
+
+        # Filter to recent topics
+        cutoff = datetime.now() - timedelta(hours=hours)
+        recent = []
+
+        for entry in all_history:
+            # Skip entries with missing or invalid timestamps
+            timestamp = entry.get("timestamp")
+            if not timestamp or not isinstance(timestamp, str):
+                continue
+
+            try:
+                entry_time = datetime.fromisoformat(timestamp)
+                if entry_time > cutoff:
+                    recent.append(entry["topic"])
+            except (ValueError, TypeError):
+                # Skip entries with malformed timestamps
+                continue
+
+        return recent
+    except Exception as e:
+        logger.warning(f"Could not load topic history: {e}")
+        return []
+
+
+def save_topic_to_history(profile_path: Path, topic: str) -> None:
+    """Save a used topic to history.
+
+    Args:
+        profile_path: Path to profile directory.
+        topic: Topic string that was used.
+    """
+    history_path = get_topic_history_path(profile_path)
+
+    try:
+        # Load existing history
+        all_history = []
+        if history_path.exists():
+            with open(history_path, "r", encoding="utf-8") as f:
+                all_history = json.load(f)
+
+        # Add new entry
+        all_history.append({
+            "topic": topic,
+            "timestamp": datetime.now().isoformat(),
+        })
+
+        # Keep only last 200 entries
+        all_history = all_history[-200:]
+
+        # Save
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(history_path, "w", encoding="utf-8") as f:
+            json.dump(all_history, f, indent=2)
+
+        logger.info(f"TOPIC_HISTORY | saved topic | total={len(all_history)}")
+
+    except Exception as e:
+        logger.warning(f"Could not save topic history: {e}")
 
 
 class TopicSelector(ITopicSelector):
@@ -111,6 +201,7 @@ class TopicSelector(ITopicSelector):
         """Generate a topic using AI.
 
         Integrates with AIToolsRegistry for accurate version info and hidden gems.
+        Avoids recently used topics from history.
 
         Args:
             pillar: Selected content pillar.
@@ -135,6 +226,9 @@ class TopicSelector(ITopicSelector):
             version_context = self._get_version_context()
             hidden_gems_context = self._get_hidden_gems_context(profile_path)
 
+            # Get topic history to avoid repetition
+            topic_history_context = self._get_topic_history_context(profile_path)
+
             prompt = f"""Generate ONE compelling video topic for a 60-second Instagram Reel.
 
 TODAY'S DATE: {current_date}
@@ -151,6 +245,7 @@ Example topics from this pillar:
 
 Trending keywords: {keywords}
 {hidden_gems_context}
+{topic_history_context}
 
 Requirements:
 - Topic must be specific and actionable (not vague)
@@ -163,6 +258,7 @@ Requirements:
 - When mentioning AI tools, reference their CURRENT versions (listed above)
 - Content should feel fresh and up-to-date for {current_year}
 - PRIORITIZE hidden gem tools for unique content that stands out!
+- CRITICAL: Do NOT repeat or rephrase any topic from the "RECENTLY USED" list above!
 
 Respond with ONLY the topic text, nothing else. No quotes, no explanation.
 Example good responses:
@@ -171,8 +267,27 @@ Example good responses:
 - This AI tool replaces 5 apps (NotebookLM)
 - 3 free AI tools you need to try in {current_year}"""
 
-            # Use the TextProvider to generate
-            response = await self.ai_client.generate(prompt)
+            # System prompt for topic generation
+            system_prompt = f"""You are a creative content strategist for social media video content.
+Your role is to generate compelling, specific, and actionable video topics.
+
+Profile: {profile.display_name}
+Niche: {profile.niche_id}
+Style: Short-form educational content (60-second reels)
+
+Guidelines:
+- Be specific and actionable (not vague)
+- Use current AI tool versions and terminology
+- Focus on free value, not selling
+- Make topics urgent and valuable
+- Avoid repeating recently used topics"""
+
+            # Use the TextProvider to generate with system context
+            response = await self.ai_client.generate(
+                prompt=prompt,
+                system=system_prompt,
+                task="topic_generation",
+            )
 
             # Clean up response
             topic = response.strip().strip('"').strip("'")
@@ -182,11 +297,40 @@ Example good responses:
                 self.log_detail("AI response too short/long, using template")
                 return self._generate_topic(pillar, profile.trending_keywords)
 
+            # Save topic to history
+            if profile_path:
+                save_topic_to_history(profile_path, topic)
+
             return topic
 
         except Exception as e:
             self.log_detail(f"AI generation failed: {e}, using template")
             return self._generate_topic(pillar, profile.trending_keywords)
+
+    def _get_topic_history_context(self, profile_path: Optional[Path] = None) -> str:
+        """Get topic history context to avoid repetition.
+
+        Args:
+            profile_path: Optional path to profile directory.
+
+        Returns:
+            Formatted string with recently used topics.
+        """
+        if not profile_path:
+            return ""
+
+        recent_topics = load_topic_history(profile_path, hours=72)
+        if not recent_topics:
+            return ""
+
+        # Format for prompt (show last 20 topics)
+        topics_text = "\n".join(f"- {t}" for t in recent_topics[-20:])
+        return f"""
+
+RECENTLY USED TOPICS (DO NOT REPEAT OR REPHRASE THESE):
+{topics_text}
+
+Generate a COMPLETELY DIFFERENT topic that we haven't covered recently."""
 
     def _get_version_context(self) -> str:
         """Get AI tool version context from registry.

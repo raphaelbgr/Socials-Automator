@@ -5,8 +5,13 @@ the process of editing reel captions.
 
 SETUP:
 1. Close ALL Chrome windows completely
-2. Start Chrome with remote debugging:
-   chrome.exe --remote-debugging-port=9222 --user-data-dir=ChromeDebug
+2. Start Chrome with remote debugging (use ABSOLUTE path for user-data-dir):
+
+   Windows:
+   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222 --user-data-dir="%USERPROFILE%\\ChromeDebug"
+
+   macOS:
+   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --user-data-dir="$HOME/ChromeDebug"
 
 3. Log in to Instagram in that Chrome window
 4. Run this script:
@@ -37,6 +42,82 @@ try:
     import pyperclip
 except ImportError:
     pyperclip = None
+
+import unicodedata
+
+
+def sanitize_caption_for_instagram(caption: str) -> str:
+    """Sanitize caption to remove problematic characters for Instagram.
+
+    Handles:
+    - Unicode normalization (NFC)
+    - Zero-width characters
+    - Control characters (except newlines)
+    - Problematic Unicode that Selenium can't type
+    - Smart quotes -> regular quotes
+    - Non-breaking spaces -> regular spaces
+
+    Args:
+        caption: Raw caption text
+
+    Returns:
+        Sanitized caption safe for Instagram upload
+    """
+    if not caption:
+        return ""
+
+    # Normalize Unicode to NFC (composed form)
+    caption = unicodedata.normalize('NFC', caption)
+
+    # Replace smart quotes with regular quotes
+    replacements = {
+        '\u2018': "'",  # Left single quote
+        '\u2019': "'",  # Right single quote
+        '\u201c': '"',  # Left double quote
+        '\u201d': '"',  # Right double quote
+        '\u2014': '-',  # Em dash
+        '\u2013': '-',  # En dash
+        '\u2026': '...',  # Ellipsis
+        '\u00a0': ' ',  # Non-breaking space
+        '\u200b': '',   # Zero-width space
+        '\u200c': '',   # Zero-width non-joiner
+        '\u200d': '',   # Zero-width joiner (keep for emoji sequences? removing for safety)
+        '\ufeff': '',   # BOM
+        '\u00ad': '',   # Soft hyphen
+        '\u2028': '\n', # Line separator
+        '\u2029': '\n', # Paragraph separator
+    }
+
+    for old, new in replacements.items():
+        caption = caption.replace(old, new)
+
+    # Remove control characters (keep newlines and tabs)
+    cleaned = []
+    for char in caption:
+        if char in '\n\r\t':
+            cleaned.append(char)
+        elif unicodedata.category(char) == 'Cc':  # Control characters
+            continue
+        elif unicodedata.category(char) == 'Cf':  # Format characters
+            continue
+        else:
+            cleaned.append(char)
+
+    caption = ''.join(cleaned)
+
+    # Normalize multiple newlines to max 2
+    while '\n\n\n' in caption:
+        caption = caption.replace('\n\n\n', '\n\n')
+
+    # Strip whitespace from each line
+    lines = caption.split('\n')
+    lines = [line.strip() for line in lines]
+    caption = '\n'.join(lines)
+
+    # Final strip
+    caption = caption.strip()
+
+    return caption
 
 
 # Tracking file for fixed captions
@@ -176,19 +257,19 @@ def find_empty_caption_reels(profile_path: Path) -> list[dict]:
     return sorted(empty_reels, key=lambda x: x["reel_name"])
 
 
-def connect_to_chrome() -> webdriver.Chrome:
+def connect_to_chrome(port: int = 9222) -> webdriver.Chrome:
     """Connect to existing Chrome instance with remote debugging."""
     options = Options()
-    options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+    options.add_experimental_option("debuggerAddress", f"127.0.0.1:{port}")
 
     try:
         driver = webdriver.Chrome(options=options)
-        print("[OK] Connected to Chrome")
+        print(f"[OK] Connected to Chrome on port {port}")
         return driver
     except Exception as e:
-        print(f"[X] Failed to connect to Chrome: {e}")
+        print(f"[X] Failed to connect to Chrome on port {port}: {e}")
         print("\nMake sure Chrome is running with remote debugging:")
-        print("  chrome.exe --remote-debugging-port=9222 --user-data-dir=ChromeDebug")
+        print(f'  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port={port} --user-data-dir="%USERPROFILE%\\ChromeDebug_{port}"')
         sys.exit(1)
 
 
@@ -237,6 +318,9 @@ def fix_reel_caption(driver, reel: dict, use_hashtags: bool = True) -> tuple[boo
     """
     permalink = reel["permalink"]
     caption = reel["local_caption"]
+
+    # Sanitize caption for Instagram (fixes encoding issues, control chars, etc.)
+    caption = sanitize_caption_for_instagram(caption)
 
     # Always remove emojis (ChromeDriver can't handle non-BMP characters)
     caption = remove_emojis(caption)
@@ -429,12 +513,37 @@ def fix_reel_caption(driver, reel: dict, use_hashtags: bool = True) -> tuple[boo
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: py scripts/fix_empty_captions.py <profile_name>")
-        print("Example: py scripts/fix_empty_captions.py ai.for.mortals")
-        sys.exit(1)
+    import argparse
 
-    profile_name = sys.argv[1]
+    parser = argparse.ArgumentParser(
+        description="Fix empty Instagram captions using Chrome automation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  py scripts/fix_empty_captions.py ai.for.mortals
+  py scripts/fix_empty_captions.py ai.for.mortals --port 9222
+  py scripts/fix_empty_captions.py news.but.quick --port 9223 --only-empty
+
+Multi-account setup (run in separate terminals):
+  Terminal 1: Chrome on port 9222 for Account A
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222 --user-data-dir="%USERPROFILE%\\ChromeDebug_9222"
+    py scripts/fix_empty_captions.py ai.for.mortals --port 9222
+
+  Terminal 2: Chrome on port 9223 for Account B
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9223 --user-data-dir="%USERPROFILE%\\ChromeDebug_9223"
+    py scripts/fix_empty_captions.py news.but.quick --port 9223
+        """
+    )
+    parser.add_argument("profile", help="Profile name (e.g., ai.for.mortals)")
+    parser.add_argument("--port", "-p", type=int, default=9222,
+                        help="Chrome remote debugging port (default: 9222)")
+    parser.add_argument("--only-empty", "-e", action="store_true",
+                        help="Only process reels with empty captions (skip already fixed)")
+
+    args = parser.parse_args()
+
+    profile_name = args.profile
+    chrome_port = args.port
     profile_path = Path("profiles") / profile_name
 
     if not profile_path.exists():
@@ -469,29 +578,23 @@ def main():
         return
 
     print("\n" + "=" * 60)
-    print("CHROME AUTOMATION")
+    print(f"CHROME AUTOMATION (Port {chrome_port})")
     print("=" * 60)
     print("\nMake sure Chrome is running with remote debugging.")
     print("Close ALL Chrome windows first, then run one of these commands:")
     print("-" * 60)
-    print("\n[Windows]")
-    print('  chrome.exe --remote-debugging-port=9222 --user-data-dir=ChromeDebug')
-    print("  or:")
-    print('  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222 --user-data-dir=ChromeDebug')
+    print("\n[Windows] (use absolute path for user-data-dir):")
+    print(f'  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port={chrome_port} --user-data-dir="%USERPROFILE%\\ChromeDebug_{chrome_port}"')
     print("\n[macOS]")
-    print('  open -a "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=ChromeDebug')
-    print("  or:")
-    print('  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --user-data-dir=ChromeDebug')
+    print(f'  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port={chrome_port} --user-data-dir="$HOME/ChromeDebug_{chrome_port}"')
     print("\n[Linux]")
-    print('  google-chrome --remote-debugging-port=9222 --user-data-dir=ChromeDebug')
-    print("  or:")
-    print('  /usr/bin/google-chrome-stable --remote-debugging-port=9222 --user-data-dir=ChromeDebug')
+    print(f'  google-chrome --remote-debugging-port={chrome_port} --user-data-dir="$HOME/ChromeDebug_{chrome_port}"')
     print("-" * 60)
-    print("\nLog in to Instagram in that Chrome window, then press Enter...")
+    print(f"\nLog in to Instagram in that Chrome window (port {chrome_port}), then press Enter...")
     input()
 
     # Connect to Chrome
-    driver = connect_to_chrome()
+    driver = connect_to_chrome(port=chrome_port)
 
     print(f"\nFixing {len(pending_reels)} reels...")
     print("=" * 60)

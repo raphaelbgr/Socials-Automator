@@ -379,9 +379,10 @@ def _regenerate_caption_with_hashtags(
         except Exception as e:
             console.print(f"      [dim]AI hashtag generation failed: {e}[/dim]")
 
-    # Build caption with hashtags
+    # Build caption with hashtags (limit to Instagram max)
+    from socials_automator.hashtag import INSTAGRAM_MAX_HASHTAGS
     if hashtags:
-        hashtag_str = " ".join(f"#{tag}" if not tag.startswith("#") else tag for tag in hashtags[:30])
+        hashtag_str = " ".join(f"#{tag}" if not tag.startswith("#") else tag for tag in hashtags[:INSTAGRAM_MAX_HASHTAGS])
         full_caption = f"{caption}\n\n{hashtag_str}"
     else:
         full_caption = caption

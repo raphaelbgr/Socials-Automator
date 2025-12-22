@@ -162,7 +162,7 @@ class CaptionService:
         self,
         topic: str,
         caption: str = "",
-        count: int = 12,
+        count: int = 5,  # Instagram limit as of Dec 2025
     ) -> HashtagResult:
         """Generate relevant hashtags for a reel.
 
@@ -220,7 +220,7 @@ class CaptionService:
         narration: str = "",
         profile_handle: str = "",
         profile_hashtag: str = "",
-        hashtag_count: int = 12,
+        hashtag_count: int = 5,  # Instagram limit as of Dec 2025
     ) -> tuple[CaptionResult, HashtagResult]:
         """Generate both caption and hashtags.
 
@@ -348,7 +348,9 @@ Return ONLY the hashtags, one per line, nothing else."""
 
             hashtags.append(tag)
 
-        return hashtags[:15]  # Max 15 hashtags
+        # Limit to Instagram max (5 as of Dec 2025)
+        from socials_automator.hashtag import INSTAGRAM_MAX_HASHTAGS
+        return hashtags[:INSTAGRAM_MAX_HASHTAGS]
 
 
 # Convenience function for simple usage

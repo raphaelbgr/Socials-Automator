@@ -73,6 +73,7 @@ class ScriptPlanner(IScriptPlanner):
         target_duration: float = 60.0,
         fallback_manager: Optional[LLMFallbackManager] = None,
         preferred_provider: str | None = None,
+        session: Optional[object] = None,
     ):
         """Initialize script planner.
 
@@ -81,12 +82,14 @@ class ScriptPlanner(IScriptPlanner):
             target_duration: Target video duration in seconds (default 60).
             fallback_manager: Optional LLMFallbackManager for automatic retry/fallback.
             preferred_provider: Preferred LLM provider (e.g., 'lmstudio').
+            session: Optional ScriptSession for profile-scoped context and history.
         """
         super().__init__()
         self.ai_client = ai_client
         self.target_duration = target_duration
         self._fallback_manager = fallback_manager
         self._preferred_provider = preferred_provider
+        self._session = session
 
         # Duration feedback from orchestrator (set when regenerating for duration)
         # Contains: issue (too_long/too_short), actual_duration, target_duration, current_words, target_words, message
@@ -113,6 +116,67 @@ class ScriptPlanner(IScriptPlanner):
             provider_config=provider_config,
         )
         return self._fallback_manager
+
+    def _get_session_constraints(self) -> str:
+        """Get constraints from session history for unique content.
+
+        Returns:
+            Formatted constraints section or empty string.
+        """
+        if not self._session:
+            return ""
+
+        try:
+            constraints = self._session.get_constraints()
+            if not constraints:
+                return ""
+
+            # Format as prominent section
+            lines = "\n".join(f"  - {c}" for c in constraints)
+            return f"""
+############################################################
+# UNIQUENESS CONSTRAINTS (based on recent content for this profile)
+############################################################
+{lines}
+############################################################
+"""
+        except Exception as e:
+            logger.warning(f"Failed to get session constraints: {e}")
+            return ""
+
+    def _record_session_metadata(
+        self,
+        script: VideoScript,
+        topic: TopicInfo,
+        word_count: int,
+        estimated_duration: float,
+    ) -> None:
+        """Record script metadata to session for future constraints.
+
+        Args:
+            script: The generated script.
+            topic: Topic info.
+            word_count: Word count.
+            estimated_duration: Estimated duration.
+        """
+        if not self._session:
+            return
+
+        try:
+            # Detect hook type from text
+            hook_type = self._session._detect_hook_type(script.hook)
+
+            self._session.set_metadata(
+                topic=topic.topic,
+                hook_text=script.hook,
+                hook_type=hook_type,
+                segment_count=len(script.segments),
+                word_count=word_count,
+                estimated_duration=estimated_duration,
+                target_duration=self.target_duration,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to record session metadata: {e}")
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """Execute script planning step.
@@ -209,6 +273,8 @@ class ScriptPlanner(IScriptPlanner):
                 self.log_progress(
                     f"  -> SUCCESS: {word_count} words (~{estimated_duration:.1f}s)"
                 )
+                # Record to session for future constraints
+                self._record_session_metadata(script, topic, word_count, estimated_duration)
                 return script
 
             # Script too short - log and retry
@@ -417,10 +483,14 @@ Each segment MUST have:
         # Get AI tool version context from registry
         ai_version_context = get_ai_version_context()
 
+        # Get session constraints for unique content
+        session_constraints = self._get_session_constraints()
+
         prompt = f"""Write a {target_secs}-second video narration script for Instagram Reels about: {topic.topic}
 
 TODAY'S DATE: {current_date}
 {duration_adjustment_section}
+{session_constraints}
 {ai_version_context}
 
 Research findings:

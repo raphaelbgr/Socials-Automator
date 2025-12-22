@@ -36,6 +36,7 @@ def generate_reel(
     subtitle_size: int = typer.Option(80, "--subtitle-size", help="Subtitle font size"),
     font: str = typer.Option("Montserrat-Bold.ttf", "--font", help="Font file"),
     length: str = typer.Option("1m", "--length", "-l", help="Target duration (30s, 1m, 1m30s)"),
+    hashtags: int = typer.Option(5, "--hashtags", "-H", help="Max hashtags to generate (default: 5, Instagram limit)"),
     output_dir: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Run without full generation"),
     upload: bool = typer.Option(False, "--upload", help="Upload to Instagram after generating"),
@@ -47,7 +48,7 @@ def generate_reel(
     # News-specific options
     news: bool = typer.Option(False, "--news", help="Force news mode (auto-detected for news profiles)"),
     edition: Optional[str] = typer.Option(None, "--edition", "-e", help="News edition: morning, midday, evening, night"),
-    story_count: int = typer.Option(4, "--stories", "-s", help="Number of news stories per video"),
+    story_count: Optional[str] = typer.Option("auto", "--stories", "-s", help="Number of news stories (auto = AI decides)"),
     news_max_age: int = typer.Option(24, "--news-age", help="Max news age in hours"),
 ) -> None:
     """Generate a video reel for a profile.
@@ -76,6 +77,7 @@ def generate_reel(
         subtitle_size=subtitle_size,
         font=font,
         length=length,
+        hashtags=hashtags,
         output_dir=output_dir,
         dry_run=dry_run,
         upload=upload,
@@ -208,6 +210,10 @@ def _run_loop_mode(params: ReelGenerationParams) -> None:
             if loop_limit and video_count > loop_limit:
                 show_loop_complete(console, loop_limit)
                 break
+
+            # Show config panel at start of each iteration
+            console.print()  # Blank line before panel
+            show_reel_config(console, params)
 
             # Generate video
             reel_path = _run_single_generation(

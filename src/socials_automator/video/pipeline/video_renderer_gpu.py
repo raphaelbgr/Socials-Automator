@@ -973,7 +973,7 @@ class GPUSubtitleRenderer(ISubtitleRenderer):
             cmd,
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=600,  # 10 minute timeout - complex subtitle filters need more time
         )
 
         if result.returncode != 0:

@@ -48,6 +48,10 @@ from socials_automator.news.sources import (
 )
 
 from socials_automator.research.web_search import WebSearcher, SearchResult
+from socials_automator.news.dynamic_queries import (
+    DynamicQueryGenerator,
+    generate_dynamic_queries,
+)
 
 logger = logging.getLogger("ai_calls")
 
@@ -156,6 +160,8 @@ class NewsAggregator:
         web_searcher: WebSearcher | None = None,
         use_yaml_sources: bool = True,
         profile_path: Path | None = None,
+        profile_name: str | None = None,
+        use_dynamic_queries: bool = True,
     ):
         """Initialize the aggregator.
 
@@ -165,6 +171,8 @@ class NewsAggregator:
             web_searcher: Custom WebSearcher instance.
             use_yaml_sources: If True, use new YAML-based sources with rotation.
             profile_path: Profile directory for profile-scoped state storage.
+            profile_name: Profile name for dynamic query generation.
+            use_dynamic_queries: If True, use AI-generated queries based on topic history.
         """
         if feedparser is None:
             raise ImportError(
@@ -173,6 +181,15 @@ class NewsAggregator:
 
         self.use_yaml_sources = use_yaml_sources
         self.profile_path = profile_path
+        self.use_dynamic_queries = use_dynamic_queries
+
+        # Extract profile name from path if not provided
+        if profile_name:
+            self.profile_name = profile_name
+        elif profile_path:
+            self.profile_name = Path(profile_path).name
+        else:
+            self.profile_name = None
 
         # Legacy sources (for backwards compatibility)
         self.feeds = feeds or get_all_enabled_feeds()
@@ -331,6 +348,9 @@ class NewsAggregator:
 
         return all_articles, failed
 
+    # Timeout for RSS feed parsing (prevents hanging on unresponsive servers)
+    _FEED_TIMEOUT_SECONDS = 30
+
     async def _fetch_single_feed(self, feed: RSSFeedConfig) -> list[NewsArticle]:
         """Fetch articles from a single RSS feed."""
         # Check cache
@@ -340,12 +360,19 @@ class NewsAggregator:
             if datetime.utcnow() - cached_time < timedelta(minutes=self._cache_ttl_minutes):
                 return cached_articles
 
-        # Fetch in thread pool (feedparser is sync)
-        articles = await asyncio.get_event_loop().run_in_executor(
-            None,
-            self._parse_feed_sync,
-            feed,
-        )
+        # Fetch in thread pool with timeout (feedparser is sync and can hang)
+        try:
+            articles = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(
+                    None,
+                    self._parse_feed_sync,
+                    feed,
+                ),
+                timeout=self._FEED_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"RSS_FEED_TIMEOUT | {feed.name} | timeout after {self._FEED_TIMEOUT_SECONDS}s")
+            raise TimeoutError(f"Feed {feed.name} timed out after {self._FEED_TIMEOUT_SECONDS}s")
 
         # Update cache
         self._cache[cache_key] = (datetime.utcnow(), articles)
@@ -548,13 +575,35 @@ class NewsAggregator:
         feed_selection = feed_rotator.select_feeds(max_feeds=max_feeds)
         selected_feeds = feed_selection.feeds
 
-        # Get current batch queries
+        # Get queries - either dynamic (AI-generated) or static (YAML)
         current_batch = query_rotator.current_batch
-        selected_queries = query_rotator.get_current_queries()
+        dynamic_query_strings: list[str] = []
+        use_dynamic = self.use_dynamic_queries and self.profile_name
+
+        if use_dynamic:
+            try:
+                # Generate fresh queries based on topic history
+                dynamic_query_strings = await generate_dynamic_queries(
+                    profile_name=self.profile_name,
+                    count=10,
+                )
+                logger.info(
+                    f"DYNAMIC_QUERIES | generated {len(dynamic_query_strings)} AI queries | "
+                    f"profile={self.profile_name}"
+                )
+            except Exception as e:
+                logger.warning(f"DYNAMIC_QUERIES | failed, using static: {e}")
+                use_dynamic = False
+
+        if not use_dynamic:
+            selected_queries = query_rotator.get_current_queries()
+        else:
+            selected_queries = []  # Will use dynamic_query_strings instead
 
         logger.info(
             f"AGGREGATOR_ROTATION | period={feed_selection.period} | "
-            f"feeds={len(selected_feeds)} | queries={len(selected_queries)} | "
+            f"feeds={len(selected_feeds)} | "
+            f"queries={'dynamic:' + str(len(dynamic_query_strings)) if use_dynamic else 'static:' + str(len(selected_queries))} | "
             f"batch={current_batch}/{query_rotator.total_batches}"
         )
 
@@ -571,8 +620,15 @@ class NewsAggregator:
             failed_feeds.extend(rss_failed)
             rss_count = len(rss_articles)
 
-        # Fetch from search queries using new QueryConfig
-        if selected_queries:
+        # Fetch from search queries
+        if use_dynamic and dynamic_query_strings:
+            # Use AI-generated dynamic queries
+            search_articles, search_failed = await self._fetch_dynamic_queries(dynamic_query_strings)
+            all_articles.extend(search_articles)
+            failed_queries.extend(search_failed)
+            search_count = len(search_articles)
+        elif selected_queries:
+            # Use static YAML queries
             search_articles, search_failed = await self._fetch_yaml_queries(selected_queries)
             all_articles.extend(search_articles)
             failed_queries.extend(search_failed)
@@ -671,12 +727,19 @@ class NewsAggregator:
             if datetime.utcnow() - cached_time < timedelta(minutes=self._cache_ttl_minutes):
                 return cached_articles
 
-        # Fetch in thread pool (feedparser is sync)
-        articles = await asyncio.get_event_loop().run_in_executor(
-            None,
-            self._parse_yaml_feed_sync,
-            feed,
-        )
+        # Fetch in thread pool with timeout (feedparser is sync and can hang)
+        try:
+            articles = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(
+                    None,
+                    self._parse_yaml_feed_sync,
+                    feed,
+                ),
+                timeout=self._FEED_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"RSS_FEED_TIMEOUT | {feed.name} | timeout after {self._FEED_TIMEOUT_SECONDS}s")
+            raise TimeoutError(f"Feed {feed.name} timed out after {self._FEED_TIMEOUT_SECONDS}s")
 
         # Update cache
         self._cache[cache_key] = (datetime.utcnow(), articles)
@@ -834,6 +897,61 @@ class NewsAggregator:
             logger.error(f"Search fetch error: {e}")
             failed.append(f"parallel_search: {e}")
 
+        return all_articles, failed
+
+    async def _fetch_dynamic_queries(
+        self,
+        query_strings: list[str],
+    ) -> tuple[list[NewsArticle], list[str]]:
+        """Fetch articles using AI-generated dynamic queries.
+
+        Args:
+            query_strings: List of query strings generated by AI.
+
+        Returns:
+            Tuple of (articles, failed_query_strings)
+        """
+        all_articles: list[NewsArticle] = []
+        failed: list[str] = []
+
+        try:
+            response = await self.web_searcher.parallel_news_search(
+                queries=query_strings,
+                max_results=10,
+            )
+
+            # Convert search results to NewsArticle
+            for query_response in response.queries:
+                if not query_response.success:
+                    failed.append(f"{query_response.query}: {query_response.error}")
+                    continue
+
+                for result in query_response.results:
+                    article = NewsArticle(
+                        title=result.title,
+                        summary=result.snippet,
+                        source_name=result.domain.replace(".com", "").replace(".org", "").title(),
+                        source_url=f"https://{result.domain}",
+                        article_url=result.url,
+                        published_at=datetime.utcnow(),
+                        category=NewsCategory.GENERAL,  # Dynamic queries don't have category
+                        image_url=None,
+                        content_hash=_generate_content_hash(result.title, result.domain),
+                        source_language="en",
+                        was_translated=False,
+                    )
+                    all_articles.append(article)
+
+                logger.debug(
+                    f"DYNAMIC_SEARCH_OK | query='{query_response.query[:40]}...' | "
+                    f"results={len(query_response.results)}"
+                )
+
+        except Exception as e:
+            logger.error(f"Dynamic search fetch error: {e}")
+            failed.append(f"parallel_search: {e}")
+
+        logger.info(f"DYNAMIC_QUERIES_FETCH | articles={len(all_articles)} | failed={len(failed)}")
         return all_articles, failed
 
 

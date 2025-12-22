@@ -30,10 +30,12 @@ class ReelGenerationParams:
     loop_each: Optional[int]  # Interval in seconds between loops
     gpu_accelerate: bool
     gpu_index: Optional[int]
+    # Hashtag limit (Instagram max is 5 as of Dec 2025)
+    max_hashtags: int = 5
     # News-specific parameters
     is_news_profile: bool = False
     news_edition: Optional[str] = None  # morning, midday, evening, night
-    news_story_count: int = 4
+    news_story_count: Optional[int] = None  # None = auto (AI decides)
     news_max_age_hours: int = 24
 
     @classmethod
@@ -57,10 +59,12 @@ class ReelGenerationParams:
         loop_each: Optional[str] = None,
         gpu_accelerate: bool = False,
         gpu: Optional[int] = None,
+        # Hashtag limit
+        hashtags: int = 5,
         # News-specific options
         news: bool = False,
         edition: Optional[str] = None,
-        story_count: int = 4,
+        story_count: Optional[str] = "auto",  # "auto" or a number
         news_max_age: int = 24,
         **kwargs,  # Ignore extra kwargs
     ) -> "ReelGenerationParams":
@@ -87,6 +91,18 @@ class ReelGenerationParams:
         # Parse loop interval if provided
         loop_each_seconds = parse_interval(loop_each) if loop_each else None
 
+        # Parse story count ("auto" -> None, number string -> int)
+        parsed_story_count: Optional[int] = None
+        if story_count and story_count.lower() != "auto":
+            try:
+                parsed_story_count = int(story_count)
+            except ValueError:
+                parsed_story_count = None  # Invalid value -> auto
+
+        # Validate and clamp hashtag limit (1-30, default 5)
+        from socials_automator.hashtag import INSTAGRAM_MAX_HASHTAGS
+        max_hashtags = max(1, min(30, hashtags)) if hashtags else INSTAGRAM_MAX_HASHTAGS
+
         return cls(
             profile=profile,
             profile_path=profile_path,
@@ -107,10 +123,11 @@ class ReelGenerationParams:
             loop_each=loop_each_seconds,
             gpu_accelerate=gpu_accelerate,
             gpu_index=gpu,
+            max_hashtags=max_hashtags,
             # News params
             is_news_profile=is_news,
             news_edition=edition,
-            news_story_count=story_count,
+            news_story_count=parsed_story_count,
             news_max_age_hours=news_max_age,
         )
 
