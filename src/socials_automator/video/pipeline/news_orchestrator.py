@@ -502,10 +502,20 @@ class NewsPipeline:
 
                 context = await self.voice_step.execute(context)
 
-                # Check audio duration
-                if context.audio_path:
+                # Check audio duration and SET THE DURATION CONTRACT
+                if context.audio_path and context.audio_path.exists():
                     actual_duration = self._get_audio_duration(context.audio_path)
+
+                    # === CRITICAL: Set the duration contract ===
+                    # This is the source of truth for video assembly and subtitle rendering
+                    context.required_video_duration = actual_duration
                     self.display.info(f"Audio duration: {actual_duration:.1f}s (target: {self.target_duration}s)")
+                    self.display.info("")
+                    self.display.info("=" * 60)
+                    self.display.info(f"  [Duration Contract] SET TO {actual_duration:.1f}s")
+                    self.display.info("  This is the source of truth for all video steps")
+                    self.display.info("=" * 60)
+                    self.display.info("")
 
                     if actual_duration <= max_acceptable_duration:
                         self.debug_logger.end_step(step_name)
@@ -520,6 +530,12 @@ class NewsPipeline:
                         self.display.info("Accepting longer duration for news content")
                         self.debug_logger.end_step(step_name)
                         break
+                else:
+                    # Fallback to target duration if no audio (shouldn't happen)
+                    context.required_video_duration = self.target_duration
+                    self.display.warning(f"[Duration Contract] No audio file - using target: {self.target_duration:.1f}s")
+                    self.debug_logger.end_step(step_name)
+                    break
 
             step_counter += 1
 

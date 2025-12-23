@@ -109,6 +109,11 @@ class NewsScriptPlanner(PipelineStep):
     CTA_DURATION = 3.0
     STORY_DURATION = 11.0  # ~11 seconds per story
 
+    # Retry constants for word count validation
+    MAX_RETRY_ATTEMPTS = 3  # Retries per provider before switching
+    MIN_WORD_RATIO = 0.75  # Script must have at least 75% of target words
+    MAX_PROVIDER_FALLBACKS = 2  # Max number of provider switches
+
     def __init__(
         self,
         target_duration: float = 60.0,
@@ -191,12 +196,117 @@ class NewsScriptPlanner(PipelineStep):
 
         # Calculate target words based on duration
         target_words = int(self.target_duration / 60 * self.WORDS_PER_MINUTE)
+        min_words = int(target_words * self.MIN_WORD_RATIO)
 
         # Format stories for prompt
         stories_text = self._format_stories_for_prompt(brief.stories)
 
-        # Build prompt
-        prompt = NEWS_SCRIPT_USER_PROMPT.format(
+        # Get all available providers for fallback
+        all_providers = self.text_provider._get_providers()
+
+        # Track best attempt across all providers
+        best_script: Optional[VideoScript] = None
+        best_word_count = 0
+
+        # Try each provider with retries
+        for provider_idx in range(min(len(all_providers), self.MAX_PROVIDER_FALLBACKS + 1)):
+            provider_name, provider_config = all_providers[provider_idx]
+            model_id = provider_config.litellm_model.split("/")[-1] if provider_config else "unknown"
+
+            # Create provider for this attempt (with override if not first)
+            if provider_idx == 0:
+                current_provider = self.text_provider
+            else:
+                self.log_progress(f"Switching to provider: {provider_name}")
+                current_provider = TextProvider(provider_override=provider_name)
+
+            last_word_count = 0
+
+            for attempt in range(1, self.MAX_RETRY_ATTEMPTS + 1):
+                # Build prompt with feedback if retrying
+                prompt = self._build_script_prompt(
+                    brief=brief,
+                    target_words=target_words,
+                    stories_text=stories_text,
+                    profile_name=profile_name,
+                    profile_handle=profile_handle,
+                    attempt=attempt,
+                    last_word_count=last_word_count,
+                )
+
+                print(f"  [>] {provider_name}/{model_id} (news_script)...")
+                start_time = time.time()
+
+                try:
+                    response = await current_provider.generate(
+                        prompt=prompt,
+                        system=NEWS_SCRIPT_SYSTEM_PROMPT,
+                        task="news_script",
+                        temperature=0.7,
+                        max_tokens=1500,
+                    )
+
+                    duration_ms = int((time.time() - start_time) * 1000)
+                    actual_provider = current_provider._current_provider or provider_name
+                    actual_model = current_provider._current_model or model_id
+                    print(f"  [OK] {actual_provider}/{actual_model}: OK ({duration_ms}ms)")
+
+                    script = self._parse_script_response(response, brief)
+                    word_count = len(script.full_narration.split())
+                    last_word_count = word_count
+
+                    # Track best attempt across all providers
+                    if word_count > best_word_count:
+                        best_word_count = word_count
+                        best_script = script
+
+                    # Check if word count is sufficient
+                    if word_count >= min_words:
+                        self.log_progress(f"Script accepted: {word_count} words (min: {min_words})")
+                        return script
+
+                    # Script too short - will retry
+                    self.log_progress(
+                        f"Script too short: {word_count} words (need {min_words}+), "
+                        f"retrying ({attempt}/{self.MAX_RETRY_ATTEMPTS})..."
+                    )
+
+                except Exception as e:
+                    duration_ms = int((time.time() - start_time) * 1000)
+                    print(f"  [X] {provider_name}: {str(e)[:60]}...")
+                    logger.warning(f"AI script generation failed (attempt {attempt}): {e}")
+
+            # Provider exhausted retries - log and try next provider
+            if provider_idx < len(all_providers) - 1 and provider_idx < self.MAX_PROVIDER_FALLBACKS:
+                self.log_progress(
+                    f"Provider {provider_name} failed validation after {self.MAX_RETRY_ATTEMPTS} attempts, "
+                    f"trying next provider..."
+                )
+
+        # All providers exhausted - use best attempt or fallback
+        if best_script and best_word_count > 0:
+            self.log_progress(
+                f"Using best attempt: {best_word_count} words "
+                f"(target: {target_words}, min: {min_words})"
+            )
+            return best_script
+
+        # Complete failure - use fallback
+        logger.warning("All providers failed, using fallback script")
+        return self._fallback_script(brief, profile_handle)
+
+    def _build_script_prompt(
+        self,
+        brief: NewsBrief,
+        target_words: int,
+        stories_text: str,
+        profile_name: str,
+        profile_handle: str,
+        attempt: int,
+        last_word_count: int,
+    ) -> str:
+        """Build the script prompt, adding feedback for retries."""
+        base_prompt = NEWS_SCRIPT_USER_PROMPT.format(
             edition=brief.edition.display_name,
             current_date=brief.date.strftime("%B %d, %Y"),
             theme=brief.theme,
@@ -207,39 +317,20 @@ class NewsScriptPlanner(PipelineStep):
             stories_text=stories_text,
         )
 
-        # Get provider info for logging
-        providers = self.text_provider._get_providers()
-        provider_name = providers[0][0] if providers else "unknown"
-        provider_config = providers[0][1] if providers else None
-        model_id = provider_config.litellm_model.split("/")[-1] if provider_config else "unknown"
+        if attempt == 1:
+            return base_prompt
 
-        print(f"  [>] {provider_name}/{model_id} (news_script)...")
-        start_time = time.time()
+        # Add feedback for retry attempts
+        feedback = f"""
+##########################################################
+# CRITICAL: YOUR PREVIOUS SCRIPT WAS TOO SHORT!          #
+# You wrote {last_word_count} words - need {target_words}+ words!  #
+# Each story segment MUST be 25-30 words (not 10-15!)    #
+# Include more detail in each story summary.             #
+##########################################################
 
-        # Generate script with AI
-        try:
-            response = await self.text_provider.generate(
-                prompt=prompt,
-                system=NEWS_SCRIPT_SYSTEM_PROMPT,
-                task="news_script",
-                temperature=0.7,
-                max_tokens=1500,
-            )
-
-            duration_ms = int((time.time() - start_time) * 1000)
-            actual_provider = self.text_provider._current_provider or provider_name
-            actual_model = self.text_provider._current_model or model_id
-            print(f"  [OK] {actual_provider}/{actual_model}: OK ({duration_ms}ms)")
-
-            script = self._parse_script_response(response, brief)
-
-        except Exception as e:
-            duration_ms = int((time.time() - start_time) * 1000)
-            print(f"  [X] {provider_name}: {str(e)[:60]}...")
-            logger.warning(f"AI script generation failed: {e}, using fallback")
-            script = self._fallback_script(brief, profile_handle)
-
-        return script
+"""
+        return feedback + base_prompt
 
     def _format_stories_for_prompt(self, stories: list[NewsStory]) -> str:
         """Format stories for the AI prompt."""
@@ -311,6 +402,15 @@ class NewsScriptPlanner(PipelineStep):
         narration_parts.append(cta)
         full_narration = " ".join(narration_parts)
 
+        # Log estimated timing breakdown
+        self.log_progress("--- Script Timing (Estimated) ---")
+        self.log_progress(f"  Hook:     0.0s - {self.HOOK_DURATION:.1f}s ({self.HOOK_DURATION:.1f}s)")
+        for seg in segments:
+            self.log_progress(f"  Seg {seg.index}:    {seg.start_time:.1f}s - {seg.end_time:.1f}s ({seg.duration_seconds:.1f}s)")
+        cta_start = current_time
+        self.log_progress(f"  CTA:      {cta_start:.1f}s - {total_duration:.1f}s ({self.CTA_DURATION:.1f}s)")
+        self.log_progress(f"  TOTAL:    {total_duration:.1f}s (target: {self.target_duration:.1f}s)")
+
         return VideoScript(
             title=brief.theme,
             hook=hook,
@@ -359,6 +459,15 @@ class NewsScriptPlanner(PipelineStep):
         narration_parts = [hook]
         narration_parts.extend(s.text for s in segments)
         narration_parts.append(cta)
+
+        # Log estimated timing breakdown (fallback)
+        self.log_progress("--- Script Timing (Estimated, Fallback) ---")
+        self.log_progress(f"  Hook:     0.0s - {self.HOOK_DURATION:.1f}s ({self.HOOK_DURATION:.1f}s)")
+        for seg in segments:
+            self.log_progress(f"  Seg {seg.index}:    {seg.start_time:.1f}s - {seg.end_time:.1f}s ({seg.duration_seconds:.1f}s)")
+        cta_start = current_time
+        self.log_progress(f"  CTA:      {cta_start:.1f}s - {total_duration:.1f}s ({self.CTA_DURATION:.1f}s)")
+        self.log_progress(f"  TOTAL:    {total_duration:.1f}s (target: {self.target_duration:.1f}s)")
 
         return VideoScript(
             title=brief.theme,

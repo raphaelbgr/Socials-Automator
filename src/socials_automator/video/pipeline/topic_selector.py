@@ -5,14 +5,12 @@ Selects a topic based on:
 - Trending keywords
 - AI-driven topic generation
 - Hidden gems from AI tools registry
-- Topic history to avoid repetition
+- Topic history to avoid repetition (via ReelContentHistory)
 """
 
-import json
 import logging
 import random
-import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -27,93 +25,6 @@ from .base import (
 logger = logging.getLogger("ai_calls")
 
 
-# =============================================================================
-# Topic History (prevents repeating the same topics)
-# =============================================================================
-
-def get_topic_history_path(profile_path: Path) -> Path:
-    """Get path to topic history file for a profile."""
-    return profile_path / "reel_topic_history.json"
-
-
-def load_topic_history(profile_path: Path, hours: int = 72) -> list[str]:
-    """Load recently used topics.
-
-    Args:
-        profile_path: Path to profile directory.
-        hours: How far back to look (default 72h = 3 days).
-
-    Returns:
-        List of recent topic strings.
-    """
-    history_path = get_topic_history_path(profile_path)
-    if not history_path.exists():
-        return []
-
-    try:
-        with open(history_path, "r", encoding="utf-8") as f:
-            all_history = json.load(f)
-
-        # Filter to recent topics
-        cutoff = datetime.now() - timedelta(hours=hours)
-        recent = []
-
-        for entry in all_history:
-            # Skip entries with missing or invalid timestamps
-            timestamp = entry.get("timestamp")
-            if not timestamp or not isinstance(timestamp, str):
-                continue
-
-            try:
-                entry_time = datetime.fromisoformat(timestamp)
-                if entry_time > cutoff:
-                    recent.append(entry["topic"])
-            except (ValueError, TypeError):
-                # Skip entries with malformed timestamps
-                continue
-
-        return recent
-    except Exception as e:
-        logger.warning(f"Could not load topic history: {e}")
-        return []
-
-
-def save_topic_to_history(profile_path: Path, topic: str) -> None:
-    """Save a used topic to history.
-
-    Args:
-        profile_path: Path to profile directory.
-        topic: Topic string that was used.
-    """
-    history_path = get_topic_history_path(profile_path)
-
-    try:
-        # Load existing history
-        all_history = []
-        if history_path.exists():
-            with open(history_path, "r", encoding="utf-8") as f:
-                all_history = json.load(f)
-
-        # Add new entry
-        all_history.append({
-            "topic": topic,
-            "timestamp": datetime.now().isoformat(),
-        })
-
-        # Keep only last 200 entries
-        all_history = all_history[-200:]
-
-        # Save
-        history_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(history_path, "w", encoding="utf-8") as f:
-            json.dump(all_history, f, indent=2)
-
-        logger.info(f"TOPIC_HISTORY | saved topic | total={len(all_history)}")
-
-    except Exception as e:
-        logger.warning(f"Could not save topic history: {e}")
-
-
 class TopicSelector(ITopicSelector):
     """Selects topics from profile content pillars and trending keywords."""
 
@@ -125,6 +36,21 @@ class TopicSelector(ITopicSelector):
         """
         super().__init__()
         self.ai_client = ai_client
+        self._history: Optional["ReelContentHistory"] = None
+
+    def _get_history(self, profile_path: Path) -> "ReelContentHistory":
+        """Get or create ReelContentHistory for the profile.
+
+        Args:
+            profile_path: Path to profile directory.
+
+        Returns:
+            ReelContentHistory instance.
+        """
+        if self._history is None or self._history.profile_path != profile_path:
+            from socials_automator.history import ReelContentHistory
+            self._history = ReelContentHistory(profile_path)
+        return self._history
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """Execute topic selection step.
@@ -226,7 +152,7 @@ class TopicSelector(ITopicSelector):
             version_context = self._get_version_context()
             hidden_gems_context = self._get_hidden_gems_context(profile_path)
 
-            # Get topic history to avoid repetition
+            # Get topic history context using new history module
             topic_history_context = self._get_topic_history_context(profile_path)
 
             prompt = f"""Generate ONE compelling video topic for a 60-second Instagram Reel.
@@ -292,14 +218,50 @@ Guidelines:
             # Clean up response
             topic = response.strip().strip('"').strip("'")
 
-            # Validate response
+            # Validate response length
             if len(topic) < 10 or len(topic) > 100:
                 self.log_detail("AI response too short/long, using template")
                 return self._generate_topic(pillar, profile.trending_keywords)
 
-            # Save topic to history
+            # Check for similarity using new history module
             if profile_path:
-                save_topic_to_history(profile_path, topic)
+                history = self._get_history(profile_path)
+                is_similar, matching_topic = history.is_topic_recent(topic)
+
+                if is_similar:
+                    self.log_detail(f"Topic too similar to: {matching_topic[:50]}...")
+                    self.log_detail("Regenerating with different approach...")
+
+                    # Try once more with explicit rejection
+                    retry_prompt = f"""The topic "{topic}" is too similar to recent content.
+Generate a COMPLETELY DIFFERENT topic that:
+- Uses a different AI tool (NOT {topic.split()[0]} if it starts with a tool name)
+- Has a different angle/approach
+- Covers something we haven't done in a week
+
+Profile: {profile.display_name}
+Pillar: {pillar.get('name', 'General')}
+
+Respond with ONLY the new topic text."""
+
+                    retry_response = await self.ai_client.generate(
+                        prompt=retry_prompt,
+                        system="Generate a unique, non-repetitive video topic.",
+                        task="topic_generation",
+                    )
+                    topic = retry_response.strip().strip('"').strip("'")
+
+                    # Check again - if still similar, use template as last resort
+                    is_similar_again, _ = history.is_topic_recent(topic)
+                    if is_similar_again:
+                        self.log_detail("Retry still similar, using template fallback")
+                        return self._generate_topic(pillar, profile.trending_keywords)
+
+            # Save topic to history using new module
+            if profile_path:
+                history = self._get_history(profile_path)
+                history.add_topic(topic)
+                logger.info(f"TOPIC_HISTORY | saved topic via ReelContentHistory")
 
             return topic
 
@@ -308,7 +270,7 @@ Guidelines:
             return self._generate_topic(pillar, profile.trending_keywords)
 
     def _get_topic_history_context(self, profile_path: Optional[Path] = None) -> str:
-        """Get topic history context to avoid repetition.
+        """Get topic history context using ReelContentHistory.
 
         Args:
             profile_path: Optional path to profile directory.
@@ -319,18 +281,25 @@ Guidelines:
         if not profile_path:
             return ""
 
-        recent_topics = load_topic_history(profile_path, hours=72)
-        if not recent_topics:
+        try:
+            history = self._get_history(profile_path)
+
+            # Log the counts for visibility
+            recent_topics = history.get_recent_topics()
+            self.log_progress(
+                f"Topic history: {len(recent_topics)} unique topics in last "
+                f"{history.lookback_days} days"
+            )
+
+            if not recent_topics:
+                return ""
+
+            # Use the history module's context generator
+            return history.get_context_for_prompt(max_items=50)
+
+        except Exception as e:
+            logger.warning(f"Could not get topic history context: {e}")
             return ""
-
-        # Format for prompt (show last 20 topics)
-        topics_text = "\n".join(f"- {t}" for t in recent_topics[-20:])
-        return f"""
-
-RECENTLY USED TOPICS (DO NOT REPEAT OR REPHRASE THESE):
-{topics_text}
-
-Generate a COMPLETELY DIFFERENT topic that we haven't covered recently."""
 
     def _get_version_context(self) -> str:
         """Get AI tool version context from registry.

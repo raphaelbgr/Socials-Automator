@@ -1,12 +1,15 @@
-"""News curator that uses AI to rank, filter, and summarize articles."""
+"""News curator that uses AI to rank, filter, and summarize articles.
+
+Uses NewsContentHistory for unified history tracking (stories, themes, topics).
+"""
 
 from __future__ import annotations
 
 import json
 import logging
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, date, timedelta
+from dataclasses import dataclass
+from datetime import datetime, date
 from pathlib import Path
 from typing import Optional
 
@@ -20,201 +23,10 @@ from socials_automator.news.models import (
 )
 from socials_automator.news.dynamic_queries import (
     extract_topics_from_stories,
-    save_topics_to_history,
 )
 from socials_automator.providers.text import TextProvider
 
 logger = logging.getLogger("ai_calls")
-
-
-# =============================================================================
-# Story History (prevents repeating the same stories)
-# =============================================================================
-
-def get_story_history_path(profile_name: str) -> Path:
-    """Get path to story history file for a profile."""
-    from socials_automator.constants import get_profiles_dir
-    return get_profiles_dir() / profile_name / "story_history.json"
-
-
-def load_story_history(profile_name: str, cooldown_hours: int = 48) -> set[str]:
-    """Load recently used story identifiers to avoid.
-
-    Args:
-        profile_name: Profile to load history for.
-        cooldown_hours: How long stories stay in cooldown (default 48h).
-
-    Returns:
-        Set of normalized headline strings to avoid.
-    """
-    history_path = get_story_history_path(profile_name)
-    if not history_path.exists():
-        return set()
-
-    try:
-        with open(history_path, "r", encoding="utf-8") as f:
-            all_history = json.load(f)
-
-        # Filter to recent stories within cooldown
-        cutoff = datetime.now() - timedelta(hours=cooldown_hours)
-        recent_stories = set()
-
-        for entry in all_history:
-            entry_time = datetime.fromisoformat(entry["timestamp"])
-            if entry_time > cutoff:
-                # Add normalized headline
-                recent_stories.add(entry["headline_normalized"])
-
-        return recent_stories
-    except Exception as e:
-        logger.warning(f"Could not load story history: {e}")
-        return set()
-
-
-def save_stories_to_history(profile_name: str, stories: list) -> None:
-    """Save used stories to history.
-
-    Args:
-        profile_name: Profile to save history for.
-        stories: List of NewsStory objects that were used.
-    """
-    history_path = get_story_history_path(profile_name)
-
-    try:
-        # Load existing history
-        all_history = []
-        if history_path.exists():
-            with open(history_path, "r", encoding="utf-8") as f:
-                all_history = json.load(f)
-
-        # Add new entries
-        timestamp = datetime.now().isoformat()
-        for story in stories:
-            headline = story.headline if hasattr(story, 'headline') else str(story)
-            normalized = _normalize_headline(headline)
-            all_history.append({
-                "headline": headline,
-                "headline_normalized": normalized,
-                "timestamp": timestamp,
-            })
-
-        # Keep only last 200 entries (about 50 videos worth)
-        all_history = all_history[-200:]
-
-        # Save
-        history_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(history_path, "w", encoding="utf-8") as f:
-            json.dump(all_history, f, indent=2)
-
-        logger.info(f"STORY_HISTORY | saved {len(stories)} stories | total={len(all_history)}")
-
-    except Exception as e:
-        logger.warning(f"Could not save story history: {e}")
-
-
-def _normalize_headline(headline: str) -> str:
-    """Normalize headline for comparison (lowercase, remove punctuation, key words only)."""
-    import re
-    # Lowercase and remove punctuation
-    normalized = headline.lower()
-    normalized = re.sub(r'[^\w\s]', '', normalized)
-    # Remove common filler words
-    fillers = ['the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'and', 'or', 'is', 'are', 'was', 'were']
-    words = [w for w in normalized.split() if w not in fillers]
-    return ' '.join(words[:8])  # Keep first 8 significant words
-
-
-def is_story_recently_used(headline: str, used_stories: set[str]) -> bool:
-    """Check if a story headline matches any recently used story."""
-    normalized = _normalize_headline(headline)
-    # Check exact match
-    if normalized in used_stories:
-        return True
-    # Check partial match (if 70% of words overlap)
-    norm_words = set(normalized.split())
-    for used in used_stories:
-        used_words = set(used.split())
-        if norm_words and used_words:
-            overlap = len(norm_words & used_words) / min(len(norm_words), len(used_words))
-            if overlap >= 0.7:
-                return True
-    return False
-
-
-# =============================================================================
-# Theme History (prevents repeating the same theme)
-# =============================================================================
-
-def get_theme_history_path(profile_name: str) -> Path:
-    """Get path to theme history file for a profile."""
-    from socials_automator.constants import get_profiles_dir
-    return get_profiles_dir() / profile_name / "theme_history.json"
-
-
-def load_theme_history(profile_name: str, cooldown_hours: int = 24) -> list[str]:
-    """Load recent themes that should be avoided.
-
-    Args:
-        profile_name: Profile to load history for.
-        cooldown_hours: How long themes stay in cooldown.
-
-    Returns:
-        List of recently used themes to avoid.
-    """
-    history_path = get_theme_history_path(profile_name)
-    if not history_path.exists():
-        return []
-
-    try:
-        with open(history_path, "r", encoding="utf-8") as f:
-            all_history = json.load(f)
-
-        # Filter to recent themes within cooldown
-        cutoff = datetime.now() - timedelta(hours=cooldown_hours)
-        recent_themes = [
-            entry["theme"]
-            for entry in all_history
-            if datetime.fromisoformat(entry["timestamp"]) > cutoff
-        ]
-
-        return recent_themes
-    except Exception as e:
-        logger.warning(f"Could not load theme history: {e}")
-        return []
-
-
-def save_theme_to_history(profile_name: str, theme: str) -> None:
-    """Save a theme to history.
-
-    Args:
-        profile_name: Profile to save history for.
-        theme: Theme string to save.
-    """
-    history_path = get_theme_history_path(profile_name)
-
-    try:
-        # Load existing history
-        all_history = []
-        if history_path.exists():
-            with open(history_path, "r", encoding="utf-8") as f:
-                all_history = json.load(f)
-
-        # Add new entry
-        all_history.append({
-            "theme": theme,
-            "timestamp": datetime.now().isoformat(),
-        })
-
-        # Keep only last 50 entries
-        all_history = all_history[-50:]
-
-        # Save
-        history_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(history_path, "w", encoding="utf-8") as f:
-            json.dump(all_history, f, indent=2)
-
-    except Exception as e:
-        logger.warning(f"Could not save theme history: {e}")
 
 
 # =============================================================================
@@ -321,13 +133,19 @@ class CurationConfig:
     prefer_breaking: bool = True  # Prioritize articles < 6 hours old
     balance_categories: bool = True  # Try to include diverse categories
     provider_override: str | None = None  # Force specific AI provider
-    profile_name: str | None = None  # Profile name for history tracking
+    profile_name: str | None = None  # Profile name for history tracking (deprecated)
+    profile_path: Path | None = None  # Profile path for NewsContentHistory
     theme_cooldown_hours: int = 24  # Hours before theme can be reused
     story_cooldown_hours: int = 48  # Hours before story can be reused
 
 
 class NewsCurator:
     """Curates news articles using AI for ranking and summarization.
+
+    Uses NewsContentHistory for unified history tracking:
+    - Stories/headlines (prevents repeating same news)
+    - Themes (ensures edition variety)
+    - Query topics (for dynamic search generation)
 
     Usage:
         curator = NewsCurator()
@@ -357,6 +175,36 @@ class NewsCurator:
         """
         self.config = config or CurationConfig()
         self._text_provider = text_provider
+        self._history: Optional["NewsContentHistory"] = None
+
+    def _get_history(self) -> Optional["NewsContentHistory"]:
+        """Get or create NewsContentHistory for the profile.
+
+        Returns:
+            NewsContentHistory instance or None if no profile configured.
+        """
+        # Determine profile path
+        profile_path = self.config.profile_path
+        if profile_path is None and self.config.profile_name:
+            # Fallback: derive path from profile_name
+            from socials_automator.constants import get_profiles_dir
+            profile_path = get_profiles_dir() / self.config.profile_name
+
+        if profile_path is None:
+            return None
+
+        if self._history is None or self._history.profile_path != profile_path:
+            from socials_automator.history import NewsContentHistory
+            self._history = NewsContentHistory(
+                profile_path,
+                lookback_days=max(
+                    self.config.story_cooldown_hours // 24,
+                    self.config.theme_cooldown_hours // 24,
+                    7,  # Minimum 7 days
+                ),
+            )
+
+        return self._history
 
     @property
     def text_provider(self) -> TextProvider:
@@ -490,13 +338,16 @@ class NewsCurator:
         # =================================================================
         # STEP 5: Save History (prevents reusing same stories/topics)
         # =================================================================
-        if self.config.profile_name and stories:
+        history = self._get_history()
+        if history and stories:
             # Save story headlines for story-level dedup
-            save_stories_to_history(self.config.profile_name, stories)
+            history.add_stories(stories)
+            logger.info(f"STORY_HISTORY | saved {len(stories)} stories via NewsContentHistory")
 
             # Save topic entities for dynamic query generation
             topics = extract_topics_from_stories(stories)
-            save_topics_to_history(self.config.profile_name, topics)
+            for topic in topics:
+                history.add_query_topic(topic)
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -531,21 +382,17 @@ class NewsCurator:
         # Filter out old articles
         filtered = [a for a in articles if a.age_hours <= 48]
 
-        # Filter out recently used stories
-        if self.config.profile_name:
-            used_stories = load_story_history(
-                self.config.profile_name,
-                self.config.story_cooldown_hours,
-            )
-            if used_stories:
-                before_count = len(filtered)
-                filtered = [
-                    a for a in filtered
-                    if not is_story_recently_used(a.title, used_stories)
-                ]
-                removed = before_count - len(filtered)
-                if removed > 0:
-                    logger.info(f"STORY_FILTER | removed {removed} recently used stories | remaining={len(filtered)}")
+        # Filter out recently used stories using NewsContentHistory
+        history = self._get_history()
+        if history:
+            before_count = len(filtered)
+            filtered = [
+                a for a in filtered
+                if not history.is_story_recent(a.title)
+            ]
+            removed = before_count - len(filtered)
+            if removed > 0:
+                logger.info(f"STORY_FILTER | removed {removed} recently used stories | remaining={len(filtered)}")
 
         # Sort by recency, with breaking news first
         if self.config.prefer_breaking:
@@ -639,6 +486,12 @@ class NewsCurator:
 
             # Parse response
             stories = self._parse_curation_response(response, articles)
+
+            # If AI returned 0 stories, use fallback
+            if not stories:
+                logger.warning(f"AI returned 0 stories, using fallback. Response: {response[:200]}...")
+                print(f"  [!] AI returned 0 stories, using fallback curation")
+                stories = self._fallback_curate(articles[:story_count])
 
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
@@ -752,15 +605,8 @@ class NewsCurator:
         if not stories:
             return "No stories available"
 
-        # Load recently used themes
-        recent_themes: list[str] = []
-        if self.config.profile_name:
-            recent_themes = load_theme_history(
-                self.config.profile_name,
-                self.config.theme_cooldown_hours,
-            )
-            if recent_themes:
-                logger.info(f"THEME_HISTORY | avoiding {len(recent_themes)} recent themes")
+        # Get history for theme tracking
+        history = self._get_history()
 
         # Check if there's a dominant category
         categories = [s.category for s in stories]
@@ -783,7 +629,8 @@ class NewsCurator:
         theme = None
         for cat in sorted_categories:
             candidate = f"{edition.display_name}: {category_themes[cat]}"
-            if candidate not in recent_themes:
+            # Check if theme was used recently (last 5 themes)
+            if not history or not history.is_theme_recent(candidate, lookback=5):
                 theme = candidate
                 break
 
@@ -802,7 +649,7 @@ class NewsCurator:
             ]
 
             for variation in variations:
-                if variation not in recent_themes:
+                if not history or not history.is_theme_recent(variation, lookback=10):
                     theme = variation
                     break
 
@@ -811,8 +658,8 @@ class NewsCurator:
                 theme = f"{edition.display_name}: {base} ({datetime.now().strftime('%H:%M')})"
 
         # Save theme to history
-        if self.config.profile_name and theme:
-            save_theme_to_history(self.config.profile_name, theme)
+        if history and theme:
+            history.add_theme(theme, edition=edition.value)
             logger.info(f"THEME_GENERATED | {theme}")
 
         return theme
