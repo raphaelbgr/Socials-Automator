@@ -8,13 +8,39 @@ Analyzes video script segments to determine:
 
 The AI prioritizes EXACT matches for specific content (TV shows, products,
 brands, people) and ILLUSTRATIVE matches for generic concepts.
+
+Timing is adjusted using a hybrid approach:
+1. Minimum start time enforced (skip hook region)
+2. Maximum end time enforced (skip CTA region)
+3. Padding added at segment start (image appears after topic introduced)
+4. SRT-based fine-tuning when available
 """
 
 import json
 import logging
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Tuple
+
+
+# =============================================================================
+# Timing Configuration Constants
+# =============================================================================
+
+# Minimum time before any overlay can appear (skip hook/intro)
+MIN_OVERLAY_START_TIME = 3.0  # seconds
+
+# Buffer before CTA - no overlays in final N seconds
+CTA_BUFFER_TIME = 4.0  # seconds
+
+# Padding at start of each overlay (let topic be introduced first)
+SEGMENT_START_PADDING = 0.5  # seconds
+
+# Padding at end of each overlay (end slightly before segment ends)
+SEGMENT_END_PADDING = 0.3  # seconds
+
+# Minimum overlay duration (skip if too short after adjustments)
+MIN_OVERLAY_DURATION = 2.0  # seconds
 
 from .base import (
     IImageOverlayPlanner,
@@ -152,10 +178,11 @@ class ImageOverlayPlanner(IImageOverlayPlanner):
         self.log_start("Planning image overlays for narration segments")
 
         try:
-            # Plan overlays
+            # Plan overlays (pass SRT path for timing fine-tuning)
             overlay_script = await self.plan_overlays(
                 script=context.script,
                 profile_path=context.profile_path,
+                srt_path=context.srt_path,
             )
 
             context.image_overlays = overlay_script
@@ -178,12 +205,14 @@ class ImageOverlayPlanner(IImageOverlayPlanner):
         self,
         script: VideoScript,
         profile_path: Optional[Path] = None,
+        srt_path: Optional[Path] = None,
     ) -> ImageOverlayScript:
         """Plan image overlays based on script content.
 
         Args:
             script: Video script with segments and timing.
             profile_path: Path to profile for local image library.
+            srt_path: Path to SRT file for word-level timing (optional).
 
         Returns:
             ImageOverlayScript with planned overlays.
@@ -212,6 +241,13 @@ class ImageOverlayPlanner(IImageOverlayPlanner):
 
         # Parse response
         overlay_script = self._parse_response(response, script)
+
+        # Adjust timing using hybrid approach
+        overlay_script = self._adjust_overlay_timing(
+            overlay_script=overlay_script,
+            script=script,
+            srt_path=srt_path,
+        )
 
         return overlay_script
 
@@ -329,6 +365,232 @@ Return JSON with overlays covering ALL subjects discussed.
                 continue
 
         return ImageOverlayScript(overlays=overlays, skipped=skipped)
+
+    def _adjust_overlay_timing(
+        self,
+        overlay_script: ImageOverlayScript,
+        script: VideoScript,
+        srt_path: Optional[Path] = None,
+    ) -> ImageOverlayScript:
+        """Adjust overlay timing using hybrid approach.
+
+        Applies multiple timing adjustments:
+        1. Enforce minimum start time (skip hook region)
+        2. Enforce maximum end time (skip CTA region)
+        3. Add padding at segment boundaries
+        4. Use SRT word timestamps for fine-tuning (when available)
+
+        Args:
+            overlay_script: Original overlay script from AI.
+            script: Video script with timing information.
+            srt_path: Optional path to SRT file for word-level timing.
+
+        Returns:
+            Adjusted ImageOverlayScript.
+        """
+        if not overlay_script.overlays:
+            return overlay_script
+
+        # Get timing boundaries from script
+        hook_end = getattr(script, 'hook_end_time', MIN_OVERLAY_START_TIME)
+        cta_start = getattr(script, 'cta_start_time', script.total_duration - CTA_BUFFER_TIME)
+        total_duration = script.total_duration
+
+        # Calculate effective boundaries
+        min_start = max(MIN_OVERLAY_START_TIME, hook_end)
+        max_end = min(cta_start, total_duration - CTA_BUFFER_TIME)
+
+        self.log_progress(
+            f"[>] Adjusting timing: min_start={min_start:.1f}s, max_end={max_end:.1f}s"
+        )
+
+        # Parse SRT for word-level timing (optional)
+        srt_timestamps = {}
+        if srt_path and srt_path.exists():
+            srt_timestamps = self._parse_srt_for_topics(srt_path, overlay_script.overlays)
+            if srt_timestamps:
+                self.log_progress(f"[>] SRT timing found for {len(srt_timestamps)} topics")
+
+        # Adjust each overlay
+        adjusted_overlays = []
+        skipped = list(overlay_script.skipped)
+        adjustments_made = 0
+
+        for overlay in overlay_script.overlays:
+            original_start = overlay.start_time
+            original_end = overlay.end_time
+
+            # Use SRT timing if available for this topic
+            if overlay.topic in srt_timestamps:
+                srt_start, srt_end = srt_timestamps[overlay.topic]
+                overlay.start_time = srt_start + SEGMENT_START_PADDING
+                overlay.end_time = srt_end - SEGMENT_END_PADDING
+                self.log_detail(
+                    f"  SRT timing for '{overlay.topic}': "
+                    f"{original_start:.1f}s -> {overlay.start_time:.1f}s"
+                )
+            else:
+                # Apply padding to AI timing
+                overlay.start_time = original_start + SEGMENT_START_PADDING
+                overlay.end_time = original_end - SEGMENT_END_PADDING
+
+            # Enforce minimum start time (skip hook)
+            if overlay.start_time < min_start:
+                overlay.start_time = min_start
+                adjustments_made += 1
+
+            # Enforce maximum end time (skip CTA)
+            if overlay.end_time > max_end:
+                overlay.end_time = max_end
+                adjustments_made += 1
+
+            # Validate duration after adjustments
+            if overlay.end_time - overlay.start_time < MIN_OVERLAY_DURATION:
+                skipped.append({
+                    "segment_index": overlay.segment_index,
+                    "reason": f"Too short after timing adjustment ({overlay.end_time - overlay.start_time:.1f}s)",
+                    "topic": overlay.topic,
+                })
+                self.log_detail(
+                    f"  Skipped '{overlay.topic}': too short after adjustment"
+                )
+                continue
+
+            # Ensure end > start
+            if overlay.end_time <= overlay.start_time:
+                skipped.append({
+                    "segment_index": overlay.segment_index,
+                    "reason": "Invalid timing after adjustment",
+                    "topic": overlay.topic,
+                })
+                continue
+
+            adjusted_overlays.append(overlay)
+
+        if adjustments_made > 0:
+            self.log_progress(f"[>] Made {adjustments_made} timing adjustments")
+
+        # Ensure no overlapping overlays (sequential display)
+        adjusted_overlays = self._remove_overlaps(adjusted_overlays)
+
+        return ImageOverlayScript(overlays=adjusted_overlays, skipped=skipped)
+
+    def _parse_srt_for_topics(
+        self,
+        srt_path: Path,
+        overlays: List[ImageOverlay],
+    ) -> dict[str, Tuple[float, float]]:
+        """Parse SRT file to find word-level timing for overlay topics.
+
+        Args:
+            srt_path: Path to SRT file.
+            overlays: List of overlays to find timing for.
+
+        Returns:
+            Dict mapping topic name to (start_time, end_time) tuple.
+        """
+        timestamps = {}
+
+        try:
+            with open(srt_path, 'r', encoding='utf-8') as f:
+                srt_content = f.read()
+
+            # Parse SRT entries
+            # Format: index\nstart --> end\ntext\n\n
+            entries = re.split(r'\n\n+', srt_content.strip())
+
+            srt_entries = []
+            for entry in entries:
+                lines = entry.strip().split('\n')
+                if len(lines) >= 3:
+                    # Parse timestamp line: "00:00:01,000 --> 00:00:02,500"
+                    time_match = re.match(
+                        r'(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})',
+                        lines[1]
+                    )
+                    if time_match:
+                        start = self._srt_time_to_seconds(time_match.group(1))
+                        end = self._srt_time_to_seconds(time_match.group(2))
+                        text = ' '.join(lines[2:]).strip()
+                        srt_entries.append((start, end, text.lower()))
+
+            # Find timing for each overlay topic
+            for overlay in overlays:
+                topic_lower = overlay.topic.lower()
+                topic_words = topic_lower.split()
+
+                # Search for topic in SRT entries
+                for start, end, text in srt_entries:
+                    # Check if topic words appear in this entry
+                    if any(word in text for word in topic_words if len(word) > 3):
+                        # Found a match - use this timing
+                        if overlay.topic not in timestamps:
+                            timestamps[overlay.topic] = (start, end)
+                        else:
+                            # Extend end time if topic mentioned again
+                            prev_start, _ = timestamps[overlay.topic]
+                            timestamps[overlay.topic] = (prev_start, end)
+
+        except Exception as e:
+            logger.debug(f"Could not parse SRT for timing: {e}")
+
+        return timestamps
+
+    def _srt_time_to_seconds(self, time_str: str) -> float:
+        """Convert SRT timestamp to seconds.
+
+        Args:
+            time_str: SRT timestamp like "00:01:23,456" or "00:01:23.456"
+
+        Returns:
+            Time in seconds.
+        """
+        # Normalize separator
+        time_str = time_str.replace(',', '.')
+
+        parts = time_str.split(':')
+        hours = int(parts[0])
+        minutes = int(parts[1])
+        seconds = float(parts[2])
+
+        return hours * 3600 + minutes * 60 + seconds
+
+    def _remove_overlaps(self, overlays: List[ImageOverlay]) -> List[ImageOverlay]:
+        """Remove overlapping overlays by adjusting timing.
+
+        Ensures overlays display sequentially without overlap.
+
+        Args:
+            overlays: List of overlays (may have overlapping times).
+
+        Returns:
+            List of non-overlapping overlays.
+        """
+        if len(overlays) <= 1:
+            return overlays
+
+        # Sort by start time
+        sorted_overlays = sorted(overlays, key=lambda o: o.start_time)
+
+        result = [sorted_overlays[0]]
+
+        for overlay in sorted_overlays[1:]:
+            prev = result[-1]
+
+            # Check for overlap
+            if overlay.start_time < prev.end_time:
+                # Adjust: end previous overlay when next one starts
+                # Add small gap (0.2s) between overlays
+                gap = 0.2
+                prev.end_time = overlay.start_time - gap
+
+                # Skip if previous overlay became too short
+                if prev.end_time - prev.start_time < MIN_OVERLAY_DURATION:
+                    result.pop()
+
+            result.append(overlay)
+
+        return result
 
     def _extract_json(self, text: str) -> str:
         """Extract JSON from text that may contain markdown or other content.
