@@ -188,6 +188,8 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
         video_stream = video.video
 
         # Apply blur during overlay times (if enabled)
+        # Use split+overlay technique to avoid green screen artifacts with conditional boxblur
+        # Reference: https://medium.com/@allanlei/blur-out-videos-with-ffmpeg-92d3dc62d069
         if self._blur_radius > 0 and overlays:
             # Build blur enable expression: blur only when any overlay is showing
             # Example: 'between(t,3.5,12.0)+between(t,15.0,25.0)'
@@ -201,24 +203,39 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
                 self.log_progress(f"  [>] Background blur enabled ({self._blur}, radius={self._blur_radius})")
 
                 if self._use_gpu:
-                    # GPU: download from CUDA, blur, re-upload
-                    # Note: There's no boxblur_cuda, so we need CPU blur
-                    # Must use nv12 (CUDA native) - yuv420p causes hwdownload error
-                    video_stream = (
-                        video_stream
-                        .filter('hwdownload')
-                        .filter('format', 'nv12')
-                        .filter('boxblur', self._blur_radius, enable=blur_enable)
-                        .filter('hwupload_cuda')
-                    )
+                    # GPU mode: download, split, blur, overlay, re-upload
+                    # 1. Download from CUDA to CPU
+                    cpu_stream = video_stream.filter('hwdownload').filter('format', 'yuv420p')
+
+                    # 2. Split into original and copy for blur
+                    split = cpu_stream.filter('split')
+                    original = split.stream(0)
+                    copy = split.stream(1)
+
+                    # 3. Apply blur to copy (permanent, no conditional enable)
+                    blurred = copy.filter('boxblur', self._blur_radius)
+
+                    # 4. Overlay blurred onto original with enable expression
+                    # When enable is true -> show blurred, when false -> show original
+                    merged = ffmpeg.overlay(original, blurred, enable=blur_enable)
+
+                    # 5. Re-upload to CUDA
+                    video_stream = merged.filter('format', 'nv12').filter('hwupload_cuda')
                 else:
-                    # CPU: ensure consistent pixel format before conditional boxblur
-                    # Without this, the enable expression can cause green screen artifacts
-                    video_stream = (
-                        video_stream
-                        .filter('format', 'yuv420p')
-                        .filter('boxblur', self._blur_radius, enable=blur_enable)
-                    )
+                    # CPU mode: split, blur one copy, overlay with enable
+                    # This avoids green screen artifacts from conditional boxblur
+
+                    # 1. Ensure consistent format and split
+                    formatted = video_stream.filter('format', 'yuv420p')
+                    split = formatted.filter('split')
+                    original = split.stream(0)
+                    copy = split.stream(1)
+
+                    # 2. Apply blur to copy (permanent, no conditional enable)
+                    blurred = copy.filter('boxblur', self._blur_radius)
+
+                    # 3. Overlay blurred onto original with enable expression
+                    video_stream = ffmpeg.overlay(original, blurred, enable=blur_enable)
 
         # Chain overlays one by one
         for i, overlay in enumerate(overlays):
@@ -406,7 +423,7 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
 
         current_stream = "[0:v]"
 
-        # Add blur filter if enabled
+        # Add blur filter if enabled (using split+overlay to avoid green screen artifacts)
         if self._blur_radius > 0 and overlays:
             # Build blur enable expression
             blur_ranges = []
@@ -417,11 +434,14 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
             if blur_ranges:
                 blur_enable = "+".join(blur_ranges)
                 self.log_progress(f"  [>] Background blur enabled ({self._blur}, radius={self._blur_radius})")
-                # Ensure consistent pixel format before conditional boxblur to avoid green screen
+                # Use split+overlay technique: split video, blur one copy, overlay with enable
+                # This avoids green screen artifacts from conditional boxblur
                 filter_parts.append(
-                    f"[0:v]format=yuv420p,boxblur={self._blur_radius}:enable='{blur_enable}'[blurred]"
+                    f"[0:v]format=yuv420p,split[original][copy];"
+                    f"[copy]boxblur={self._blur_radius}[blurred];"
+                    f"[original][blurred]overlay=enable='{blur_enable}'[merged]"
                 )
-                current_stream = "[blurred]"
+                current_stream = "[merged]"
 
         for i, overlay in enumerate(overlays):
             if not overlay.image_path or not overlay.image_path.exists():
