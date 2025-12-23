@@ -37,6 +37,8 @@ class ReelGenerationParams:
     news_edition: Optional[str] = None  # morning, midday, evening, night
     news_story_count: Optional[int] = None  # None = auto (AI decides)
     news_max_age_hours: int = 24
+    # Image overlay feature
+    overlay_images: bool = False
 
     @classmethod
     def from_cli(
@@ -66,6 +68,8 @@ class ReelGenerationParams:
         edition: Optional[str] = None,
         story_count: Optional[str] = "auto",  # "auto" or a number
         news_max_age: int = 24,
+        # Image overlay feature
+        overlay_images: bool = False,
         **kwargs,  # Ignore extra kwargs
     ) -> "ReelGenerationParams":
         """Create from CLI arguments with parsing and defaults.
@@ -129,6 +133,8 @@ class ReelGenerationParams:
             news_edition=edition,
             news_story_count=parsed_story_count,
             news_max_age_hours=news_max_age,
+            # Image overlay
+            overlay_images=overlay_images,
         )
 
 

@@ -80,6 +80,17 @@ from .video import (
     WATERMARK_OPACITY,
     WATERMARK_POSITION,
     WATERMARK_MARGIN,
+    # Image overlay
+    IMAGE_OVERLAY_MARGIN_X,
+    IMAGE_OVERLAY_MAX_HEIGHT,
+    IMAGE_OVERLAY_MARGIN_BOTTOM,
+    IMAGE_OVERLAY_SUBTITLE_Y,
+    IMAGE_OVERLAY_BLUR_STRENGTH,
+    IMAGE_OVERLAY_BORDER_RADIUS,
+    IMAGE_OVERLAY_POP_IN_DURATION,
+    IMAGE_OVERLAY_POP_OUT_DURATION,
+    IMAGE_OVERLAY_POP_OVERSHOOT,
+    IMAGE_OVERLAY_POP_BOUNCE,
 )
 
 # =============================================================================
@@ -116,6 +127,12 @@ from .paths import (
     PEXELS_CACHE_DIR_NAME,
     PEXELS_CACHE_SUBDIR,
     PEXELS_CACHE_INDEX_FILENAME,
+    PEXELS_IMAGE_CACHE_SUBDIR,
+    PEXELS_IMAGE_CACHE_INDEX_FILENAME,
+    # Profile assets
+    PROFILE_ASSETS_DIR_NAME,
+    PROFILE_IMAGES_DIR_NAME,
+    IMAGE_OVERLAYS_FILENAME,
     # Logs
     LOG_AI_CALLS,
     LOG_INSTAGRAM_API,
@@ -131,6 +148,7 @@ from .paths import (
     get_profiles_dir,
     get_config_dir,
     get_pexels_cache_dir,
+    get_pexels_image_cache_dir,
 )
 
 # =============================================================================
@@ -287,6 +305,17 @@ __all__ = [
     "WATERMARK_OPACITY",
     "WATERMARK_POSITION",
     "WATERMARK_MARGIN",
+    # Image overlay
+    "IMAGE_OVERLAY_MARGIN_X",
+    "IMAGE_OVERLAY_MAX_HEIGHT",
+    "IMAGE_OVERLAY_MARGIN_BOTTOM",
+    "IMAGE_OVERLAY_SUBTITLE_Y",
+    "IMAGE_OVERLAY_BLUR_STRENGTH",
+    "IMAGE_OVERLAY_BORDER_RADIUS",
+    "IMAGE_OVERLAY_POP_IN_DURATION",
+    "IMAGE_OVERLAY_POP_OUT_DURATION",
+    "IMAGE_OVERLAY_POP_OVERSHOOT",
+    "IMAGE_OVERLAY_POP_BOUNCE",
     # Paths
     "PROJECT_ROOT",
     "PROFILES_DIR_NAME",
@@ -313,6 +342,11 @@ __all__ = [
     "PEXELS_CACHE_DIR_NAME",
     "PEXELS_CACHE_SUBDIR",
     "PEXELS_CACHE_INDEX_FILENAME",
+    "PEXELS_IMAGE_CACHE_SUBDIR",
+    "PEXELS_IMAGE_CACHE_INDEX_FILENAME",
+    "PROFILE_ASSETS_DIR_NAME",
+    "PROFILE_IMAGES_DIR_NAME",
+    "IMAGE_OVERLAYS_FILENAME",
     "LOG_AI_CALLS",
     "LOG_INSTAGRAM_API",
     "LOG_VIDEO_PIPELINE",
@@ -325,6 +359,7 @@ __all__ = [
     "get_profiles_dir",
     "get_config_dir",
     "get_pexels_cache_dir",
+    "get_pexels_image_cache_dir",
     # Limits
     "INSTAGRAM_CAPTION_MAX_LENGTH",
     "INSTAGRAM_HASHTAG_MAX_COUNT",

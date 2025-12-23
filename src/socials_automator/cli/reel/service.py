@@ -261,6 +261,7 @@ class ReelGeneratorService:
             gpu_accelerate=params.gpu_accelerate,
             gpu_index=params.gpu_index,
             profile_path=params.profile_path,
+            overlay_images=params.overlay_images,
         )
 
     def _create_news_pipeline(self, params: ReelGenerationParams, progress_callback):
@@ -293,6 +294,8 @@ class ReelGeneratorService:
             max_news_age_hours=params.news_max_age_hours,
             profile_name=params.profile,  # For theme history tracking
             profile_path=params.profile_path,  # For profile-scoped data storage
+            # Image overlays
+            overlay_images=params.overlay_images,
         )
 
     def _create_output_dir(self, params: ReelGenerationParams) -> Path:

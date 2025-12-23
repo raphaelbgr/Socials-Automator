@@ -44,10 +44,17 @@ from .video_downloader import VideoDownloader
 from .video_searcher import VideoSearcher
 from .voice_generator import VoiceGenerator
 
+# Image overlay components (optional feature)
+from .image_overlay_planner import ImageOverlayPlanner
+from .image_resolver import ImageResolver
+from .image_downloader import ImageDownloader
+from .image_overlay_renderer import ImageOverlayRenderer
+
 # News module imports
 from ...news.aggregator import NewsAggregator
 from ...news.curator import NewsCurator, CurationConfig
 from ...news.models import NewsBrief, NewsEdition, NewsCategory
+from ...providers import text as text_provider_module
 
 # GPU-accelerated renderers (optional)
 try:
@@ -72,9 +79,16 @@ STEP_DESCRIPTIONS = {
     "VideoDownloader": "Downloading video clips",
     "VideoAssembler": "Assembling clips into 9:16 vertical video",
     "GPUVideoAssembler": "Assembling clips into 9:16 vertical video (GPU NVENC)",
+    "ThumbnailGenerator": "Generating thumbnail for Instagram",
+    # Image overlay steps (optional)
+    "ImageOverlayPlanner": "Planning contextual image overlays with AI",
+    "ImageResolver": "Finding images from cache and Pexels",
+    "ImageDownloader": "Downloading overlay images",
+    "ImageOverlayRenderer": "Compositing image overlays onto video",
+    "GPUImageOverlayRenderer": "Compositing image overlays (GPU NVENC)",
+    # Subtitles and caption
     "SubtitleRenderer": "Rendering karaoke-style subtitles and adding audio",
     "GPUSubtitleRenderer": "Rendering subtitles and adding audio (GPU NVENC)",
-    "ThumbnailGenerator": "Generating thumbnail for Instagram",
     "CaptionGenerator": "Generating Instagram caption and hashtags",
 }
 
@@ -119,6 +133,8 @@ class NewsPipeline:
         news_categories: Optional[list[NewsCategory]] = None,
         profile_name: Optional[str] = None,  # For theme history tracking
         profile_path: Optional[Path] = None,  # For profile-scoped data storage
+        # Image overlay feature
+        overlay_images: bool = False,
     ):
         """Initialize news pipeline.
 
@@ -142,9 +158,11 @@ class NewsPipeline:
             news_categories: Filter to specific categories.
             profile_name: Profile name for theme history tracking.
             profile_path: Profile directory for profile-scoped data storage.
+            overlay_images: Enable contextual image overlays (pop-in/pop-out).
         """
         self.profile_name = profile_name
         self.profile_path = profile_path
+        self.overlay_images = overlay_images
         self.logger = logging.getLogger("video.news_pipeline")
         self.progress_callback = progress_callback
         self.text_ai = text_ai
@@ -188,10 +206,13 @@ class NewsPipeline:
                     self.gpu_accelerate = False
 
         # Initialize news components
+        # Create text provider for dynamic query generation
+        aggregator_text_provider = text_provider_module.TextProvider(provider_override=text_ai) if text_ai else None
         self.news_aggregator = NewsAggregator(
             profile_path=profile_path,
             profile_name=profile_name,
             use_dynamic_queries=True,  # AI-generated queries based on topic history
+            text_provider=aggregator_text_provider,  # Respects --text-ai flag
         )
         self.news_curator = NewsCurator(
             config=CurationConfig(
@@ -235,11 +256,23 @@ class NewsPipeline:
         self.thumbnail_step = ThumbnailGenerator(font=subtitle_font, font_size=90)
         self.caption_step = CaptionGenerator(preferred_provider=text_ai)
 
+        # Image overlay steps (optional feature)
+        self.image_overlay_steps: list[PipelineStep] = []
+        if overlay_images:
+            ai_client = text_provider_module.TextProvider(provider_override=text_ai)
+            self.display.info("Image overlays enabled")
+            self.image_overlay_steps = [
+                ImageOverlayPlanner(text_provider=ai_client),
+                ImageResolver(),
+                ImageDownloader(),
+                ImageOverlayRenderer(use_gpu=gpu_accelerate),
+            ]
+
         # Connect all steps to the display system for logging
         self._connect_step_displays()
 
         # Track all steps for progress
-        self.steps = [
+        base_steps = [
             "NewsAggregator",
             "NewsCurator",
             "NewsScriptPlanner",
@@ -248,9 +281,18 @@ class NewsPipeline:
             "VideoDownloader",
             "VideoAssembler",
             "ThumbnailGenerator",
+        ]
+        overlay_step_names = [
+            "ImageOverlayPlanner",
+            "ImageResolver",
+            "ImageDownloader",
+            "ImageOverlayRenderer",
+        ] if overlay_images else []
+        final_steps = [
             "SubtitleRenderer",
             "CaptionGenerator",
         ]
+        self.steps = base_steps + overlay_step_names + final_steps
 
     def _get_audio_duration(self, audio_path: Path) -> float:
         """Get duration of audio file using ffprobe."""
@@ -290,6 +332,7 @@ class NewsPipeline:
             self.video_download_step,
             self.assembly_step,
             self.subtitle_step,
+            *self.image_overlay_steps,  # Include overlay steps if enabled
             self.thumbnail_step,
             self.caption_step,
         ]
@@ -588,6 +631,21 @@ class NewsPipeline:
             context = await self.thumbnail_step.execute(context)
             self.debug_logger.end_step(step_name)
             step_counter += 1
+
+            # =================================================================
+            # Phase 7.5: Image Overlays (optional)
+            # =================================================================
+            if self.overlay_images and self.image_overlay_steps:
+                for overlay_step in self.image_overlay_steps:
+                    step_name = overlay_step.__class__.__name__
+                    description = STEP_DESCRIPTIONS.get(step_name, f"Running {step_name}")
+                    self.display.start_step(step_name, description)
+                    self.debug_logger.start_step(step_name)
+                    self._update_progress(step_name, step_counter / total_steps, description)
+
+                    context = await overlay_step.execute(context)
+                    self.debug_logger.end_step(step_name)
+                    step_counter += 1
 
             # =================================================================
             # Phase 8: Subtitle Rendering

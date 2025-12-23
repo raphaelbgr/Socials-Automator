@@ -156,6 +156,22 @@ PEXELS_CACHE_SUBDIR: Final[str] = "cache"
 PEXELS_CACHE_INDEX_FILENAME: Final[str] = "index.json"
 """Filename for Pexels cache index."""
 
+PEXELS_IMAGE_CACHE_SUBDIR: Final[str] = "image-cache"
+"""Subdirectory within pexels for cached images."""
+
+PEXELS_IMAGE_CACHE_INDEX_FILENAME: Final[str] = "index.json"
+"""Filename for Pexels image cache index."""
+
+# Profile assets
+PROFILE_ASSETS_DIR_NAME: Final[str] = "assets"
+"""Directory name for profile assets."""
+
+PROFILE_IMAGES_DIR_NAME: Final[str] = "images"
+"""Directory name for local image library within assets."""
+
+IMAGE_OVERLAYS_FILENAME: Final[str] = "image_overlays.json"
+"""Filename for image overlay data in output directory."""
+
 
 # =============================================================================
 # LOG FILES
@@ -230,11 +246,22 @@ def get_config_dir() -> Path:
 
 
 def get_pexels_cache_dir() -> Path:
-    """Get the Pexels cache directory, creating it if needed.
+    """Get the Pexels video cache directory, creating it if needed.
 
     Returns:
-        Path to Pexels cache directory.
+        Path to Pexels video cache directory.
     """
     cache_dir = PROJECT_ROOT / PEXELS_CACHE_DIR_NAME / PEXELS_CACHE_SUBDIR
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
+
+
+def get_pexels_image_cache_dir() -> Path:
+    """Get the Pexels image cache directory, creating it if needed.
+
+    Returns:
+        Path to Pexels image cache directory.
+    """
+    cache_dir = PROJECT_ROOT / PEXELS_CACHE_DIR_NAME / PEXELS_IMAGE_CACHE_SUBDIR
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir

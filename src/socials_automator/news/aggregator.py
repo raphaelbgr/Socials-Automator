@@ -162,6 +162,7 @@ class NewsAggregator:
         profile_path: Path | None = None,
         profile_name: str | None = None,
         use_dynamic_queries: bool = True,
+        text_provider: Optional["TextProvider"] = None,
     ):
         """Initialize the aggregator.
 
@@ -173,6 +174,7 @@ class NewsAggregator:
             profile_path: Profile directory for profile-scoped state storage.
             profile_name: Profile name for dynamic query generation.
             use_dynamic_queries: If True, use AI-generated queries based on topic history.
+            text_provider: AI provider for dynamic query generation.
         """
         if feedparser is None:
             raise ImportError(
@@ -204,6 +206,9 @@ class NewsAggregator:
             timeout=15,
             max_results_per_query=10,
         )
+
+        # AI provider for dynamic queries
+        self.text_provider = text_provider
 
         # Cache for recent fetches (to avoid hammering sources)
         self._cache: dict[str, tuple[datetime, list[NewsArticle]]] = {}
@@ -582,16 +587,26 @@ class NewsAggregator:
 
         if use_dynamic:
             try:
-                # Generate fresh queries based on topic history
-                dynamic_query_strings = await generate_dynamic_queries(
+                # Show progress - dynamic query generation can take time
+                print("  [>] Generating AI-powered search queries (timeout: 60s)...")
+                # Generate fresh queries based on topic history with timeout
+                query_task = generate_dynamic_queries(
                     profile_name=self.profile_name,
                     count=10,
+                    text_provider=self.text_provider,
                 )
+                dynamic_query_strings = await asyncio.wait_for(query_task, timeout=60.0)
+                print(f"  [OK] Generated {len(dynamic_query_strings)} dynamic queries")
                 logger.info(
                     f"DYNAMIC_QUERIES | generated {len(dynamic_query_strings)} AI queries | "
                     f"profile={self.profile_name}"
                 )
+            except asyncio.TimeoutError:
+                print("  [!] Dynamic queries timed out (60s), using static queries")
+                logger.warning("DYNAMIC_QUERIES | timed out after 60s, using static")
+                use_dynamic = False
             except Exception as e:
+                print(f"  [!] Dynamic queries failed, using static: {e}")
                 logger.warning(f"DYNAMIC_QUERIES | failed, using static: {e}")
                 use_dynamic = False
 
@@ -615,24 +630,30 @@ class NewsAggregator:
 
         # Fetch from RSS feeds using new FeedConfig
         if selected_feeds:
+            print(f"  [>] Fetching {len(selected_feeds)} RSS feeds...")
             rss_articles, rss_failed = await self._fetch_yaml_feeds(selected_feeds)
             all_articles.extend(rss_articles)
             failed_feeds.extend(rss_failed)
             rss_count = len(rss_articles)
+            print(f"  [OK] Got {rss_count} articles from RSS feeds")
 
         # Fetch from search queries
         if use_dynamic and dynamic_query_strings:
             # Use AI-generated dynamic queries
+            print(f"  [>] Running {len(dynamic_query_strings)} web searches...")
             search_articles, search_failed = await self._fetch_dynamic_queries(dynamic_query_strings)
             all_articles.extend(search_articles)
             failed_queries.extend(search_failed)
             search_count = len(search_articles)
+            print(f"  [OK] Got {search_count} articles from web search")
         elif selected_queries:
             # Use static YAML queries
+            print(f"  [>] Running {len(selected_queries)} web searches...")
             search_articles, search_failed = await self._fetch_yaml_queries(selected_queries)
             all_articles.extend(search_articles)
             failed_queries.extend(search_failed)
             search_count = len(search_articles)
+            print(f"  [OK] Got {search_count} articles from web search")
 
         total_before_dedup = len(all_articles)
 

@@ -139,6 +139,114 @@ class VideoClipInfo(BaseModel):
     keywords_used: list[str] = Field(default_factory=list)
 
 
+# =============================================================================
+# Image Overlay Models
+# =============================================================================
+
+
+class ImageOverlay(BaseModel):
+    """Single image overlay with timing information.
+
+    Represents an image that should appear during a specific time range
+    in the video to illustrate the narration content.
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    segment_index: int  # Which segment this belongs to
+    start_time: float  # Seconds from video start
+    end_time: float  # Seconds from video start
+    topic: str  # What's being discussed (e.g., "Stranger Things")
+    match_type: str  # "exact" or "illustrative"
+
+    # Resolution results (filled by ImageResolver)
+    source: Optional[str] = None  # "local", "pexels", or None (skip)
+    local_hint: Optional[str] = None  # Folder name in local library
+    pexels_query: Optional[str] = None  # Fallback search query
+    pexels_id: Optional[int] = None  # Resolved Pexels image ID
+    image_path: Optional[Path] = None  # Final local path to image
+
+    # Metadata
+    alt_text: Optional[str] = None  # Accessibility/description text
+    confidence: float = 0.0  # AI confidence this image is needed (0-1)
+    file_size_bytes: int = 0  # File size for logging
+    width: int = 0  # Image width
+    height: int = 0  # Image height
+
+    @property
+    def duration(self) -> float:
+        """Get overlay duration in seconds."""
+        return self.end_time - self.start_time
+
+    @property
+    def is_resolved(self) -> bool:
+        """Check if image has been resolved to a file."""
+        return self.image_path is not None and self.source is not None
+
+
+class ImageOverlayScript(BaseModel):
+    """Collection of image overlays for a video.
+
+    Manages the complete set of image overlays, including
+    both planned overlays and skipped segments.
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    overlays: list[ImageOverlay] = Field(default_factory=list)
+    skipped: list[dict] = Field(default_factory=list)  # {"segment_index": int, "reason": str}
+
+    def get_overlays_at_time(self, time_seconds: float) -> list[ImageOverlay]:
+        """Get all overlays active at a given time.
+
+        Args:
+            time_seconds: Time point in the video.
+
+        Returns:
+            List of active overlays (with resolved image paths).
+        """
+        return [
+            o for o in self.overlays
+            if o.start_time <= time_seconds < o.end_time and o.image_path
+        ]
+
+    def get_resolved_overlays(self) -> list[ImageOverlay]:
+        """Get all successfully resolved overlays.
+
+        Returns:
+            List of overlays with valid image paths.
+        """
+        return [o for o in self.overlays if o.is_resolved]
+
+    @property
+    def total_coverage(self) -> float:
+        """Get total time covered by overlays in seconds."""
+        return sum(o.duration for o in self.get_resolved_overlays())
+
+    @property
+    def exact_count(self) -> int:
+        """Count of exact-match overlays."""
+        return sum(1 for o in self.overlays if o.match_type == "exact")
+
+    @property
+    def illustrative_count(self) -> int:
+        """Count of illustrative overlays."""
+        return sum(1 for o in self.overlays if o.match_type == "illustrative")
+
+
+class LocalImageMetadata(BaseModel):
+    """Metadata for a local image in profile assets.
+
+    Stored in metadata.json alongside each image in the
+    profile's assets/images/ directory.
+    """
+
+    aliases: list[str] = Field(default_factory=list)  # ["stranger things", "ST"]
+    tags: list[str] = Field(default_factory=list)  # ["netflix", "tv", "show"]
+    source: Optional[str] = None  # "official", "screenshot", "fan-art"
+    attribution: Optional[str] = None  # Credit if needed
+
+
 class ArtifactStatus(BaseModel):
     """Status of a generated artifact."""
 
@@ -197,6 +305,10 @@ class PipelineContext(BaseModel):
     # Duration contract - set after voice generation, immutable thereafter
     # This is the SOURCE OF TRUTH for video duration - all downstream steps must meet this
     required_video_duration: Optional[float] = None  # Seconds, from actual audio file
+
+    # Image overlay system
+    image_overlays: Optional["ImageOverlayScript"] = None
+    overlay_images_enabled: bool = False
 
 
 # =============================================================================
@@ -407,6 +519,109 @@ class ISubtitleRenderer(PipelineStep):
 
 
 # =============================================================================
+# Image Overlay Interfaces
+# =============================================================================
+
+
+class IImageOverlayPlanner(PipelineStep):
+    """Interface for image overlay planning."""
+
+    def __init__(self):
+        super().__init__("ImageOverlayPlanner")
+
+    @abstractmethod
+    async def plan_overlays(
+        self,
+        script: VideoScript,
+        profile_path: Path,
+    ) -> ImageOverlayScript:
+        """Plan image overlays based on script content.
+
+        Args:
+            script: Video script with segments and timing.
+            profile_path: Path to profile for local image library.
+
+        Returns:
+            ImageOverlayScript with planned overlays.
+        """
+        pass
+
+
+class IImageResolver(PipelineStep):
+    """Interface for image resolution (local + Pexels)."""
+
+    def __init__(self):
+        super().__init__("ImageResolver")
+
+    @abstractmethod
+    async def resolve_images(
+        self,
+        overlay_script: ImageOverlayScript,
+        profile_path: Path,
+    ) -> ImageOverlayScript:
+        """Resolve image sources for each overlay.
+
+        Args:
+            overlay_script: Script with planned overlays.
+            profile_path: Path to profile for local image library.
+
+        Returns:
+            Updated ImageOverlayScript with resolved sources.
+        """
+        pass
+
+
+class IImageDownloader(PipelineStep):
+    """Interface for Pexels image downloading."""
+
+    def __init__(self):
+        super().__init__("ImageDownloader")
+
+    @abstractmethod
+    async def download_images(
+        self,
+        overlay_script: ImageOverlayScript,
+        output_dir: Path,
+    ) -> ImageOverlayScript:
+        """Download Pexels images to cache.
+
+        Args:
+            overlay_script: Script with Pexels image IDs.
+            output_dir: Directory for downloaded images.
+
+        Returns:
+            Updated ImageOverlayScript with local paths.
+        """
+        pass
+
+
+class IImageOverlayRenderer(PipelineStep):
+    """Interface for image overlay rendering."""
+
+    def __init__(self):
+        super().__init__("ImageOverlayRenderer")
+
+    @abstractmethod
+    async def render_overlays(
+        self,
+        video_path: Path,
+        overlay_script: ImageOverlayScript,
+        output_path: Path,
+    ) -> Path:
+        """Render image overlays onto video with animations.
+
+        Args:
+            video_path: Path to input video.
+            overlay_script: Script with resolved image overlays.
+            output_path: Path for output video.
+
+        Returns:
+            Path to rendered video.
+        """
+        pass
+
+
+# =============================================================================
 # Exceptions
 # =============================================================================
 
@@ -473,5 +688,11 @@ class SubtitleRenderError(PipelineError):
 
 class ThumbnailGenerationError(PipelineError):
     """Error during thumbnail generation."""
+
+    pass
+
+
+class ImageOverlayError(PipelineError):
+    """Error during image overlay processing."""
 
     pass

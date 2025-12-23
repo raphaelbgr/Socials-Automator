@@ -41,6 +41,10 @@ def show_reel_config(console: Console, params: ReelGenerationParams) -> None:
 
     gpu_style = "green" if params.gpu_accelerate else "dim"
 
+    # Format overlay images info
+    overlay_style = "green" if params.overlay_images else "dim"
+    overlay_info = "Enabled" if params.overlay_images else "Disabled"
+
     # Format news info
     news_info = ""
     if params.is_news_profile:
@@ -71,6 +75,7 @@ def show_reel_config(console: Console, params: ReelGenerationParams) -> None:
         f"Font: [yellow]{params.font}[/yellow]\n"
         f"Target Length: [yellow]{format_duration(params.target_duration)}[/yellow]\n"
         f"GPU Acceleration: [{gpu_style}]{gpu_info}[/{gpu_style}]\n"
+        f"Image Overlays: [{overlay_style}]{overlay_info}[/{overlay_style}]\n"
         f"Topic: [green]{params.topic or 'Auto-generated'}[/green]"
         f"{loop_info}"
         f"{news_info}",
