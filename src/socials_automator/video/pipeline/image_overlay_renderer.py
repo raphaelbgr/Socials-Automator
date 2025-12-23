@@ -203,10 +203,11 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
                 if self._use_gpu:
                     # GPU: download from CUDA, blur, re-upload
                     # Note: There's no boxblur_cuda, so we need CPU blur
+                    # Must use nv12 (CUDA native) - yuv420p causes hwdownload error
                     video_stream = (
                         video_stream
                         .filter('hwdownload')
-                        .filter('format', 'yuv420p')  # Consistent format for boxblur
+                        .filter('format', 'nv12')
                         .filter('boxblur', self._blur_radius, enable=blur_enable)
                         .filter('hwupload_cuda')
                     )
