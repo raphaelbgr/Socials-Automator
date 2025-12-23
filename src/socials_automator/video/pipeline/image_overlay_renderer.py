@@ -206,16 +206,17 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
                     video_stream = (
                         video_stream
                         .filter('hwdownload')
-                        .filter('format', 'nv12')
+                        .filter('format', 'yuv420p')  # Consistent format for boxblur
                         .filter('boxblur', self._blur_radius, enable=blur_enable)
                         .filter('hwupload_cuda')
                     )
                 else:
-                    # CPU: simple boxblur with enable expression
-                    video_stream = video_stream.filter(
-                        'boxblur',
-                        self._blur_radius,
-                        enable=blur_enable
+                    # CPU: ensure consistent pixel format before conditional boxblur
+                    # Without this, the enable expression can cause green screen artifacts
+                    video_stream = (
+                        video_stream
+                        .filter('format', 'yuv420p')
+                        .filter('boxblur', self._blur_radius, enable=blur_enable)
                     )
 
         # Chain overlays one by one
@@ -415,8 +416,9 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
             if blur_ranges:
                 blur_enable = "+".join(blur_ranges)
                 self.log_progress(f"  [>] Background blur enabled ({self._blur}, radius={self._blur_radius})")
+                # Ensure consistent pixel format before conditional boxblur to avoid green screen
                 filter_parts.append(
-                    f"[0:v]boxblur={self._blur_radius}:enable='{blur_enable}'[blurred]"
+                    f"[0:v]format=yuv420p,boxblur={self._blur_radius}:enable='{blur_enable}'[blurred]"
                 )
                 current_stream = "[blurred]"
 
