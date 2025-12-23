@@ -48,6 +48,7 @@ from .voice_generator import VoiceGenerator
 # Image overlay components (optional feature)
 from .image_overlay_planner import ImageOverlayPlanner
 from .image_resolver import ImageResolver
+from .image_selector import ImageSelector
 from .image_downloader import ImageDownloader
 from .image_overlay_renderer import ImageOverlayRenderer
 
@@ -143,6 +144,8 @@ class VideoPipeline:
         image_provider: str = "websearch",
         use_tor: bool = False,
         blur: Optional[str] = None,
+        smart_pick: bool = False,
+        smart_pick_count: int = 10,
     ):
         """Initialize video pipeline.
 
@@ -169,7 +172,9 @@ class VideoPipeline:
             overlay_images: Enable image overlays during narration segments.
             image_provider: Image provider for overlays (pexels, pixabay, websearch).
             use_tor: Route websearch provider through Tor for anonymity.
-            blur: Blur background during overlays (light, medium, heavy). None = disabled.
+            blur: Dim background during overlays (light, medium, heavy). None = disabled.
+            smart_pick: Use AI vision to select best matching images from candidates.
+            smart_pick_count: Number of candidate images to compare (default 10).
         """
         self.logger = logging.getLogger("video.pipeline")
         self.video_first = video_first
@@ -267,19 +272,38 @@ class VideoPipeline:
         self.image_overlay_steps: list[PipelineStep] = []
         if overlay_images:
             tor_info = " via Tor" if use_tor else ""
-            blur_info = f", blur={blur}" if blur else ""
-            self.display.info(f"Image overlays enabled ({image_provider}{tor_info}{blur_info})")
-            self.image_overlay_steps = [
-                ImageOverlayPlanner(text_provider=self.ai_client),
-                ImageResolver(image_provider=image_provider, use_tor=use_tor),
-                ImageDownloader(image_provider=image_provider, use_tor=use_tor),
-                ImageOverlayRenderer(use_gpu=gpu_accelerate, blur=blur),
-            ]
+            blur_info = f", dim={blur}" if blur else ""
+            smart_info = f", smart-pick={smart_pick_count}" if smart_pick else ""
+            self.display.info(f"Image overlays enabled ({image_provider}{tor_info}{blur_info}{smart_info})")
+
+            if smart_pick:
+                # Use AI vision to select best matching images
+                self.image_overlay_steps = [
+                    ImageOverlayPlanner(text_provider=self.ai_client),
+                    ImageSelector(
+                        image_provider=image_provider,
+                        use_tor=use_tor,
+                        candidate_count=smart_pick_count,
+                        text_provider=self.ai_client,
+                        preferred_provider=text_ai,
+                    ),
+                    ImageDownloader(image_provider=image_provider, use_tor=use_tor),
+                    ImageOverlayRenderer(use_gpu=gpu_accelerate, blur=blur),
+                ]
+            else:
+                # Standard first-result selection
+                self.image_overlay_steps = [
+                    ImageOverlayPlanner(text_provider=self.ai_client),
+                    ImageResolver(image_provider=image_provider, use_tor=use_tor),
+                    ImageDownloader(image_provider=image_provider, use_tor=use_tor),
+                    ImageOverlayRenderer(use_gpu=gpu_accelerate, blur=blur),
+                ]
 
             # Update step descriptions dynamically based on provider
             provider_name = image_provider.title()  # "websearch" -> "Websearch"
             self._step_descriptions = STEP_DESCRIPTIONS.copy()
             self._step_descriptions["ImageResolver"] = f"Resolving image sources (local library + {provider_name})"
+            self._step_descriptions["ImageSelector"] = f"AI selecting best images from {smart_pick_count} candidates"
             self._step_descriptions["ImageDownloader"] = f"Downloading {provider_name} overlay images"
         else:
             self._step_descriptions = STEP_DESCRIPTIONS

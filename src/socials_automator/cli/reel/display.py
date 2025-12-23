@@ -46,7 +46,8 @@ def show_reel_config(console: Console, params: ReelGenerationParams) -> None:
     if params.overlay_images:
         tor_info = " via Tor" if params.use_tor else ""
         dim_info = f", dim={params.blur}" if params.blur else ""
-        overlay_info = f"Enabled ({params.image_provider}{tor_info}{dim_info})"
+        smart_info = f", smart-pick={params.smart_pick_count}" if params.smart_pick else ""
+        overlay_info = f"Enabled ({params.image_provider}{tor_info}{dim_info}{smart_info})"
     else:
         overlay_info = "Disabled"
 

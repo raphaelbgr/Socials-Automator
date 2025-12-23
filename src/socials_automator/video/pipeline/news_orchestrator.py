@@ -47,6 +47,7 @@ from .voice_generator import VoiceGenerator
 # Image overlay components (optional feature)
 from .image_overlay_planner import ImageOverlayPlanner
 from .image_resolver import ImageResolver
+from .image_selector import ImageSelector
 from .image_downloader import ImageDownloader
 from .image_overlay_renderer import ImageOverlayRenderer
 
@@ -83,6 +84,7 @@ STEP_DESCRIPTIONS = {
     # Image overlay steps (optional) - descriptions are updated dynamically
     "ImageOverlayPlanner": "Planning contextual image overlays with AI",
     "ImageResolver": "Finding images from cache and provider",  # Updated dynamically
+    "ImageSelector": "AI selecting best images from candidates",  # Updated dynamically
     "ImageDownloader": "Downloading overlay images",  # Updated dynamically
     "ImageOverlayRenderer": "Compositing image overlays onto video",
     "GPUImageOverlayRenderer": "Compositing image overlays (GPU NVENC)",
@@ -138,6 +140,9 @@ class NewsPipeline:
         image_provider: str = "websearch",
         use_tor: bool = False,
         blur: Optional[str] = None,
+        # Smart pick (AI-powered image selection)
+        smart_pick: bool = False,
+        smart_pick_count: int = 10,
     ):
         """Initialize news pipeline.
 
@@ -165,6 +170,8 @@ class NewsPipeline:
             image_provider: Image provider for overlays (pexels, pixabay, websearch).
             use_tor: Route websearch provider through Tor for anonymity.
             blur: Blur background during overlays (light, medium, heavy). None = disabled.
+            smart_pick: Use AI vision to select best matching images.
+            smart_pick_count: Number of candidates to compare for smart pick.
         """
         self.profile_name = profile_name
         self.profile_path = profile_path
@@ -172,6 +179,8 @@ class NewsPipeline:
         self.image_provider = image_provider
         self.use_tor = use_tor
         self.blur = blur
+        self.smart_pick = smart_pick
+        self.smart_pick_count = smart_pick_count
         self.logger = logging.getLogger("video.news_pipeline")
         self.progress_callback = progress_callback
         self.text_ai = text_ai
@@ -270,19 +279,37 @@ class NewsPipeline:
         if overlay_images:
             ai_client = text_provider_module.TextProvider(provider_override=text_ai)
             tor_info = " via Tor" if use_tor else ""
-            blur_info = f", blur={blur}" if blur else ""
-            self.display.info(f"Image overlays enabled ({image_provider}{tor_info}{blur_info})")
-            self.image_overlay_steps = [
-                ImageOverlayPlanner(text_provider=ai_client),
-                ImageResolver(image_provider=image_provider, use_tor=use_tor),
-                ImageDownloader(image_provider=image_provider, use_tor=use_tor),
-                ImageOverlayRenderer(use_gpu=gpu_accelerate, blur=blur),
-            ]
+            blur_info = f", dim={blur}" if blur else ""
+            smart_info = f", smart-pick={smart_pick_count}" if smart_pick else ""
+            self.display.info(f"Image overlays enabled ({image_provider}{tor_info}{blur_info}{smart_info})")
+
+            # Build overlay steps - use ImageSelector if smart_pick enabled
+            if smart_pick:
+                self.image_overlay_steps = [
+                    ImageOverlayPlanner(text_provider=ai_client),
+                    ImageSelector(
+                        image_provider=image_provider,
+                        use_tor=use_tor,
+                        candidate_count=smart_pick_count,
+                        text_provider=ai_client,
+                        preferred_provider=text_ai,
+                    ),
+                    ImageDownloader(image_provider=image_provider, use_tor=use_tor),
+                    ImageOverlayRenderer(use_gpu=gpu_accelerate, blur=blur),
+                ]
+            else:
+                self.image_overlay_steps = [
+                    ImageOverlayPlanner(text_provider=ai_client),
+                    ImageResolver(image_provider=image_provider, use_tor=use_tor),
+                    ImageDownloader(image_provider=image_provider, use_tor=use_tor),
+                    ImageOverlayRenderer(use_gpu=gpu_accelerate, blur=blur),
+                ]
 
             # Update step descriptions dynamically based on provider
             provider_name = image_provider.title()  # "websearch" -> "Websearch"
             self._step_descriptions = STEP_DESCRIPTIONS.copy()
             self._step_descriptions["ImageResolver"] = f"Finding images from cache and {provider_name}"
+            self._step_descriptions["ImageSelector"] = f"AI selecting best images from {provider_name} candidates"
             self._step_descriptions["ImageDownloader"] = f"Downloading {provider_name} overlay images"
         else:
             self._step_descriptions = STEP_DESCRIPTIONS
@@ -301,12 +328,17 @@ class NewsPipeline:
             "VideoAssembler",
             "ThumbnailGenerator",
         ]
-        overlay_step_names = [
-            "ImageOverlayPlanner",
-            "ImageResolver",
-            "ImageDownloader",
-            "ImageOverlayRenderer",
-        ] if overlay_images else []
+        if overlay_images:
+            # Use ImageSelector when smart_pick is enabled, else ImageResolver
+            image_step = "ImageSelector" if smart_pick else "ImageResolver"
+            overlay_step_names = [
+                "ImageOverlayPlanner",
+                image_step,
+                "ImageDownloader",
+                "ImageOverlayRenderer",
+            ]
+        else:
+            overlay_step_names = []
         final_steps = [
             "SubtitleRenderer",
             "CaptionGenerator",

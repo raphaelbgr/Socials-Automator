@@ -254,8 +254,15 @@ Generate a NEW caption that addresses this feedback.
     ) -> str:
         """Build caption prompt for news profiles.
 
-        News captions list stories with proper line breaks.
+        News captions list stories with proper line breaks and source attribution.
         """
+        # Extract source names from research (if available)
+        source_names = []
+        if context.research and context.research.sources:
+            source_names = list(set(s.get("name", "") for s in context.research.sources if s.get("name")))
+
+        sources_line = f"\nSources used: {', '.join(source_names)}" if source_names else ""
+
         return f"""Write an engaging Instagram Reels caption for a NEWS video.
 {feedback_section}
 VIDEO NARRATION (contains the news stories covered):
@@ -264,30 +271,31 @@ VIDEO NARRATION (contains the news stories covered):
 ---
 
 Topic: {context.topic.topic}
-Profile: {context.profile.display_name} ({profile_handle})
+Profile: {context.profile.display_name} ({profile_handle}){sources_line}
 
 CRITICAL REQUIREMENTS:
 1. Start with a short headline (e.g., "Night Edition: Entertainment news you can't miss!")
 2. List 3-5 news stories from the narration as bullet points
 3. EACH BULLET MUST BE ON ITS OWN LINE - use actual line breaks (\\n), NOT inline dashes
 4. Each bullet should summarize ONE story briefly (10-15 words max)
-5. End with: "Save this + follow {profile_handle} for more!"
-6. Keep under 200 words total
-7. NO EMOJIS in the caption text
-8. NO MARKDOWN FORMATTING
+5. After the CTA line, add "Sources: " followed by source names (e.g., TMZ, Variety)
+6. End with: "Save this + follow {profile_handle} for more!"
+7. Keep under 250 words total
+8. NO EMOJIS in the caption text
+9. NO MARKDOWN FORMATTING
 
 IMPORTANT: In your JSON response, use \\n for line breaks between bullets. Example:
-"caption": "Headline here\\n\\n- First story summary\\n- Second story summary\\n- Third story summary\\n\\nSave this..."
+"caption": "Headline here\\n\\n- First story summary\\n- Second story summary\\n\\nSave this...\\n\\nSources: TMZ, Variety"
 
 FORMAT - Return valid JSON only:
 {{
-    "caption": "Headline\\n\\n- Story 1\\n- Story 2\\n- Story 3\\n\\nSave this + follow {profile_handle} for more! {profile_hashtag}",
+    "caption": "Headline\\n\\n- Story 1\\n- Story 2\\n- Story 3\\n\\nSave this + follow {profile_handle} for more! {profile_hashtag}\\n\\nSources: Source1, Source2",
     "hashtags": "#Entertainment #News #Hollywood ... (5 relevant hashtags)"
 }}
 
 EXAMPLE of correct format:
 {{
-    "caption": "Night Edition: Entertainment news you can't miss!\\n\\n- Netflix's Terminator Zero anime brings franchise-changing storytelling\\n- Disney's Avatar 4 reveals eight-year time skip mystery\\n- Disney+ streaming offers holiday entertainment deals\\n\\nSave this + follow @news.but.quick for more! #Newsbutquick",
+    "caption": "Night Edition: Entertainment news you can't miss!\\n\\n- Netflix's Terminator Zero anime brings franchise-changing storytelling\\n- Disney's Avatar 4 reveals eight-year time skip mystery\\n- Disney+ streaming offers holiday entertainment deals\\n\\nSave this + follow @news.but.quick for more! #Newsbutquick\\n\\nSources: Variety, Entertainment Weekly, Deadline",
     "hashtags": "#Entertainment #Netflix #Disney #Hollywood #Streaming"
 }}
 
@@ -342,6 +350,84 @@ FORMAT - Return valid JSON only:
 
 Return ONLY the JSON, no markdown or explanation."""
 
+    def _fix_inline_bullets(self, caption: str) -> str:
+        """Fix inline bullets to use proper line breaks.
+
+        AI sometimes generates captions like:
+        "Headline! - First item - Second item - Third item Save this..."
+
+        This converts them to:
+        "Headline!
+
+        - First item
+        - Second item
+        - Third item
+
+        Save this..."
+
+        Args:
+            caption: Caption text that may have inline bullets.
+
+        Returns:
+            Caption with proper line breaks.
+        """
+        import re
+
+        # If already has proper line breaks, don't modify
+        if '\n- ' in caption or '\n* ' in caption:
+            return caption
+
+        # Pattern: sentence end (! or .) followed by space and dash
+        # Example: "miss! - First" -> "miss!\n\n- First"
+        if ' - ' in caption:
+            # Check if this looks like inline bullets (multiple dashes)
+            dash_count = caption.count(' - ')
+            if dash_count >= 2:  # At least 2 inline bullets
+                # Split into parts: headline and bullets
+                # Find the first " - " that starts a bullet point
+                # (usually after ! or . or :)
+                pattern = r'([!.?:])\s*-\s+'
+                match = re.search(pattern, caption)
+                if match:
+                    # Split at the first bullet
+                    split_pos = match.end() - len(match.group(0)) + len(match.group(1))
+                    headline = caption[:split_pos].strip()
+                    bullets_text = caption[split_pos:].strip()
+
+                    # Remove leading " - " from bullets_text
+                    bullets_text = re.sub(r'^[\s-]+', '', bullets_text)
+
+                    # Split remaining text by " - " pattern
+                    bullets = re.split(r'\s+-\s+', bullets_text)
+
+                    # Check if last bullet contains CTA (Save, Follow, etc.)
+                    cta = ""
+                    if bullets:
+                        last_bullet = bullets[-1]
+                        # Look for CTA pattern in last bullet
+                        cta_match = re.search(
+                            r'\s+(Save this|Follow|Tag|Share|Comment|Like|Check out)',
+                            last_bullet,
+                            re.IGNORECASE
+                        )
+                        if cta_match:
+                            # Split last bullet from CTA
+                            cta = last_bullet[cta_match.start():].strip()
+                            bullets[-1] = last_bullet[:cta_match.start()].strip()
+
+                    # Filter out empty bullets
+                    bullets = [b.strip() for b in bullets if b.strip()]
+
+                    # Reconstruct with proper line breaks
+                    if bullets:
+                        formatted_bullets = '\n- '.join(bullets)
+                        result = f"{headline}\n\n- {formatted_bullets}"
+                        if cta:
+                            result += f"\n\n{cta}"
+                        return result
+
+        return caption
+
     def _parse_caption_response(self, response: str, context: PipelineContext) -> tuple[str, str]:
         """Parse caption JSON response.
 
@@ -375,6 +461,9 @@ Return ONLY the JSON, no markdown or explanation."""
 
             # Strip any markdown formatting from caption
             caption = strip_markdown(caption)
+
+            # Fix inline bullets - convert to proper line breaks
+            caption = self._fix_inline_bullets(caption)
 
             # Ensure profile hashtag is in caption
             if profile_hashtag and profile_hashtag not in caption:

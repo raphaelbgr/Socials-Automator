@@ -42,6 +42,8 @@ class ReelGenerationParams:
     image_provider: str = "websearch"  # websearch, pexels, pixabay
     use_tor: bool = False  # Route websearch through Tor
     blur: Optional[str] = None  # None=disabled, light/medium/heavy
+    smart_pick: bool = False  # Use AI vision to select best image
+    smart_pick_count: int = 10  # Number of candidates to compare
 
     @classmethod
     def from_cli(
@@ -76,6 +78,8 @@ class ReelGenerationParams:
         image_provider: str = "websearch",  # websearch, pexels, pixabay
         use_tor: bool = False,  # Route websearch through Tor
         blur: Optional[str] = None,  # None=disabled, light/medium/heavy
+        smart_pick: bool = False,  # Use AI vision to select best image
+        smart_pick_count: int = 10,  # Number of candidates to compare
         **kwargs,  # Ignore extra kwargs
     ) -> "ReelGenerationParams":
         """Create from CLI arguments with parsing and defaults.
@@ -153,6 +157,8 @@ class ReelGenerationParams:
             image_provider=image_provider,
             use_tor=use_tor,
             blur=blur_normalized,
+            smart_pick=smart_pick,
+            smart_pick_count=smart_pick_count,
         )
 
 

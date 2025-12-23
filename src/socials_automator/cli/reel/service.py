@@ -269,6 +269,8 @@ class ReelGeneratorService:
             image_provider=params.image_provider,
             use_tor=params.use_tor,
             blur=params.blur,
+            smart_pick=params.smart_pick,
+            smart_pick_count=params.smart_pick_count,
         )
 
     def _create_news_pipeline(self, params: ReelGenerationParams, progress_callback):
@@ -306,6 +308,8 @@ class ReelGeneratorService:
             image_provider=params.image_provider,
             use_tor=params.use_tor,
             blur=params.blur,
+            smart_pick=params.smart_pick,
+            smart_pick_count=params.smart_pick_count,
         )
 
     def _create_output_dir(self, params: ReelGenerationParams) -> Path:

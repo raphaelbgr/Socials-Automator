@@ -54,7 +54,9 @@ def generate_reel(
     overlay_images: bool = typer.Option(False, "--overlay-images", help="Add contextual images that illustrate narration"),
     image_provider: str = typer.Option("websearch", "--image-provider", help="Image provider for overlays (websearch, pexels, pixabay)"),
     use_tor: bool = typer.Option(False, "--use-tor", help="Route websearch through Tor for anonymity"),
-    blur: Optional[str] = typer.Option(None, "--blur", help="Blur background during overlays: light, medium (default), heavy"),
+    blur: Optional[str] = typer.Option(None, "--blur", help="Dim background during overlays: light, medium, heavy"),
+    smart_pick: bool = typer.Option(False, "--smart-pick", help="Use AI vision to select best matching images"),
+    smart_pick_count: int = typer.Option(10, "--smart-pick-count", help="Number of candidates to compare (default: 10)"),
 ) -> None:
     """Generate a video reel for a profile.
 
@@ -101,6 +103,8 @@ def generate_reel(
         image_provider=image_provider,
         use_tor=use_tor,
         blur=blur,
+        smart_pick=smart_pick,
+        smart_pick_count=smart_pick_count,
     )
 
     # Validate params
