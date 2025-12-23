@@ -42,20 +42,32 @@ from socials_automator.constants import (
 logger = logging.getLogger("video.pipeline")
 
 
+# Blur intensity mapping (boxblur radius values)
+BLUR_INTENSITY = {
+    "light": 8,     # Subtle blur, background still visible
+    "medium": 15,   # Balanced blur, draws focus to overlay
+    "heavy": 30,    # Strong blur, overlay really pops
+}
+
+
 class ImageOverlayRenderer(IImageOverlayRenderer):
     """Renders image overlays onto video with GPU acceleration."""
 
     def __init__(
         self,
         use_gpu: bool = False,
+        blur: Optional[str] = None,
     ):
         """Initialize renderer.
 
         Args:
             use_gpu: Whether to use GPU acceleration (overlay_cuda + NVENC).
+            blur: Blur background during overlays (light, medium, heavy). None = disabled.
         """
         super().__init__()
         self._use_gpu = use_gpu
+        self._blur = blur
+        self._blur_radius = BLUR_INTENSITY.get(blur, 0) if blur else 0
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """Execute image overlay rendering step.
@@ -174,6 +186,37 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
 
         # Get video stream
         video_stream = video.video
+
+        # Apply blur during overlay times (if enabled)
+        if self._blur_radius > 0 and overlays:
+            # Build blur enable expression: blur only when any overlay is showing
+            # Example: 'between(t,3.5,12.0)+between(t,15.0,25.0)'
+            blur_ranges = []
+            for overlay in overlays:
+                if overlay.image_path and overlay.image_path.exists():
+                    blur_ranges.append(f"between(t,{overlay.start_time},{overlay.end_time})")
+
+            if blur_ranges:
+                blur_enable = "+".join(blur_ranges)
+                self.log_progress(f"  [>] Background blur enabled ({self._blur}, radius={self._blur_radius})")
+
+                if self._use_gpu:
+                    # GPU: download from CUDA, blur, re-upload
+                    # Note: There's no boxblur_cuda, so we need CPU blur
+                    video_stream = (
+                        video_stream
+                        .filter('hwdownload')
+                        .filter('format', 'nv12')
+                        .filter('boxblur', self._blur_radius, enable=blur_enable)
+                        .filter('hwupload_cuda')
+                    )
+                else:
+                    # CPU: simple boxblur with enable expression
+                    video_stream = video_stream.filter(
+                        'boxblur',
+                        self._blur_radius,
+                        enable=blur_enable
+                    )
 
         # Chain overlays one by one
         for i, overlay in enumerate(overlays):
@@ -361,6 +404,22 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
 
         current_stream = "[0:v]"
 
+        # Add blur filter if enabled
+        if self._blur_radius > 0 and overlays:
+            # Build blur enable expression
+            blur_ranges = []
+            for overlay in overlays:
+                if overlay.image_path and overlay.image_path.exists():
+                    blur_ranges.append(f"between(t\\,{overlay.start_time}\\,{overlay.end_time})")
+
+            if blur_ranges:
+                blur_enable = "+".join(blur_ranges)
+                self.log_progress(f"  [>] Background blur enabled ({self._blur}, radius={self._blur_radius})")
+                filter_parts.append(
+                    f"[0:v]boxblur={self._blur_radius}:enable='{blur_enable}'[blurred]"
+                )
+                current_stream = "[blurred]"
+
         for i, overlay in enumerate(overlays):
             if not overlay.image_path or not overlay.image_path.exists():
                 continue
@@ -482,8 +541,9 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
         coverage = overlay_script.total_coverage
         if total_duration and total_duration > 0:
             coverage_pct = (coverage / total_duration) * 100
+            blur_info = f", blur={self._blur}" if self._blur else ""
             self.log_progress(
-                f"\n  Coverage: {coverage:.1f}s / {total_duration:.1f}s ({coverage_pct:.0f}% of video)"
+                f"\n  Coverage: {coverage:.1f}s / {total_duration:.1f}s ({coverage_pct:.0f}% of video{blur_info})"
             )
 
         self.log_progress("")

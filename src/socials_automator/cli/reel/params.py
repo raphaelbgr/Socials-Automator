@@ -41,6 +41,7 @@ class ReelGenerationParams:
     overlay_images: bool = False
     image_provider: str = "websearch"  # websearch, pexels, pixabay
     use_tor: bool = False  # Route websearch through Tor
+    blur: Optional[str] = None  # None=disabled, light/medium/heavy
 
     @classmethod
     def from_cli(
@@ -74,6 +75,7 @@ class ReelGenerationParams:
         overlay_images: bool = False,
         image_provider: str = "websearch",  # websearch, pexels, pixabay
         use_tor: bool = False,  # Route websearch through Tor
+        blur: Optional[str] = None,  # None=disabled, light/medium/heavy
         **kwargs,  # Ignore extra kwargs
     ) -> "ReelGenerationParams":
         """Create from CLI arguments with parsing and defaults.
@@ -111,6 +113,15 @@ class ReelGenerationParams:
         from socials_automator.hashtag import INSTAGRAM_MAX_HASHTAGS
         max_hashtags = max(1, min(30, hashtags)) if hashtags else INSTAGRAM_MAX_HASHTAGS
 
+        # Normalize blur value: empty string or invalid -> "medium"
+        blur_normalized: Optional[str] = None
+        if blur is not None:
+            blur_lower = blur.lower().strip() if blur else "medium"
+            if blur_lower in ("light", "medium", "heavy"):
+                blur_normalized = blur_lower
+            else:
+                blur_normalized = "medium"  # Default for invalid/empty values
+
         return cls(
             profile=profile,
             profile_path=profile_path,
@@ -141,6 +152,7 @@ class ReelGenerationParams:
             overlay_images=overlay_images,
             image_provider=image_provider,
             use_tor=use_tor,
+            blur=blur_normalized,
         )
 
 

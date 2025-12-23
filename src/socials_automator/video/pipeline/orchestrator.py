@@ -142,6 +142,7 @@ class VideoPipeline:
         overlay_images: bool = False,
         image_provider: str = "websearch",
         use_tor: bool = False,
+        blur: Optional[str] = None,
     ):
         """Initialize video pipeline.
 
@@ -168,6 +169,7 @@ class VideoPipeline:
             overlay_images: Enable image overlays during narration segments.
             image_provider: Image provider for overlays (pexels, pixabay, websearch).
             use_tor: Route websearch provider through Tor for anonymity.
+            blur: Blur background during overlays (light, medium, heavy). None = disabled.
         """
         self.logger = logging.getLogger("video.pipeline")
         self.video_first = video_first
@@ -265,12 +267,13 @@ class VideoPipeline:
         self.image_overlay_steps: list[PipelineStep] = []
         if overlay_images:
             tor_info = " via Tor" if use_tor else ""
-            self.display.info(f"Image overlays enabled ({image_provider}{tor_info})")
+            blur_info = f", blur={blur}" if blur else ""
+            self.display.info(f"Image overlays enabled ({image_provider}{tor_info}{blur_info})")
             self.image_overlay_steps = [
                 ImageOverlayPlanner(text_provider=self.ai_client),
                 ImageResolver(image_provider=image_provider, use_tor=use_tor),
                 ImageDownloader(image_provider=image_provider, use_tor=use_tor),
-                ImageOverlayRenderer(use_gpu=gpu_accelerate),
+                ImageOverlayRenderer(use_gpu=gpu_accelerate, blur=blur),
             ]
 
             # Update step descriptions dynamically based on provider

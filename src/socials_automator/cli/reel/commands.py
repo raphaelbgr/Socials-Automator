@@ -54,6 +54,7 @@ def generate_reel(
     overlay_images: bool = typer.Option(False, "--overlay-images", help="Add contextual images that illustrate narration"),
     image_provider: str = typer.Option("websearch", "--image-provider", help="Image provider for overlays (websearch, pexels, pixabay)"),
     use_tor: bool = typer.Option(False, "--use-tor", help="Route websearch through Tor for anonymity"),
+    blur: Optional[str] = typer.Option(None, "--blur", help="Blur background during overlays: light, medium (default), heavy"),
 ) -> None:
     """Generate a video reel for a profile.
 
@@ -99,6 +100,7 @@ def generate_reel(
         overlay_images=overlay_images,
         image_provider=image_provider,
         use_tor=use_tor,
+        blur=blur,
     )
 
     # Validate params

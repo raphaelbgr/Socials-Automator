@@ -268,6 +268,7 @@ class ReelGeneratorService:
             overlay_images=params.overlay_images,
             image_provider=params.image_provider,
             use_tor=params.use_tor,
+            blur=params.blur,
         )
 
     def _create_news_pipeline(self, params: ReelGenerationParams, progress_callback):
@@ -304,6 +305,7 @@ class ReelGeneratorService:
             overlay_images=params.overlay_images,
             image_provider=params.image_provider,
             use_tor=params.use_tor,
+            blur=params.blur,
         )
 
     def _create_output_dir(self, params: ReelGenerationParams) -> Path:

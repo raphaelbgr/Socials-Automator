@@ -137,6 +137,7 @@ class NewsPipeline:
         overlay_images: bool = False,
         image_provider: str = "websearch",
         use_tor: bool = False,
+        blur: Optional[str] = None,
     ):
         """Initialize news pipeline.
 
@@ -163,12 +164,14 @@ class NewsPipeline:
             overlay_images: Enable contextual image overlays (pop-in/pop-out).
             image_provider: Image provider for overlays (pexels, pixabay, websearch).
             use_tor: Route websearch provider through Tor for anonymity.
+            blur: Blur background during overlays (light, medium, heavy). None = disabled.
         """
         self.profile_name = profile_name
         self.profile_path = profile_path
         self.overlay_images = overlay_images
         self.image_provider = image_provider
         self.use_tor = use_tor
+        self.blur = blur
         self.logger = logging.getLogger("video.news_pipeline")
         self.progress_callback = progress_callback
         self.text_ai = text_ai
@@ -267,12 +270,13 @@ class NewsPipeline:
         if overlay_images:
             ai_client = text_provider_module.TextProvider(provider_override=text_ai)
             tor_info = " via Tor" if use_tor else ""
-            self.display.info(f"Image overlays enabled ({image_provider}{tor_info})")
+            blur_info = f", blur={blur}" if blur else ""
+            self.display.info(f"Image overlays enabled ({image_provider}{tor_info}{blur_info})")
             self.image_overlay_steps = [
                 ImageOverlayPlanner(text_provider=ai_client),
                 ImageResolver(image_provider=image_provider, use_tor=use_tor),
                 ImageDownloader(image_provider=image_provider, use_tor=use_tor),
-                ImageOverlayRenderer(use_gpu=gpu_accelerate),
+                ImageOverlayRenderer(use_gpu=gpu_accelerate, blur=blur),
             ]
 
             # Update step descriptions dynamically based on provider

@@ -453,6 +453,7 @@ python -m socials_automator.cli generate-reel <profile> [OPTIONS]
 | `--overlay-images` | | Add contextual images that illustrate narration (pop-in/pop-out) | False |
 | `--image-provider` | | Image provider for overlays: websearch, pexels, pixabay | websearch |
 | `--use-tor` | | Route websearch requests through embedded Tor for anonymity | False |
+| `--blur` | | Blur background during overlays: light, medium, heavy | None |
 
 **Available Voices:**
 | Voice | Description |
@@ -562,6 +563,15 @@ python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --
 python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --image-provider pexels
 python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --image-provider pixabay
 
+# Blur background during overlays (draws focus to the image)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --blur medium
+
+# Light blur (subtle, background still visible)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --blur light
+
+# Heavy blur (strong effect, overlay really pops)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --blur heavy
+
 # Control hashtag count (Instagram limit is 5 as of Dec 2025)
 python -m socials_automator.cli generate-reel ai.for.mortals --hashtags 3
 
@@ -666,6 +676,26 @@ The `websearch` provider supports embedded Tor for anonymous image scraping:
 # Anonymous web scraping with Tor (websearch is already default)
 python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --use-tor
 ```
+
+**Background Blur (`--blur`):**
+
+Blur the video background when image overlays are displayed, drawing focus to the overlay image:
+
+| Intensity | Effect | Use Case |
+|-----------|--------|----------|
+| `light` | Subtle blur (radius=8) | Background still visible, slight focus shift |
+| `medium` | Balanced blur (radius=15) | Clear focus on overlay, background softened |
+| `heavy` | Strong blur (radius=30) | Overlay really pops, background heavily blurred |
+
+```bash
+# Medium blur (recommended for most videos)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --blur medium
+
+# Combine with Tor for full setup
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --blur medium --use-tor
+```
+
+The blur is applied dynamically - only active when an overlay is showing, and the background returns to normal between overlays.
 
 **Output:**
 ```
