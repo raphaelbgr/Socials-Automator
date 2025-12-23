@@ -2,7 +2,7 @@
 
 Resolves each planned image overlay to an actual image file:
 1. First checks the profile's local image library
-2. Falls back to Pexels search
+2. Falls back to configured image provider (Pexels, Pixabay, etc.)
 3. Skips if no good match found (especially for exact matches)
 
 Local Image Library Structure:
@@ -25,7 +25,12 @@ from .base import (
     LocalImageMetadata,
     PipelineContext,
 )
-from .pexels_image import PexelsImageClient
+from .image_providers import (
+    IImageSearchProvider,
+    ImageSearchResult,
+    get_image_provider,
+    AVAILABLE_PROVIDERS,
+)
 
 logger = logging.getLogger("ai_calls")
 
@@ -35,26 +40,38 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
 class ImageResolver(IImageResolver):
-    """Resolves image overlays to actual files."""
+    """Resolves image overlays to actual files.
+
+    Supports multiple image providers (Pexels, Pixabay, etc.) via the
+    --image-provider CLI flag.
+    """
 
     def __init__(
         self,
-        pexels_client: Optional[PexelsImageClient] = None,
+        image_provider: Optional[str] = None,
+        use_tor: bool = False,
     ):
         """Initialize image resolver.
 
         Args:
-            pexels_client: Optional Pexels client for image search.
+            image_provider: Image provider name (websearch, pexels, pixabay).
+                            Defaults to "websearch" if not specified.
+            use_tor: Route websearch provider through Tor for anonymity.
         """
         super().__init__()
-        self._pexels_client = pexels_client
-        self._used_pexels_ids: set[int] = set()
+        self._provider_name = image_provider or "websearch"
+        self._use_tor = use_tor
+        self._provider: Optional[IImageSearchProvider] = None
+        self._used_image_ids: set[str] = set()
 
-    def _get_pexels_client(self) -> PexelsImageClient:
-        """Get or create Pexels client."""
-        if self._pexels_client is None:
-            self._pexels_client = PexelsImageClient()
-        return self._pexels_client
+    def _get_provider(self) -> IImageSearchProvider:
+        """Get or create image provider."""
+        if self._provider is None:
+            self._provider = get_image_provider(
+                self._provider_name,
+                use_tor=self._use_tor,
+            )
+        return self._provider
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """Execute image resolution step.
@@ -69,7 +86,7 @@ class ImageResolver(IImageResolver):
             self.log_progress("No overlays to resolve")
             return context
 
-        self.log_start("Resolving image sources (local library + Pexels)")
+        self.log_start(f"Resolving image sources (local library + {self._provider_name})")
 
         try:
             overlay_script = await self.resolve_images(
@@ -84,11 +101,14 @@ class ImageResolver(IImageResolver):
 
             # Count by source
             local_count = sum(1 for o in overlay_script.overlays if o.source == "local")
-            pexels_count = sum(1 for o in overlay_script.overlays if o.source == "pexels")
+            provider_count = sum(
+                1 for o in overlay_script.overlays
+                if o.source and o.source not in ("local", None)
+            )
             skipped_count = sum(1 for o in overlay_script.overlays if o.source is None)
 
             self.log_success(
-                f"{local_count} local, {pexels_count} Pexels, {skipped_count} skipped"
+                f"{local_count} local, {provider_count} {self._provider_name.title()}, {skipped_count} skipped"
             )
 
             return context
@@ -151,23 +171,24 @@ class ImageResolver(IImageResolver):
                 )
                 return
 
-        # Try Pexels for non-exact or if local not found
+        # Try configured image provider for non-exact or if local not found
         if overlay.pexels_query:
-            pexels_result = await self._search_pexels(overlay)
+            search_result = await self._search_provider(overlay)
 
-            if pexels_result:
-                overlay.source = "pexels"
-                overlay.pexels_id = pexels_result.get("id")
-                overlay.width = pexels_result.get("width", 0)
-                overlay.height = pexels_result.get("height", 0)
-                overlay.alt_text = pexels_result.get("alt", overlay.alt_text)
+            if search_result:
+                overlay.source = self._provider_name
+                overlay.pexels_id = search_result.id  # Use generic ID field
+                overlay.download_url = search_result.url  # URL for downloading
+                overlay.width = search_result.width
+                overlay.height = search_result.height
+                overlay.alt_text = search_result.description or overlay.alt_text
 
                 # Mark as used to avoid duplicates
-                if overlay.pexels_id:
-                    self._used_pexels_ids.add(overlay.pexels_id)
+                if search_result.id:
+                    self._used_image_ids.add(search_result.id)
 
                 self.log_detail(
-                    f"PEXELS match: {overlay.topic} -> pexels:{overlay.pexels_id}"
+                    f"{self._provider_name.upper()} match: {overlay.topic} -> {self._provider_name}:{search_result.id}"
                 )
                 return
 
@@ -290,28 +311,35 @@ class ImageResolver(IImageResolver):
 
         return None
 
-    async def _search_pexels(self, overlay: ImageOverlay) -> Optional[dict]:
-        """Search Pexels for an image.
+    async def _search_provider(self, overlay: ImageOverlay) -> Optional[ImageSearchResult]:
+        """Search configured image provider for an image.
 
         Args:
-            overlay: Overlay with pexels_query.
+            overlay: Overlay with pexels_query (used as search query).
 
         Returns:
-            Pexels image data or None.
+            ImageSearchResult or None.
         """
         if not overlay.pexels_query:
             return None
 
         try:
-            client = self._get_pexels_client()
-            result = await client.search_and_select_best(
+            provider = self._get_provider()
+            results = await provider.search(
                 query=overlay.pexels_query,
-                exclude_ids=self._used_pexels_ids,
+                per_page=10,
             )
-            return result
+
+            # Filter out already used images
+            for result in results:
+                if result.id not in self._used_image_ids:
+                    return result
+
+            # If all results used, return first anyway
+            return results[0] if results else None
 
         except Exception as e:
-            logger.warning(f"Pexels search failed: {e}")
+            logger.warning(f"{self._provider_name} search failed: {e}")
             return None
 
     def _update_image_dimensions(self, overlay: ImageOverlay) -> None:
@@ -351,10 +379,10 @@ class ImageResolver(IImageResolver):
                 source = "LOCAL "
                 match_reason = "local library"[:25].ljust(25)
                 file_info = str(overlay.image_path.name)[:25] if overlay.image_path else "?"
-            elif overlay.source == "pexels":
-                source = "PEXELS"
+            elif overlay.source and overlay.source != "local":
+                source = overlay.source.upper()[:6].ljust(6)
                 match_reason = f"query match"[:25].ljust(25)
-                file_info = f"pexels:{overlay.pexels_id}"[:25]
+                file_info = f"{overlay.source}:{overlay.pexels_id}"[:25]
             else:
                 source = "SKIP  "
                 match_reason = "no match"[:25].ljust(25)
@@ -368,5 +396,5 @@ class ImageResolver(IImageResolver):
 
     async def close(self) -> None:
         """Close any open connections."""
-        if self._pexels_client:
-            await self._pexels_client.close()
+        if self._provider:
+            await self._provider.close()

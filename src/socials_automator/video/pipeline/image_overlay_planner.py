@@ -30,67 +30,82 @@ logger = logging.getLogger("ai_calls")
 
 
 # System prompt for image overlay planning
-IMAGE_OVERLAY_SYSTEM_PROMPT = """You are an AI that analyzes video scripts to determine where images should appear to illustrate the narration.
+IMAGE_OVERLAY_SYSTEM_PROMPT = """You are an AI that analyzes video scripts to plan image overlays for EVERY distinct subject mentioned.
 
-Your task is to identify segments that would benefit from visual support and determine the best image to show.
+Your goal is MAXIMUM COVERAGE - add an image overlay for EACH subject, product, show, concept, or topic discussed in the narration.
+
+## CRITICAL: COVER ALL SUBJECTS
+
+For news/list-style videos, you MUST add an overlay for EACH item discussed:
+- If the video mentions 5 different shows/products/topics, plan 5 overlays
+- Each subject deserves its own image during its discussion time
+- The viewer should see a relevant image for EVERY topic mentioned
 
 ## IMAGE TYPES
 
-1. **EXACT MATCH** (match_type: "exact")
-   - Use when discussing specific, identifiable content:
+1. **EXACT MATCH** (match_type: "exact") - PREFERRED
+   - Use for specific, identifiable content:
      - TV shows, movies, games (e.g., "Stranger Things", "The Witcher")
      - Products, apps, software (e.g., "ChatGPT", "iPhone 15", "Midjourney")
      - Brands, companies (e.g., "Netflix", "OpenAI", "Apple")
      - Famous people (e.g., "Elon Musk", "Sam Altman")
    - The image MUST be the actual thing being discussed
-   - Set confidence HIGH (0.9+) for these
+   - Set confidence HIGH (0.9+)
 
 2. **ILLUSTRATIVE** (match_type: "illustrative")
-   - Use for abstract concepts, actions, or generic ideas:
+   - Use for abstract concepts when no exact image exists:
      - "productivity tips" -> person working at desk
-     - "morning routine" -> coffee cup, sunrise
-     - "staying organized" -> planner, to-do list
-   - A relevant stock photo is acceptable
+     - "AI safety" -> futuristic technology concept
    - Set confidence MEDIUM (0.6-0.8)
 
-## WHEN TO SKIP (do not add overlay)
+## WHEN TO SKIP (only these cases)
 
-- Opening hooks (segment 0 or first few seconds) - let the video speak
-- Call-to-action segments - focus on the message
-- Transitions between topics
-- When the narration is self-explanatory
-- When no good image would add value
+- First 2-3 seconds (opening hook) - let video establish
+- Final CTA segment ("follow for more", "like and subscribe")
+- That's it - DO NOT skip content segments!
 
 ## OUTPUT FORMAT
 
-Return valid JSON with this structure:
+Return valid JSON:
 {
   "overlays": [
     {
       "segment_index": 1,
-      "start_time": 5.2,
-      "end_time": 15.8,
+      "start_time": 3.5,
+      "end_time": 12.0,
       "topic": "Stranger Things",
       "match_type": "exact",
       "local_hint": "stranger-things",
       "pexels_query": "stranger things netflix series poster",
       "confidence": 0.95,
       "alt_text": "Stranger Things TV show poster"
+    },
+    {
+      "segment_index": 2,
+      "start_time": 12.0,
+      "end_time": 22.5,
+      "topic": "Wednesday",
+      "match_type": "exact",
+      "local_hint": "wednesday-netflix",
+      "pexels_query": "wednesday addams netflix series",
+      "confidence": 0.95,
+      "alt_text": "Wednesday Netflix series"
     }
   ],
   "skipped": [
-    {"segment_index": 0, "reason": "Opening hook - no image needed"},
-    {"segment_index": 5, "reason": "CTA segment"}
+    {"segment_index": 0, "reason": "Opening hook"},
+    {"segment_index": 6, "reason": "CTA"}
   ]
 }
 
 ## RULES
 
-1. local_hint should be lowercase, hyphenated (e.g., "stranger-things", "chat-gpt")
-2. pexels_query should be descriptive for stock photo search
-3. Only add overlays that genuinely enhance understanding
+1. AIM FOR ONE OVERLAY PER DISTINCT SUBJECT - if 5 topics are discussed, plan 5 overlays
+2. local_hint: lowercase, hyphenated (e.g., "stranger-things", "chat-gpt")
+3. pexels_query: descriptive search terms for the image
 4. For EXACT matches, be specific in the topic field
-5. alt_text should describe what the image shows for accessibility
+5. Overlays should NOT overlap in time - end one before starting the next
+6. Coverage is key - more overlays is better than fewer
 """
 
 
@@ -229,7 +244,7 @@ class ImageOverlayPlanner(IImageOverlayPlanner):
             f'"{script.cta}"'
         )
 
-        prompt = f"""Analyze this video script and plan image overlays:
+        prompt = f"""Analyze this video script and plan image overlays for ALL subjects:
 
 TITLE: {script.title}
 
@@ -241,12 +256,14 @@ SEGMENTS WITH TIMING:
 
 TOTAL DURATION: {script.total_duration:.1f}s
 
-Determine which segments need image overlays and return the JSON response.
-Remember:
+IMPORTANT: Plan an overlay for EACH distinct subject/topic mentioned in the narration.
+- Count how many different subjects are discussed (shows, products, apps, concepts)
+- Plan one overlay image for EACH subject during its discussion time
 - Use "exact" match_type for specific content (shows, products, brands, people)
-- Use "illustrative" for abstract concepts
-- Skip hooks and CTAs
-- Only add overlays that genuinely enhance the video
+- Use "illustrative" only when no exact image exists
+- Only skip the opening hook (first 2-3s) and final CTA
+
+Return JSON with overlays covering ALL subjects discussed.
 """
 
         return prompt

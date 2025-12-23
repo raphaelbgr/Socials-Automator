@@ -470,7 +470,9 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
             if overlay.source == "local":
                 image_name = str(overlay.image_path.name)[:25] if overlay.image_path else "?"
             else:
-                image_name = f"pexels:{overlay.pexels_id}"[:25] if overlay.pexels_id else "?"
+                # Use actual source (pexels, pixabay, websearch, etc.)
+                source = overlay.source or "unknown"
+                image_name = f"{source}:{overlay.pexels_id}"[:25] if overlay.pexels_id else "?"
 
             self.log_progress(
                 f"  | {time_range} | {image_name.ljust(25)} | {mode[:13].ljust(13)} |"

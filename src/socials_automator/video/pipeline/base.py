@@ -160,10 +160,11 @@ class ImageOverlay(BaseModel):
     match_type: str  # "exact" or "illustrative"
 
     # Resolution results (filled by ImageResolver)
-    source: Optional[str] = None  # "local", "pexels", or None (skip)
+    source: Optional[str] = None  # "local", "pexels", "pixabay", or None (skip)
     local_hint: Optional[str] = None  # Folder name in local library
     pexels_query: Optional[str] = None  # Fallback search query
-    pexels_id: Optional[int] = None  # Resolved Pexels image ID
+    pexels_id: Optional[str] = None  # Resolved image ID (provider-agnostic)
+    download_url: Optional[str] = None  # URL to download from (provider-specific)
     image_path: Optional[Path] = None  # Final local path to image
 
     # Metadata

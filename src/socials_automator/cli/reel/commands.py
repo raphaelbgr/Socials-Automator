@@ -52,6 +52,8 @@ def generate_reel(
     news_max_age: int = typer.Option(24, "--news-age", help="Max news age in hours"),
     # Image overlay feature
     overlay_images: bool = typer.Option(False, "--overlay-images", help="Add contextual images that illustrate narration"),
+    image_provider: str = typer.Option("websearch", "--image-provider", help="Image provider for overlays (websearch, pexels, pixabay)"),
+    use_tor: bool = typer.Option(False, "--use-tor", help="Route websearch through Tor for anonymity"),
 ) -> None:
     """Generate a video reel for a profile.
 
@@ -95,6 +97,8 @@ def generate_reel(
         news_max_age=news_max_age,
         # Image overlay
         overlay_images=overlay_images,
+        image_provider=image_provider,
+        use_tor=use_tor,
     )
 
     # Validate params

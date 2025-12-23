@@ -39,6 +39,8 @@ class ReelGenerationParams:
     news_max_age_hours: int = 24
     # Image overlay feature
     overlay_images: bool = False
+    image_provider: str = "websearch"  # websearch, pexels, pixabay
+    use_tor: bool = False  # Route websearch through Tor
 
     @classmethod
     def from_cli(
@@ -70,6 +72,8 @@ class ReelGenerationParams:
         news_max_age: int = 24,
         # Image overlay feature
         overlay_images: bool = False,
+        image_provider: str = "websearch",  # websearch, pexels, pixabay
+        use_tor: bool = False,  # Route websearch through Tor
         **kwargs,  # Ignore extra kwargs
     ) -> "ReelGenerationParams":
         """Create from CLI arguments with parsing and defaults.
@@ -135,6 +139,8 @@ class ReelGenerationParams:
             news_max_age_hours=news_max_age,
             # Image overlay
             overlay_images=overlay_images,
+            image_provider=image_provider,
+            use_tor=use_tor,
         )
 
 

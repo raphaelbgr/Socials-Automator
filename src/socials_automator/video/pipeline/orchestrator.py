@@ -74,10 +74,10 @@ STEP_DESCRIPTIONS = {
     "VideoDownloader": "Downloading video clips (with cache optimization)",
     "VideoAssembler": "Assembling clips into 9:16 vertical video",
     "GPUVideoAssembler": "Assembling clips into 9:16 vertical video (GPU NVENC)",
-    # Image overlay steps
+    # Image overlay steps (descriptions updated dynamically based on provider)
     "ImageOverlayPlanner": "AI planning image overlays for narration segments",
-    "ImageResolver": "Resolving image sources (local library + Pexels)",
-    "ImageDownloader": "Downloading overlay images (with cache optimization)",
+    "ImageResolver": "Resolving image sources (local library + provider)",  # Updated dynamically
+    "ImageDownloader": "Downloading overlay images (with cache optimization)",  # Updated dynamically
     "ImageOverlayRenderer": "Rendering image overlays with pop animations",
     # Subtitle and caption steps
     "SubtitleRenderer": "Rendering karaoke-style subtitles and adding audio",
@@ -140,6 +140,8 @@ class VideoPipeline:
         video_first: bool = True,
         profile_path: Optional[Path] = None,
         overlay_images: bool = False,
+        image_provider: str = "websearch",
+        use_tor: bool = False,
     ):
         """Initialize video pipeline.
 
@@ -164,6 +166,8 @@ class VideoPipeline:
                 When False, uses legacy segment-based mode where segments define video boundaries.
             profile_path: Path to profile directory for session-based AI context.
             overlay_images: Enable image overlays during narration segments.
+            image_provider: Image provider for overlays (pexels, pixabay, websearch).
+            use_tor: Route websearch provider through Tor for anonymity.
         """
         self.logger = logging.getLogger("video.pipeline")
         self.video_first = video_first
@@ -179,6 +183,8 @@ class VideoPipeline:
         self.gpu_info: Optional[GPUInfo] = None
         self.profile_path = profile_path
         self.overlay_images = overlay_images
+        self.image_provider = image_provider
+        self.use_tor = use_tor
 
         # Initialize debug logger
         self.debug_logger = PipelineDebugLogger()
@@ -258,13 +264,22 @@ class VideoPipeline:
         # Image overlay components (optional feature)
         self.image_overlay_steps: list[PipelineStep] = []
         if overlay_images:
-            self.display.info("Image overlays enabled")
+            tor_info = " via Tor" if use_tor else ""
+            self.display.info(f"Image overlays enabled ({image_provider}{tor_info})")
             self.image_overlay_steps = [
                 ImageOverlayPlanner(text_provider=self.ai_client),
-                ImageResolver(),  # Auto-creates PexelsImageClient
-                ImageDownloader(),  # Auto-creates PexelsImageClient and cache
+                ImageResolver(image_provider=image_provider, use_tor=use_tor),
+                ImageDownloader(image_provider=image_provider, use_tor=use_tor),
                 ImageOverlayRenderer(use_gpu=gpu_accelerate),
             ]
+
+            # Update step descriptions dynamically based on provider
+            provider_name = image_provider.title()  # "websearch" -> "Websearch"
+            self._step_descriptions = STEP_DESCRIPTIONS.copy()
+            self._step_descriptions["ImageResolver"] = f"Resolving image sources (local library + {provider_name})"
+            self._step_descriptions["ImageDownloader"] = f"Downloading {provider_name} overlay images"
+        else:
+            self._step_descriptions = STEP_DESCRIPTIONS
 
         # Sequential: Assembly -> Thumbnail -> [Image Overlays] -> Subtitles -> Caption
         # ThumbnailGenerator runs BEFORE SubtitleRenderer to get clean frames without text
@@ -461,7 +476,7 @@ class VideoPipeline:
             for step in self.sequential_steps[:-1]:  # Skip ScriptPlanner, we'll run it in the duration loop
                 step_name = step.name
                 progress = step_counter / total_steps
-                description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
+                description = self._step_descriptions.get(step_name, f"Executing {step_name}")
 
                 self.display.start_step(step_name, description)
                 self.debug_logger.start_step(step_name)
@@ -497,7 +512,7 @@ class VideoPipeline:
                 # Run ScriptPlanner (with duration feedback if retrying)
                 step_name = script_planner.name
                 progress = step_counter / total_steps
-                description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
+                description = self._step_descriptions.get(step_name, f"Executing {step_name}")
 
                 if duration_attempt > 1:
                     self.display.info(f"Regenerating script (attempt {duration_attempt}/{self.MAX_DURATION_RETRIES}) - adjusting for duration...")
@@ -539,7 +554,7 @@ class VideoPipeline:
                 # Run VoiceGenerator to get actual audio duration
                 voice_step = self.voice_step
                 step_name = voice_step.name
-                description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
+                description = self._step_descriptions.get(step_name, f"Executing {step_name}")
 
                 # Only show step header on first attempt
                 if not voice_step_counted:
@@ -761,7 +776,7 @@ class VideoPipeline:
                     # Video search
                     search_step = self.video_search_step
                     step_name = search_step.name
-                    description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
+                    description = self._step_descriptions.get(step_name, f"Executing {step_name}")
 
                     if retry_count == 0:
                         self.display.start_step(step_name, description)
@@ -783,7 +798,7 @@ class VideoPipeline:
                     # Video download
                     download_step = self.video_download_step
                     step_name = download_step.name
-                    description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
+                    description = self._step_descriptions.get(step_name, f"Executing {step_name}")
 
                     if retry_count == 0:
                         self.display.start_step(step_name, description)
@@ -896,7 +911,7 @@ Return ONLY the keywords, one per line, no numbers or bullets."""
             for step in self.final_steps:
                 step_name = step.name
                 progress = step_counter / total_steps
-                description = STEP_DESCRIPTIONS.get(step_name, f"Executing {step_name}")
+                description = self._step_descriptions.get(step_name, f"Executing {step_name}")
 
                 self.display.start_step(step_name, description)
                 self.debug_logger.start_step(step_name)

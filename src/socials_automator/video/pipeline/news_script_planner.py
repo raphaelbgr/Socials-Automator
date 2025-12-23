@@ -11,6 +11,7 @@ Structure:
 
 import json
 import logging
+import re
 import time
 from datetime import datetime
 from typing import Optional
@@ -28,6 +29,44 @@ from ...news.models import NewsBrief, NewsStory, NewsEdition
 from ...providers.text import TextProvider
 
 logger = logging.getLogger("ai_calls")
+
+
+def _sanitize_narration_text(text: str) -> str:
+    """Remove hashtags and emojis from narration text.
+
+    Hashtags and emojis should NOT be in voiceover - only in captions.
+
+    Args:
+        text: Raw text that may contain hashtags/emojis.
+
+    Returns:
+        Cleaned text suitable for voice narration.
+    """
+    if not text:
+        return text
+
+    # Remove hashtags (e.g., #news, #entertainment)
+    text = re.sub(r'#\w+', '', text)
+
+    # Remove common emojis (basic Unicode ranges)
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"  # Emoticons
+        "\U0001F300-\U0001F5FF"  # Symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # Transport & map symbols
+        "\U0001F1E0-\U0001F1FF"  # Flags
+        "\U00002700-\U000027BF"  # Dingbats
+        "\U0001F900-\U0001F9FF"  # Supplemental symbols
+        "\U00002600-\U000026FF"  # Misc symbols
+        "]+",
+        flags=re.UNICODE
+    )
+    text = emoji_pattern.sub('', text)
+
+    # Clean up extra whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text
 
 
 # =============================================================================
@@ -365,8 +404,8 @@ class NewsScriptPlanner(PipelineStep):
             logger.debug(f"Response: {response[:500]}")
             return self._fallback_script(brief, "@news.but.quick")
 
-        # Extract components
-        hook = data.get("hook", brief.get_hook_text())
+        # Extract components and sanitize (remove hashtags/emojis from narration)
+        hook = _sanitize_narration_text(data.get("hook", brief.get_hook_text()))
         cta = "Follow News But Quick to keep up to date with the latest news!"
         segments_data = data.get("segments", [])
 
@@ -375,7 +414,7 @@ class NewsScriptPlanner(PipelineStep):
         current_time = self.HOOK_DURATION
 
         for i, seg_data in enumerate(segments_data):
-            text = seg_data.get("text", "")
+            text = _sanitize_narration_text(seg_data.get("text", ""))
             keywords = seg_data.get("keywords", [])[:4]
 
             # Estimate duration from word count
@@ -426,13 +465,13 @@ class NewsScriptPlanner(PipelineStep):
         profile_handle: str,
     ) -> VideoScript:
         """Create a basic script when AI fails."""
-        hook = brief.get_hook_text()
+        hook = _sanitize_narration_text(brief.get_hook_text())
         segments = []
         current_time = self.HOOK_DURATION
 
         for i, story in enumerate(brief.stories):
-            # Build narration from story components
-            text = f"{story.headline}. {story.summary}"
+            # Build narration from story components (sanitize to remove hashtags/emojis)
+            text = _sanitize_narration_text(f"{story.headline}. {story.summary}")
 
             # Use story's visual keywords or generate generic ones
             keywords = story.visual_keywords[:3] if story.visual_keywords else [

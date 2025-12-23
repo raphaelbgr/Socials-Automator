@@ -451,6 +451,8 @@ python -m socials_automator.cli generate-reel <profile> [OPTIONS]
 | `--stories` | `-s` | Number of news stories per video | 4 |
 | `--news-age` | | Max age of news articles in hours | 24 |
 | `--overlay-images` | | Add contextual images that illustrate narration (pop-in/pop-out) | False |
+| `--image-provider` | | Image provider for overlays: websearch, pexels, pixabay | websearch |
+| `--use-tor` | | Route websearch requests through embedded Tor for anonymity | False |
 
 **Available Voices:**
 | Voice | Description |
@@ -547,10 +549,18 @@ python -m socials_automator.cli generate-reel ai.for.mortals -n 5 --upload
 python -m socials_automator.cli generate-reel ai.for.mortals --text-ai lmstudio -g --voice adam_excited --upload
 
 # Add contextual image overlays (TV shows, products, etc.)
+# Uses DuckDuckGo websearch by default - no API key needed!
 python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images
 
 # Full pipeline with image overlays, GPU, and upload
 python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images -g --text-ai lmstudio --upload
+
+# Use Tor for anonymous image scraping (websearch is default)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --use-tor
+
+# Use alternative image providers (require API keys)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --image-provider pexels
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --image-provider pixabay
 
 # Control hashtag count (Instagram limit is 5 as of Dec 2025)
 python -m socials_automator.cli generate-reel ai.for.mortals --hashtags 3
@@ -632,6 +642,31 @@ py -X utf8 -m socials_automator.cli generate-reel news.but.quick -n 25 -g --uplo
 - Requires NVIDIA GPU with NVENC support (GTX 600+, most modern GPUs)
 - Falls back to CPU if GPU unavailable
 
+**Image Providers (`--image-provider`):**
+
+Three providers are available for image overlays:
+
+| Provider | API Key | Description |
+|----------|---------|-------------|
+| `websearch` (default) | Not needed | DuckDuckGo image search - finds exact matches for shows, products, etc. |
+| `pexels` | Required (`PEXELS_API_KEY`) | High-quality stock photos, 200 req/month free |
+| `pixabay` | Required (`PIXABAY_API_KEY`) | Free stock photos, 100 req/min |
+
+The default `websearch` provider is ideal for finding exact images of specific content (TV shows, products, apps) mentioned in the narration - no API key required!
+
+**Tor Support (`--use-tor`):**
+
+The `websearch` provider supports embedded Tor for anonymous image scraping:
+- Uses pure Python Tor (`torpy`) - no external Tor installation required
+- Automatically closes connection after each video (fresh IP for next loop)
+- Helps avoid rate limiting when generating many videos
+- Requires: `pip install ddgs torpy`
+
+```bash
+# Anonymous web scraping with Tor (websearch is already default)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --use-tor
+```
+
 **Output:**
 ```
 profiles/<profile>/reels/YYYY/MM/generated/<post-id>/
@@ -643,6 +678,9 @@ profiles/<profile>/reels/YYYY/MM/generated/<post-id>/
 
 **Requirements:**
 - `PEXELS_API_KEY` environment variable for stock footage
+- `ddgs` package for image overlays (default websearch provider) - `pip install ddgs`
+- `torpy` package (optional, for `--use-tor`) - `pip install torpy`
+- `PIXABAY_API_KEY` environment variable (optional, for `--image-provider pixabay`)
 - RVC models for custom voice (rvc_adam) or use built-in voices (alloy, shimmer)
 
 **Available Fonts** (in `/fonts` folder):
@@ -1737,6 +1775,52 @@ Premium image generation from OpenAI.
 
 ---
 
+### Stock Image Providers (for Image Overlays)
+
+#### Pexels (Default)
+High-quality stock photos. Required for video generation.
+
+1. Go to [pexels.com/api](https://www.pexels.com/api/)
+2. Sign up for a free account
+3. Copy your API key from the dashboard
+4. Add to your `.env` file:
+   ```
+   PEXELS_API_KEY=your-pexels-key
+   ```
+
+**Cost**: Free (200 requests/month, then rate limited)
+
+#### Pixabay (Optional)
+Alternative stock photo provider.
+
+1. Go to [pixabay.com/api/docs](https://pixabay.com/api/docs/)
+2. Sign up for a free account
+3. Copy your API key
+4. Add to your `.env` file:
+   ```
+   PIXABAY_API_KEY=your-pixabay-key
+   ```
+
+**Cost**: Free (100 requests/minute)
+
+#### Web Search (Default - No API Key)
+DuckDuckGo image search with optional Tor support. This is now the default provider for `--overlay-images`.
+
+```bash
+# Install dependencies
+pip install ddgs torpy
+
+# Use image overlays (websearch is default - no API key needed!)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images
+
+# With Tor for anonymity (closes connection after each video for fresh IP)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --use-tor
+```
+
+**Cost**: Free, unlimited, no API key needed
+
+---
+
 ### Example .env File
 
 ```bash
@@ -1747,10 +1831,15 @@ GROQ_API_KEY=gsk_your-groq-key
 GOOGLE_API_KEY=your-google-key
 OPENAI_API_KEY=sk-your-openai-key
 
-# Image Providers (pick at least one)
+# Image AI Providers (pick at least one for carousel generation)
 FAL_API_KEY=your-fal-key
 REPLICATE_API_TOKEN=r8_your-replicate-token
 # OPENAI_API_KEY is also used for DALL-E 3
+
+# Stock Image/Video Providers (for reels)
+PEXELS_API_KEY=your-pexels-key           # Required for video generation
+PIXABAY_API_KEY=your-pixabay-key         # Optional, for --image-provider pixabay
+# websearch provider needs no API key (uses DuckDuckGo)
 ```
 
 ### Provider Priority
@@ -1952,6 +2041,7 @@ Socials-Automator/
 │   │   └── models.py       # Data models
 │   ├── video/              # Video reel generation
 │   │   └── pipeline/       # Video generation pipeline
+│   │       └── image_providers/  # Multi-provider image support (websearch, pexels, pixabay, tor)
 │   ├── design/             # Slide design
 │   │   ├── composer.py     # Image composition
 │   │   └── templates.py    # Slide templates

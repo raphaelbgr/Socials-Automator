@@ -12,6 +12,7 @@ Supports four backends:
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -21,6 +22,51 @@ from .base import (
     PipelineContext,
     VoiceGenerationError,
 )
+
+
+def _sanitize_for_tts(text: str) -> str:
+    """Sanitize text for TTS - remove hashtags, emojis, and other non-speakable content.
+
+    This is the LAST LINE OF DEFENSE before text goes to the TTS engine.
+    Hashtags and emojis should NEVER be spoken aloud.
+
+    Args:
+        text: Raw narration text.
+
+    Returns:
+        Clean text suitable for TTS.
+    """
+    if not text:
+        return text
+
+    # Remove hashtags (e.g., #news #entertainment)
+    text = re.sub(r'#\w+', '', text)
+
+    # Remove @ mentions
+    text = re.sub(r'@\w+', '', text)
+
+    # Remove emojis
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"  # Emoticons
+        "\U0001F300-\U0001F5FF"  # Symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # Transport & map symbols
+        "\U0001F1E0-\U0001F1FF"  # Flags
+        "\U00002700-\U000027BF"  # Dingbats
+        "\U0001F900-\U0001F9FF"  # Supplemental symbols
+        "\U00002600-\U000026FF"  # Misc symbols
+        "\U0001FA00-\U0001FA6F"  # Chess symbols
+        "\U0001FA70-\U0001FAFF"  # Symbols extended
+        "\U00002300-\U000023FF"  # Misc technical
+        "]+",
+        flags=re.UNICODE
+    )
+    text = emoji_pattern.sub('', text)
+
+    # Clean up multiple spaces and trim
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text
 
 
 # Edge-TTS voice presets
@@ -198,8 +244,11 @@ class VoiceGenerator(IVoiceGenerator):
         self.log_start("Generating voiceover...")
 
         try:
+            # Sanitize text to remove hashtags, emojis, mentions before TTS
+            narration_text = _sanitize_for_tts(context.script.full_narration)
+
             audio_path, srt_path, timestamps = await self.generate_voice(
-                context.script.full_narration,
+                narration_text,
                 context.temp_dir,
             )
 

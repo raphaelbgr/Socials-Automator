@@ -1,14 +1,19 @@
-"""Pexels image cache system.
+"""Image cache system for multiple providers.
 
-Caches downloaded Pexels images to reduce API calls and download time.
+Caches downloaded images to reduce API calls and download time.
 Uses a flat file structure with a JSON index for fast lookups.
 
 Structure:
-    pexels/image-cache/
-        index.json          # Quick lookup by pexels_id
-        12345678.jpg        # Image files named by pexels_id
-        87654321.jpg
-        ...
+    pexels/
+        image-cache/            # Pexels images
+            index.json
+            12345678.jpg
+        image-cache-pixabay/    # Pixabay images
+            index.json
+            87654321.jpg
+        image-cache-unsplash/   # Unsplash images (future)
+            index.json
+            abcdef12.jpg
 """
 
 import json
@@ -20,16 +25,25 @@ from typing import Optional
 from socials_automator.constants import get_pexels_image_cache_dir
 
 
-class PexelsImageCache:
-    """Manages cached Pexels images with JSON index."""
+class ImageCache:
+    """Provider-agnostic image cache with JSON index.
 
-    def __init__(self, cache_dir: Optional[Path] = None):
+    This is the base class for caching images from any provider.
+    """
+
+    def __init__(
+        self,
+        cache_dir: Path,
+        provider_name: str = "unknown",
+    ):
         """Initialize cache.
 
         Args:
-            cache_dir: Cache directory path. Uses default if not provided.
+            cache_dir: Cache directory path.
+            provider_name: Name of the provider (for logging).
         """
-        self.cache_dir = Path(cache_dir) if cache_dir else get_pexels_image_cache_dir()
+        self.cache_dir = Path(cache_dir)
+        self.provider_name = provider_name
         self.index_path = self.cache_dir / "index.json"
         self._index: dict = {}
         self._load_index()
@@ -54,16 +68,16 @@ class PexelsImageCache:
         with open(self.index_path, "w", encoding="utf-8") as f:
             json.dump(self._index, f, indent=2, default=str)
 
-    def has_image(self, pexels_id: int) -> bool:
+    def has_image(self, image_id: str) -> bool:
         """Check if image is in cache.
 
         Args:
-            pexels_id: Pexels image ID.
+            image_id: Provider-specific image ID.
 
         Returns:
             True if image is cached and file exists.
         """
-        str_id = str(pexels_id)
+        str_id = str(image_id)
         if str_id not in self._index:
             return False
 
@@ -71,17 +85,17 @@ class PexelsImageCache:
         image_path = self.cache_dir / self._index[str_id].get("filename", "")
         return image_path.exists()
 
-    def get_image_path(self, pexels_id: int) -> Optional[Path]:
+    def get_image_path(self, image_id: str) -> Optional[Path]:
         """Get cached image path.
 
         Args:
-            pexels_id: Pexels image ID.
+            image_id: Provider-specific image ID.
 
         Returns:
             Path to cached image or None if not cached.
         """
-        str_id = str(pexels_id)
-        if not self.has_image(pexels_id):
+        str_id = str(image_id)
+        if not self.has_image(image_id):
             return None
 
         # Increment hit count
@@ -91,29 +105,29 @@ class PexelsImageCache:
 
         return self.cache_dir / self._index[str_id]["filename"]
 
-    def get_metadata(self, pexels_id: int) -> Optional[dict]:
+    def get_metadata(self, image_id: str) -> Optional[dict]:
         """Get cached image metadata.
 
         Args:
-            pexels_id: Pexels image ID.
+            image_id: Provider-specific image ID.
 
         Returns:
             Metadata dict or None if not cached.
         """
-        str_id = str(pexels_id)
+        str_id = str(image_id)
         return self._index.get(str_id)
 
-    def copy_to_destination(self, pexels_id: int, destination: Path) -> bool:
+    def copy_to_destination(self, image_id: str, destination: Path) -> bool:
         """Copy cached image to destination.
 
         Args:
-            pexels_id: Pexels image ID.
+            image_id: Provider-specific image ID.
             destination: Destination path for the image.
 
         Returns:
             True if copied successfully, False otherwise.
         """
-        cached_path = self.get_image_path(pexels_id)
+        cached_path = self.get_image_path(image_id)
         if not cached_path:
             return False
 
@@ -126,27 +140,25 @@ class PexelsImageCache:
 
     def add_image(
         self,
-        pexels_id: int,
+        image_id: str,
         source_path: Path,
-        image_data: dict,
-        query_used: str,
+        metadata: dict,
     ) -> Path:
         """Add image to cache.
 
         Args:
-            pexels_id: Pexels image ID.
+            image_id: Provider-specific image ID.
             source_path: Path to downloaded image file.
-            image_data: Pexels API image data.
-            query_used: Search query that found this image.
+            metadata: Image metadata from provider.
 
         Returns:
             Path to cached image.
         """
-        str_id = str(pexels_id)
+        str_id = str(image_id)
 
         # Determine file extension from source
         ext = source_path.suffix.lower() or ".jpg"
-        filename = f"{pexels_id}{ext}"
+        filename = f"{image_id}{ext}"
         cache_path = self.cache_dir / filename
 
         # Copy to cache if not already there
@@ -154,31 +166,19 @@ class PexelsImageCache:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_path, cache_path)
 
-        # Get image dimensions
-        width = image_data.get("width", 0)
-        height = image_data.get("height", 0)
-
-        # Build metadata
-        metadata = {
-            "pexels_id": pexels_id,
+        # Build cache entry
+        cache_entry = {
+            "image_id": image_id,
+            "provider": self.provider_name,
             "filename": filename,
-            "pexels_url": image_data.get("url", ""),
-            "photographer": image_data.get("photographer", "Unknown"),
-            "photographer_url": image_data.get("photographer_url", ""),
-            "alt": image_data.get("alt", ""),
-            "width": width,
-            "height": height,
-            "orientation": self._get_orientation(width, height),
-            "query_used": query_used,
-            "src_original": image_data.get("src", {}).get("original", ""),
-            "src_large": image_data.get("src", {}).get("large", ""),
             "file_size_bytes": cache_path.stat().st_size if cache_path.exists() else 0,
             "cached_at": datetime.now().isoformat(),
             "last_used": datetime.now().isoformat(),
             "hit_count": 0,
+            **metadata,
         }
 
-        self._index[str_id] = metadata
+        self._index[str_id] = cache_entry
         self._save_index()
 
         return cache_path
@@ -203,6 +203,7 @@ class PexelsImageCache:
         total_size = sum(v.get("file_size_bytes", 0) for v in self._index.values())
 
         return {
+            "provider": self.provider_name,
             "total_images": total_images,
             "total_hits": total_hits,
             "total_size_bytes": total_size,
@@ -225,9 +226,9 @@ class PexelsImageCache:
         query_words = set(query_lower.split())
 
         for metadata in self._index.values():
-            # Search in query_used and alt text
+            # Search in query_used and description
             cached_query = metadata.get("query_used", "").lower()
-            alt_text = metadata.get("alt", "").lower()
+            description = metadata.get("description", metadata.get("alt", "")).lower()
 
             # Calculate match score
             score = 0
@@ -241,8 +242,8 @@ class PexelsImageCache:
             word_matches = len(query_words & cached_words)
             score += word_matches
 
-            # Alt text matches
-            if query_lower in alt_text:
+            # Description matches
+            if query_lower in description:
                 score += 1
 
             if score > 0:
@@ -293,3 +294,101 @@ class PexelsImageCache:
             self._save_index()
 
         return removed
+
+
+# =============================================================================
+# Provider-specific cache factories
+# =============================================================================
+
+def get_image_cache(provider_name: str) -> ImageCache:
+    """Get an image cache for a specific provider.
+
+    Args:
+        provider_name: Provider name (pexels, pixabay, etc.)
+
+    Returns:
+        ImageCache instance configured for the provider.
+    """
+    # Get parent of pexels image cache (the pexels/ directory)
+    pexels_dir = get_pexels_image_cache_dir().parent
+
+    # Map provider names to cache folder names
+    cache_folders = {
+        "pexels": "image-cache",
+        "pixabay": "image-cache-pixabay",
+        "unsplash": "image-cache-unsplash",
+        "websearch": "image-cache-websearch",
+    }
+
+    folder = cache_folders.get(provider_name, f"image-cache-{provider_name}")
+    cache_dir = pexels_dir / folder
+
+    return ImageCache(cache_dir=cache_dir, provider_name=provider_name)
+
+
+# =============================================================================
+# Backward compatibility alias
+# =============================================================================
+
+class PexelsImageCache(ImageCache):
+    """Backward-compatible Pexels image cache.
+
+    This class maintains backward compatibility with existing code
+    that uses PexelsImageCache directly.
+    """
+
+    def __init__(self, cache_dir: Optional[Path] = None):
+        """Initialize Pexels cache.
+
+        Args:
+            cache_dir: Cache directory path. Uses default if not provided.
+        """
+        from socials_automator.constants import get_pexels_image_cache_dir
+
+        if cache_dir is None:
+            cache_dir = get_pexels_image_cache_dir()
+
+        super().__init__(cache_dir=cache_dir, provider_name="pexels")
+
+    def add_image(
+        self,
+        pexels_id: int,
+        source_path: Path,
+        image_data: dict,
+        query_used: str,
+    ) -> Path:
+        """Add image to cache (backward-compatible signature).
+
+        Args:
+            pexels_id: Pexels image ID.
+            source_path: Path to downloaded image file.
+            image_data: Pexels API image data.
+            query_used: Search query that found this image.
+
+        Returns:
+            Path to cached image.
+        """
+        # Convert to generic format
+        width = image_data.get("width", 0)
+        height = image_data.get("height", 0)
+
+        metadata = {
+            "pexels_id": pexels_id,
+            "pexels_url": image_data.get("url", ""),
+            "photographer": image_data.get("photographer", "Unknown"),
+            "photographer_url": image_data.get("photographer_url", ""),
+            "alt": image_data.get("alt", ""),
+            "description": image_data.get("alt", ""),
+            "width": width,
+            "height": height,
+            "orientation": self._get_orientation(width, height),
+            "query_used": query_used,
+            "src_original": image_data.get("src", {}).get("original", ""),
+            "src_large": image_data.get("src", {}).get("large", ""),
+        }
+
+        return super().add_image(
+            image_id=str(pexels_id),
+            source_path=source_path,
+            metadata=metadata,
+        )

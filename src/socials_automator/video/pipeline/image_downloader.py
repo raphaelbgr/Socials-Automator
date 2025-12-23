@@ -1,13 +1,16 @@
-"""Image downloading from Pexels with caching.
+"""Image downloading with caching for multiple providers.
 
-Downloads Pexels images to the cache and updates overlay paths.
+Downloads images from Pexels, Pixabay, or other providers to cache.
 Uses cache-first approach to avoid redundant downloads.
 
 Cache Structure:
-    pexels/image-cache/
-        index.json
-        12345678.jpg
-        ...
+    pexels/
+        image-cache/            # Pexels images
+            index.json
+            12345678.jpg
+        image-cache-pixabay/    # Pixabay images
+            index.json
+            87654321.jpg
 """
 
 import logging
@@ -21,8 +24,11 @@ from .base import (
     ImageOverlayError,
     PipelineContext,
 )
-from .image_cache import PexelsImageCache
-from .pexels_image import PexelsImageClient
+from .image_cache import ImageCache, get_image_cache
+from .image_providers import (
+    IImageSearchProvider,
+    get_image_provider,
+)
 
 logger = logging.getLogger("ai_calls")
 
@@ -45,30 +51,42 @@ def format_file_size(size_bytes: int) -> str:
 
 
 class ImageDownloader(IImageDownloader):
-    """Downloads Pexels images with caching."""
+    """Downloads images from configured provider with caching."""
 
     def __init__(
         self,
-        pexels_client: Optional[PexelsImageClient] = None,
-        cache: Optional[PexelsImageCache] = None,
+        image_provider: Optional[str] = None,
+        use_tor: bool = False,
     ):
         """Initialize image downloader.
 
         Args:
-            pexels_client: Optional Pexels client.
-            cache: Optional image cache.
+            image_provider: Image provider name (websearch, pexels, pixabay).
+                            Defaults to "websearch" if not specified.
+            use_tor: Route websearch provider through Tor for anonymity.
         """
         super().__init__()
-        self._pexels_client = pexels_client
-        self._cache = cache or PexelsImageCache()
+        self._provider_name = image_provider or "websearch"
+        self._use_tor = use_tor
+        self._provider: Optional[IImageSearchProvider] = None
+        self._cache: Optional[ImageCache] = None
         self._cache_hits = 0
         self._cache_misses = 0
 
-    def _get_pexels_client(self) -> PexelsImageClient:
-        """Get or create Pexels client."""
-        if self._pexels_client is None:
-            self._pexels_client = PexelsImageClient(cache=self._cache)
-        return self._pexels_client
+    def _get_provider(self) -> IImageSearchProvider:
+        """Get or create image provider."""
+        if self._provider is None:
+            self._provider = get_image_provider(
+                self._provider_name,
+                use_tor=self._use_tor,
+            )
+        return self._provider
+
+    def _get_cache(self) -> ImageCache:
+        """Get or create image cache."""
+        if self._cache is None:
+            self._cache = get_image_cache(self._provider_name)
+        return self._cache
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """Execute image download step.
@@ -82,17 +100,17 @@ class ImageDownloader(IImageDownloader):
         if not context.image_overlays:
             return context
 
-        # Count how many need downloading
-        pexels_overlays = [
+        # Count how many need downloading (any non-local source with an ID)
+        provider_overlays = [
             o for o in context.image_overlays.overlays
-            if o.source == "pexels" and o.pexels_id
+            if o.source and o.source != "local" and o.pexels_id
         ]
 
-        if not pexels_overlays:
-            self.log_progress("No Pexels images to download")
+        if not provider_overlays:
+            self.log_progress(f"No {self._provider_name} images to download")
             return context
 
-        self.log_start(f"Downloading {len(pexels_overlays)} Pexels images")
+        self.log_start(f"Downloading {len(provider_overlays)} {self._provider_name.title()} images")
 
         try:
             # Reset stats
@@ -121,9 +139,9 @@ class ImageDownloader(IImageDownloader):
             # Calculate total size
             total_size = sum(
                 o.file_size_bytes for o in overlay_script.overlays
-                if o.source == "pexels" and o.file_size_bytes
+                if o.source and o.source != "local" and o.file_size_bytes
             )
-            self.log_success(f"Downloaded {len(pexels_overlays)} images ({format_file_size(total_size)})")
+            self.log_success(f"Downloaded {len(provider_overlays)} images ({format_file_size(total_size)})")
 
             return context
 
@@ -136,10 +154,10 @@ class ImageDownloader(IImageDownloader):
         overlay_script: ImageOverlayScript,
         output_dir: Path,
     ) -> ImageOverlayScript:
-        """Download Pexels images to cache.
+        """Download images from provider to cache.
 
         Args:
-            overlay_script: Script with Pexels image IDs.
+            overlay_script: Script with image IDs.
             output_dir: Directory for downloaded images.
 
         Returns:
@@ -148,7 +166,8 @@ class ImageDownloader(IImageDownloader):
         output_dir.mkdir(parents=True, exist_ok=True)
 
         for overlay in overlay_script.overlays:
-            if overlay.source == "pexels" and overlay.pexels_id:
+            # Download any non-local source with an ID
+            if overlay.source and overlay.source != "local" and overlay.pexels_id:
                 await self._download_single(overlay, output_dir)
 
         return overlay_script
@@ -161,65 +180,74 @@ class ImageDownloader(IImageDownloader):
         """Download a single image.
 
         Args:
-            overlay: Overlay with pexels_id.
+            overlay: Overlay with image ID and download URL.
             output_dir: Output directory.
         """
-        pexels_id = overlay.pexels_id
-        if not pexels_id:
+        image_id = overlay.pexels_id
+        if not image_id:
             return
 
+        cache = self._get_cache()
+        provider = self._get_provider()
+
         # Check cache first
-        if self._cache.has_image(pexels_id):
-            cached_path = self._cache.get_image_path(pexels_id)
+        if cache.has_image(image_id):
+            cached_path = cache.get_image_path(image_id)
             if cached_path:
                 overlay.image_path = cached_path
                 overlay.file_size_bytes = cached_path.stat().st_size
                 self._cache_hits += 1
 
                 self.log_detail(
-                    f"[HIT] pexels:{pexels_id} - {format_file_size(overlay.file_size_bytes)}"
+                    f"[HIT] {self._provider_name}:{image_id} - {format_file_size(overlay.file_size_bytes)}"
                 )
                 return
 
         # Need to download
         self._cache_misses += 1
 
+        if not overlay.download_url:
+            self.log_warning(f"No download URL for {self._provider_name}:{image_id}")
+            overlay.source = None
+            return
+
         try:
-            client = self._get_pexels_client()
-
-            # Get photo details
-            photo_data = await client.get_photo(pexels_id)
-            if not photo_data:
-                self.log_warning(f"Could not get photo data for pexels:{pexels_id}")
-                overlay.source = None  # Mark as failed
-                return
-
             # Download to temp path first
-            temp_path = output_dir / f"{pexels_id}.jpg"
+            temp_path = output_dir / f"{image_id}.jpg"
 
-            downloaded_path = await client.download_image(
-                image_data=photo_data,
+            downloaded_path = await provider.download(
+                image_id=image_id,
+                url=overlay.download_url,
                 output_path=temp_path,
-                quality="large",
             )
 
             if downloaded_path and downloaded_path.exists():
-                overlay.image_path = self._cache.get_image_path(pexels_id) or downloaded_path
-                overlay.file_size_bytes = overlay.image_path.stat().st_size
-                overlay.width = photo_data.get("width", 0)
-                overlay.height = photo_data.get("height", 0)
-                overlay.alt_text = photo_data.get("alt", overlay.alt_text)
+                # Add to cache
+                cached_path = cache.add_image(
+                    image_id=image_id,
+                    source_path=downloaded_path,
+                    metadata={
+                        "width": overlay.width,
+                        "height": overlay.height,
+                        "description": overlay.alt_text or "",
+                        "download_url": overlay.download_url,
+                    },
+                )
 
+                overlay.image_path = cached_path
+                overlay.file_size_bytes = cached_path.stat().st_size
+
+                alt_preview = (overlay.alt_text or "")[:40]
                 self.log_detail(
-                    f"[MISS] pexels:{pexels_id} - {format_file_size(overlay.file_size_bytes)} "
-                    f"- \"{overlay.alt_text[:40]}...\""
+                    f"[MISS] {self._provider_name}:{image_id} - {format_file_size(overlay.file_size_bytes)} "
+                    f'- "{alt_preview}..."'
                 )
             else:
-                self.log_warning(f"Download failed for pexels:{pexels_id}")
+                self.log_warning(f"Download failed for {self._provider_name}:{image_id}")
                 overlay.source = None
 
         except Exception as e:
-            logger.warning(f"Failed to download pexels:{pexels_id}: {e}")
+            logger.warning(f"Failed to download {self._provider_name}:{image_id}: {e}")
             overlay.source = None
 
     def _log_results(self, overlay_script: ImageOverlayScript) -> None:
@@ -228,27 +256,29 @@ class ImageDownloader(IImageDownloader):
         Args:
             overlay_script: Overlay script with downloaded images.
         """
-        pexels_overlays = [
+        # Filter to provider overlays (any non-local source)
+        provider_overlays = [
             o for o in overlay_script.overlays
-            if o.source == "pexels" and o.pexels_id
+            if o.source and o.source != "local" and o.pexels_id
         ]
 
-        if not pexels_overlays:
+        if not provider_overlays:
             return
+
+        cache = self._get_cache()
 
         self.log_progress("")
         self.log_progress("  --- Downloads ---")
         self.log_progress("  | Image           | Status | Size   | Description                      |")
         self.log_progress("  |-----------------|--------|--------|----------------------------------|")
 
-        for overlay in pexels_overlays:
-            image_id = f"pexels:{overlay.pexels_id}"[:15].ljust(15)
+        for overlay in provider_overlays:
+            image_id = f"{overlay.source}:{overlay.pexels_id}"[:15].ljust(15)
 
             if overlay.image_path and overlay.image_path.exists():
                 # Determine if it was a cache hit
                 # We can check by seeing if the path is in cache dir
-                cache_dir = self._cache.cache_dir
-                if overlay.image_path.parent == cache_dir:
+                if overlay.image_path.parent == cache.cache_dir:
                     status = "[HIT] "
                 else:
                     status = "[MISS]"
@@ -265,5 +295,5 @@ class ImageDownloader(IImageDownloader):
 
     async def close(self) -> None:
         """Close any open connections."""
-        if self._pexels_client:
-            await self._pexels_client.close()
+        if self._provider:
+            await self._provider.close()

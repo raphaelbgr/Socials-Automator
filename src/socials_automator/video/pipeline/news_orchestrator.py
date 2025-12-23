@@ -80,10 +80,10 @@ STEP_DESCRIPTIONS = {
     "VideoAssembler": "Assembling clips into 9:16 vertical video",
     "GPUVideoAssembler": "Assembling clips into 9:16 vertical video (GPU NVENC)",
     "ThumbnailGenerator": "Generating thumbnail for Instagram",
-    # Image overlay steps (optional)
+    # Image overlay steps (optional) - descriptions are updated dynamically
     "ImageOverlayPlanner": "Planning contextual image overlays with AI",
-    "ImageResolver": "Finding images from cache and Pexels",
-    "ImageDownloader": "Downloading overlay images",
+    "ImageResolver": "Finding images from cache and provider",  # Updated dynamically
+    "ImageDownloader": "Downloading overlay images",  # Updated dynamically
     "ImageOverlayRenderer": "Compositing image overlays onto video",
     "GPUImageOverlayRenderer": "Compositing image overlays (GPU NVENC)",
     # Subtitles and caption
@@ -135,6 +135,8 @@ class NewsPipeline:
         profile_path: Optional[Path] = None,  # For profile-scoped data storage
         # Image overlay feature
         overlay_images: bool = False,
+        image_provider: str = "websearch",
+        use_tor: bool = False,
     ):
         """Initialize news pipeline.
 
@@ -159,10 +161,14 @@ class NewsPipeline:
             profile_name: Profile name for theme history tracking.
             profile_path: Profile directory for profile-scoped data storage.
             overlay_images: Enable contextual image overlays (pop-in/pop-out).
+            image_provider: Image provider for overlays (pexels, pixabay, websearch).
+            use_tor: Route websearch provider through Tor for anonymity.
         """
         self.profile_name = profile_name
         self.profile_path = profile_path
         self.overlay_images = overlay_images
+        self.image_provider = image_provider
+        self.use_tor = use_tor
         self.logger = logging.getLogger("video.news_pipeline")
         self.progress_callback = progress_callback
         self.text_ai = text_ai
@@ -260,13 +266,22 @@ class NewsPipeline:
         self.image_overlay_steps: list[PipelineStep] = []
         if overlay_images:
             ai_client = text_provider_module.TextProvider(provider_override=text_ai)
-            self.display.info("Image overlays enabled")
+            tor_info = " via Tor" if use_tor else ""
+            self.display.info(f"Image overlays enabled ({image_provider}{tor_info})")
             self.image_overlay_steps = [
                 ImageOverlayPlanner(text_provider=ai_client),
-                ImageResolver(),
-                ImageDownloader(),
+                ImageResolver(image_provider=image_provider, use_tor=use_tor),
+                ImageDownloader(image_provider=image_provider, use_tor=use_tor),
                 ImageOverlayRenderer(use_gpu=gpu_accelerate),
             ]
+
+            # Update step descriptions dynamically based on provider
+            provider_name = image_provider.title()  # "websearch" -> "Websearch"
+            self._step_descriptions = STEP_DESCRIPTIONS.copy()
+            self._step_descriptions["ImageResolver"] = f"Finding images from cache and {provider_name}"
+            self._step_descriptions["ImageDownloader"] = f"Downloading {provider_name} overlay images"
+        else:
+            self._step_descriptions = STEP_DESCRIPTIONS
 
         # Connect all steps to the display system for logging
         self._connect_step_displays()
@@ -425,7 +440,7 @@ class NewsPipeline:
             # Phase 1: News Aggregation (with global source rotation)
             # =================================================================
             step_name = "NewsAggregator"
-            description = STEP_DESCRIPTIONS.get(step_name, "Fetching news")
+            description = self._step_descriptions.get(step_name, "Fetching news")
             self.display.start_step(step_name, description)
             self.debug_logger.start_step(step_name)
             self._update_progress(step_name, step_counter / total_steps, "Fetching global news...")
@@ -462,7 +477,7 @@ class NewsPipeline:
             # Phase 2: News Curation
             # =================================================================
             step_name = "NewsCurator"
-            description = STEP_DESCRIPTIONS.get(step_name, "Curating news")
+            description = self._step_descriptions.get(step_name, "Curating news")
             self.display.start_step(step_name, description)
             self.debug_logger.start_step(step_name)
             self._update_progress(step_name, step_counter / total_steps, "Curating stories...")
@@ -504,7 +519,7 @@ class NewsPipeline:
             # Phase 3: Script Planning
             # =================================================================
             step_name = "NewsScriptPlanner"
-            description = STEP_DESCRIPTIONS.get(step_name, "Planning script")
+            description = self._step_descriptions.get(step_name, "Planning script")
             self.display.start_step(step_name, description)
             self.debug_logger.start_step(step_name)
             self._update_progress(step_name, step_counter / total_steps, "Planning script...")
@@ -537,7 +552,7 @@ class NewsPipeline:
                 if duration_attempt > 1:
                     self.display.info(f"Regenerating voice (attempt {duration_attempt})...")
                 else:
-                    description = STEP_DESCRIPTIONS.get(step_name, "Generating voice")
+                    description = self._step_descriptions.get(step_name, "Generating voice")
                     self.display.start_step(step_name, description)
 
                 self.debug_logger.start_step(step_name)
@@ -586,7 +601,7 @@ class NewsPipeline:
             # Phase 5: Parallel Video Search and Download
             # =================================================================
             step_name = "VideoSearcher"
-            description = STEP_DESCRIPTIONS.get(step_name, "Searching videos")
+            description = self._step_descriptions.get(step_name, "Searching videos")
             self.display.start_step(step_name, description)
             self.debug_logger.start_step(step_name)
             self._update_progress(step_name, step_counter / total_steps, "Searching for videos...")
@@ -597,7 +612,7 @@ class NewsPipeline:
             step_counter += 1
 
             step_name = "VideoDownloader"
-            description = STEP_DESCRIPTIONS.get(step_name, "Downloading videos")
+            description = self._step_descriptions.get(step_name, "Downloading videos")
             self.display.start_step(step_name, description)
             self.debug_logger.start_step(step_name)
             self._update_progress(step_name, step_counter / total_steps, "Downloading clips...")
@@ -610,7 +625,7 @@ class NewsPipeline:
             # Phase 6: Video Assembly
             # =================================================================
             step_name = "VideoAssembler" if not self.gpu_accelerate else "GPUVideoAssembler"
-            description = STEP_DESCRIPTIONS.get(step_name, "Assembling video")
+            description = self._step_descriptions.get(step_name, "Assembling video")
             self.display.start_step(step_name, description)
             self.debug_logger.start_step(step_name)
             self._update_progress(step_name, step_counter / total_steps, "Assembling video...")
@@ -623,7 +638,7 @@ class NewsPipeline:
             # Phase 7: Thumbnail Generation (before subtitles)
             # =================================================================
             step_name = "ThumbnailGenerator"
-            description = STEP_DESCRIPTIONS.get(step_name, "Generating thumbnail")
+            description = self._step_descriptions.get(step_name, "Generating thumbnail")
             self.display.start_step(step_name, description)
             self.debug_logger.start_step(step_name)
             self._update_progress(step_name, step_counter / total_steps, "Generating thumbnail...")
@@ -638,7 +653,8 @@ class NewsPipeline:
             if self.overlay_images and self.image_overlay_steps:
                 for overlay_step in self.image_overlay_steps:
                     step_name = overlay_step.__class__.__name__
-                    description = STEP_DESCRIPTIONS.get(step_name, f"Running {step_name}")
+                    # Use dynamic descriptions (includes actual provider name)
+                    description = self._step_descriptions.get(step_name, f"Running {step_name}")
                     self.display.start_step(step_name, description)
                     self.debug_logger.start_step(step_name)
                     self._update_progress(step_name, step_counter / total_steps, description)
@@ -651,7 +667,7 @@ class NewsPipeline:
             # Phase 8: Subtitle Rendering
             # =================================================================
             step_name = "SubtitleRenderer" if not self.gpu_accelerate else "GPUSubtitleRenderer"
-            description = STEP_DESCRIPTIONS.get(step_name, "Rendering subtitles")
+            description = self._step_descriptions.get(step_name, "Rendering subtitles")
             self.display.start_step(step_name, description)
             self.debug_logger.start_step(step_name)
             self._update_progress(step_name, step_counter / total_steps, "Rendering subtitles...")
@@ -664,7 +680,7 @@ class NewsPipeline:
             # Phase 9: Caption Generation
             # =================================================================
             step_name = "CaptionGenerator"
-            description = STEP_DESCRIPTIONS.get(step_name, "Generating caption")
+            description = self._step_descriptions.get(step_name, "Generating caption")
             self.display.start_step(step_name, description)
             self.debug_logger.start_step(step_name)
             self._update_progress(step_name, step_counter / total_steps, "Generating caption...")

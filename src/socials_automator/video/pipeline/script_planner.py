@@ -820,6 +820,24 @@ Respond with ONLY valid JSON, no other text."""
         """
         import re
 
+        # Remove hashtags (they should NOT be in voiceover)
+        text = re.sub(r'#\w+', '', text)
+
+        # Remove emojis (they can't be spoken)
+        emoji_pattern = re.compile(
+            "["
+            "\U0001F600-\U0001F64F"  # Emoticons
+            "\U0001F300-\U0001F5FF"  # Symbols & pictographs
+            "\U0001F680-\U0001F6FF"  # Transport & map symbols
+            "\U0001F1E0-\U0001F1FF"  # Flags
+            "\U00002700-\U000027BF"  # Dingbats
+            "\U0001F900-\U0001F9FF"  # Supplemental symbols
+            "\U00002600-\U000026FF"  # Misc symbols
+            "]+",
+            flags=re.UNICODE
+        )
+        text = emoji_pattern.sub('', text)
+
         # Remove URLs
         text = re.sub(r'http\S+', '', text)
 

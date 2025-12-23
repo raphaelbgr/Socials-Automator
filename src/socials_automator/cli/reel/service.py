@@ -156,6 +156,10 @@ class ReelGeneratorService:
             # Get actual duration from metadata
             duration = self._get_video_duration(video_path)
 
+            # Close Tor connection after generation (fresh IP for next video)
+            if params.use_tor and params.image_provider == "websearch":
+                self._close_tor_connection()
+
             return Success(GenerationResult(
                 success=True,
                 output_path=video_path,
@@ -262,6 +266,8 @@ class ReelGeneratorService:
             gpu_index=params.gpu_index,
             profile_path=params.profile_path,
             overlay_images=params.overlay_images,
+            image_provider=params.image_provider,
+            use_tor=params.use_tor,
         )
 
     def _create_news_pipeline(self, params: ReelGenerationParams, progress_callback):
@@ -296,6 +302,8 @@ class ReelGeneratorService:
             profile_path=params.profile_path,  # For profile-scoped data storage
             # Image overlays
             overlay_images=params.overlay_images,
+            image_provider=params.image_provider,
+            use_tor=params.use_tor,
         )
 
     def _create_output_dir(self, params: ReelGenerationParams) -> Path:
@@ -395,6 +403,27 @@ class ReelGeneratorService:
             except Exception:
                 pass
         return 60.0
+
+    def _close_tor_connection(self) -> None:
+        """Close Tor connection after video generation.
+
+        A fresh Tor connection will be created for the next video,
+        ensuring a new exit IP and avoiding rate limit carry-over.
+        """
+        try:
+            from socials_automator.video.pipeline.image_providers import (
+                close_tor,
+                is_tor_available,
+            )
+            from ..core.console import console
+
+            if is_tor_available():
+                console.print("[dim]Closing Tor connection (fresh IP for next video)...[/dim]")
+                close_tor()
+                console.print("[green][OK][/green] Tor connection closed")
+        except Exception as e:
+            # Don't fail the generation if Tor close fails
+            pass
 
     def _audit_and_fix_artifacts(self, reel_path: Path, profile_path: Path):
         """Audit artifacts and regenerate missing ones."""
