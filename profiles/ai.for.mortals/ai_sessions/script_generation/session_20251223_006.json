@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_006",
+  "type": "script_generation",
+  "created_at": "2025-12-23T01:40:32.805960",
+  "updated_at": "2025-12-23T01:40:32.819866",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "3 hidden AI tools that boost your productivity by automating meetings",
+    "hook_text": "Maximize your meeting time—try these hidden productivity hacks!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 139,
+    "estimated_duration": 55.6,
+    "target_duration": 60.0
+  }
+}

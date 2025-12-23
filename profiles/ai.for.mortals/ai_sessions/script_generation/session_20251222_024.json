@@ -1,0 +1,19 @@
+{
+  "id": "session_20251222_024",
+  "type": "script_generation",
+  "created_at": "2025-12-22T23:17:23.936946",
+  "updated_at": "2025-12-22T23:18:47.832428",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Latest prompt engineering features",
+    "hook_text": "Unlock insane ChatGPT results! I cracked the code on prompt engineering - watch this.",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 181,
+    "estimated_duration": 72.4,
+    "target_duration": 60.0
+  }
+}

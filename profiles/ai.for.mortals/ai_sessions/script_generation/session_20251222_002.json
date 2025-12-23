@@ -1,0 +1,18 @@
+{
+  "id": "session_20251222_002",
+  "type": "script_generation",
+  "created_at": "2025-12-22T17:36:07.455773",
+  "updated_at": "2025-12-22T17:36:07.474562",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Test Topic: AI Automation",
+    "hook_text": "Did you know AI can automate 80 percent of your tasks?",
+    "hook_type": "question",
+    "segment_count": 3,
+    "word_count": 150,
+    "target_duration": 60.0
+  }
+}

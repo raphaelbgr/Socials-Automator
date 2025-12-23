@@ -1,0 +1,19 @@
+{
+  "id": "session_20251222_011",
+  "type": "script_generation",
+  "created_at": "2025-12-22T19:41:23.806763",
+  "updated_at": "2025-12-22T19:41:23.828066",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Unleash Cursor's 2025 Power: Automate Repetitive Tasks for FREE and Boost Productivity",
+    "hook_text": "Stop wasting hours on boring tasks. Cursor 2025 changes everything.",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 224,
+    "estimated_duration": 89.60000000000001,
+    "target_duration": 60.0
+  }
+}

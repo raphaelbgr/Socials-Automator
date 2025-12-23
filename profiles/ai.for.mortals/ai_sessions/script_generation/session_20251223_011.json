@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_011",
+  "type": "script_generation",
+  "created_at": "2025-12-23T06:26:44.797379",
+  "updated_at": "2025-12-23T06:26:44.812381",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "3 Free AI Tools That Boost Your Productivity Like Never Before",
+    "hook_text": "Unlock productivity boosts with these 3 free AI tools!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 215,
+    "estimated_duration": 86.0,
+    "target_duration": 60.0
+  }
+}

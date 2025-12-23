@@ -1,0 +1,19 @@
+{
+  "id": "session_20251222_005",
+  "type": "script_generation",
+  "created_at": "2025-12-22T18:07:36.132237",
+  "updated_at": "2025-12-22T18:07:36.154292",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "3 free Sora 2 prompts that make video scripts in seconds",
+    "hook_text": "3 Sora 2 prompts that script videos in seconds!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 171,
+    "estimated_duration": 68.39999999999999,
+    "target_duration": 60.0
+  }
+}

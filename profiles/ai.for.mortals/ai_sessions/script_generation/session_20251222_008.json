@@ -1,0 +1,19 @@
+{
+  "id": "session_20251222_008",
+  "type": "script_generation",
+  "created_at": "2025-12-22T19:08:25.223134",
+  "updated_at": "2025-12-22T19:08:25.240829",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "From $0 to $1000/month with AI",
+    "hook_text": "Started with nothing, now earning $1000 monthly with AI alone.",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 156,
+    "estimated_duration": 62.400000000000006,
+    "target_duration": 60.0
+  }
+}

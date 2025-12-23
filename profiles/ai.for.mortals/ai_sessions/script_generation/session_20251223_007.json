@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_007",
+  "type": "script_generation",
+  "created_at": "2025-12-23T01:57:26.119511",
+  "updated_at": "2025-12-23T01:57:26.135367",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "3 hidden AI tools that boost your productivity without coding",
+    "hook_text": "Boost productivity? Here’s the secret tools I use.",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 173,
+    "estimated_duration": 69.2,
+    "target_duration": 60.0
+  }
+}

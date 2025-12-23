@@ -1,0 +1,19 @@
+{
+  "id": "session_20251222_010",
+  "type": "script_generation",
+  "created_at": "2025-12-22T19:36:43.485658",
+  "updated_at": "2025-12-22T19:36:43.502261",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Unlock Free, High-Quality Stock Images with Midjourney V7 & Textual Inversion",
+    "hook_text": "Struggling with expensive stock images? I found a game-changer.",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 156,
+    "estimated_duration": 62.400000000000006,
+    "target_duration": 60.0
+  }
+}

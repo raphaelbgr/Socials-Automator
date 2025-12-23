@@ -1,0 +1,19 @@
+{
+  "id": "session_20251222_004",
+  "type": "script_generation",
+  "created_at": "2025-12-22T17:48:31.058015",
+  "updated_at": "2025-12-22T17:49:28.827300",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Sora 2 just changed how I create videos - 3 free tips",
+    "hook_text": "3 game-changing Sora 2 tips I can't stop using",
+    "hook_type": "statement",
+    "segment_count": 3,
+    "word_count": 78,
+    "estimated_duration": 31.200000000000003,
+    "target_duration": 30.0
+  }
+}

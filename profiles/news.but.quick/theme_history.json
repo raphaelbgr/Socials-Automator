@@ -1,118 +1,202 @@
 [
   {
-    "theme": "Midday Pulse: Music news",
-    "timestamp": "2025-12-18T13:02:15.601740"
+    "theme": "Evening Wrap: Entertainment news (20:58)",
+    "timestamp": "2025-12-20T20:58:45.693977"
   },
   {
-    "theme": "Midday Pulse: Streaming updates",
-    "timestamp": "2025-12-18T13:04:36.321041"
+    "theme": "Evening Wrap: Celebrity buzz",
+    "timestamp": "2025-12-20T21:21:00.205708"
   },
   {
-    "theme": "Midday Pulse: Viral moments",
-    "timestamp": "2025-12-18T13:06:45.571210"
-  },
-  {
-    "theme": "Midday Pulse: Music news roundup",
-    "timestamp": "2025-12-18T13:10:19.941676"
-  },
-  {
-    "theme": "Midday Pulse: Latest music news",
-    "timestamp": "2025-12-18T13:13:41.243883"
-  },
-  {
-    "theme": "Midday Pulse: Music news highlights",
-    "timestamp": "2025-12-18T13:16:40.144717"
-  },
-  {
-    "theme": "Midday Pulse: Today's music news",
-    "timestamp": "2025-12-18T13:18:51.155299"
-  },
-  {
-    "theme": "Midday Pulse: TV updates",
-    "timestamp": "2025-12-18T13:20:53.276068"
-  },
-  {
-    "theme": "Midday Pulse: Music news (13:22)",
-    "timestamp": "2025-12-18T13:22:59.197290"
-  },
-  {
-    "theme": "Midday Pulse: Music news (13:25)",
-    "timestamp": "2025-12-18T13:25:47.796333"
-  },
-  {
-    "theme": "Midday Pulse: Music news (13:28)",
-    "timestamp": "2025-12-18T13:28:37.487040"
-  },
-  {
-    "theme": "Midday Pulse: Viral moments roundup",
-    "timestamp": "2025-12-18T15:52:16.737617"
-  },
-  {
-    "theme": "Midday Pulse: Music news (16:23)",
-    "timestamp": "2025-12-18T16:23:29.965769"
-  },
-  {
-    "theme": "Evening Wrap: Streaming updates",
-    "timestamp": "2025-12-18T18:42:16.577888"
-  },
-  {
-    "theme": "Evening Wrap: Music news",
-    "timestamp": "2025-12-18T18:55:33.811749"
-  },
-  {
-    "theme": "Evening Wrap: TV updates",
-    "timestamp": "2025-12-18T19:04:10.544386"
-  },
-  {
-    "theme": "Evening Wrap: Music news roundup",
-    "timestamp": "2025-12-18T19:25:53.203121"
-  },
-  {
-    "theme": "Evening Wrap: Viral moments",
-    "timestamp": "2025-12-18T19:30:34.134603"
-  },
-  {
-    "theme": "Evening Wrap: Latest music news",
-    "timestamp": "2025-12-18T19:46:54.369321"
-  },
-  {
-    "theme": "Evening Wrap: Movie news",
-    "timestamp": "2025-12-18T21:59:13.667349"
-  },
-  {
-    "theme": "Night Edition: Movie news",
-    "timestamp": "2025-12-18T22:02:42.723907"
-  },
-  {
-    "theme": "Night Edition: Music news",
-    "timestamp": "2025-12-18T22:25:51.635395"
+    "theme": "Evening Wrap: Entertainment news (21:43)",
+    "timestamp": "2025-12-20T21:43:22.671082"
   },
   {
     "theme": "Night Edition: Entertainment news",
-    "timestamp": "2025-12-18T22:31:10.314300"
-  },
-  {
-    "theme": "Night Edition: Music news roundup",
-    "timestamp": "2025-12-18T22:36:17.561818"
+    "timestamp": "2025-12-20T22:06:43.078193"
   },
   {
     "theme": "Night Edition: Entertainment news roundup",
-    "timestamp": "2025-12-18T22:47:24.798579"
+    "timestamp": "2025-12-20T22:29:13.682201"
   },
   {
-    "theme": "Night Edition: Movie news roundup",
-    "timestamp": "2025-12-18T22:59:07.839947"
+    "theme": "Night Edition: Entertainment news highlights",
+    "timestamp": "2025-12-20T22:51:32.110115"
   },
   {
-    "theme": "Night Edition: Latest movie news",
-    "timestamp": "2025-12-18T23:18:08.235223"
+    "theme": "Night Edition: Today's entertainment news",
+    "timestamp": "2025-12-20T23:14:06.376552"
   },
   {
-    "theme": "Night Edition: Movie news highlights",
-    "timestamp": "2025-12-19T00:02:50.551410"
+    "theme": "Night Edition: Entertainment news (23:56)",
+    "timestamp": "2025-12-20T23:56:53.570206"
+  },
+  {
+    "theme": "Night Edition: Entertainment news (00:19)",
+    "timestamp": "2025-12-21T00:19:58.144214"
+  },
+  {
+    "theme": "Night Edition: Entertainment news (00:42)",
+    "timestamp": "2025-12-21T00:42:12.053824"
+  },
+  {
+    "theme": "Night Edition: Latest entertainment news",
+    "timestamp": "2025-12-21T01:04:40.078400"
+  },
+  {
+    "theme": "Night Edition: Entertainment news (01:26)",
+    "timestamp": "2025-12-21T01:26:57.357920"
+  },
+  {
+    "theme": "Night Edition: Entertainment news (01:49)",
+    "timestamp": "2025-12-21T01:49:52.373170"
+  },
+  {
+    "theme": "Night Edition: Entertainment news (02:12)",
+    "timestamp": "2025-12-21T02:12:13.120840"
+  },
+  {
+    "theme": "Night Edition: Entertainment news (02:34)",
+    "timestamp": "2025-12-21T02:34:44.897668"
+  },
+  {
+    "theme": "Night Edition: Entertainment news (02:57)",
+    "timestamp": "2025-12-21T02:57:33.141661"
+  },
+  {
+    "theme": "Night Edition: Entertainment news (03:20)",
+    "timestamp": "2025-12-21T03:20:08.444304"
   },
   {
     "theme": "Night Edition: Celebrity buzz",
-    "timestamp": "2025-12-19T00:16:56.597115"
+    "timestamp": "2025-12-21T03:42:43.440777"
+  },
+  {
+    "theme": "Night Edition: Movie news",
+    "timestamp": "2025-12-21T04:05:14.437981"
+  },
+  {
+    "theme": "Night Edition: Entertainment news (04:28)",
+    "timestamp": "2025-12-21T04:28:09.903215"
+  },
+  {
+    "theme": "Night Edition: Celebrity buzz roundup",
+    "timestamp": "2025-12-21T04:50:30.672837"
+  },
+  {
+    "theme": "Night Edition: Latest celebrity buzz",
+    "timestamp": "2025-12-21T05:33:37.552916"
+  },
+  {
+    "theme": "Night Edition: Entertainment news (05:56)",
+    "timestamp": "2025-12-21T05:56:37.278999"
+  },
+  {
+    "theme": "Morning Briefing: Entertainment news",
+    "timestamp": "2025-12-21T06:39:28.370021"
+  },
+  {
+    "theme": "Morning Briefing: Celebrity buzz",
+    "timestamp": "2025-12-21T07:23:15.425324"
+  },
+  {
+    "theme": "Morning Briefing: Entertainment news roundup",
+    "timestamp": "2025-12-21T07:46:23.612665"
+  },
+  {
+    "theme": "Morning Briefing: Celebrity buzz roundup",
+    "timestamp": "2025-12-21T08:29:22.457558"
+  },
+  {
+    "theme": "Morning Briefing: Latest entertainment news",
+    "timestamp": "2025-12-21T09:12:13.388800"
+  },
+  {
+    "theme": "Morning Briefing: Entertainment news highlights",
+    "timestamp": "2025-12-21T09:34:26.967653"
+  },
+  {
+    "theme": "Morning Briefing: Today's entertainment news",
+    "timestamp": "2025-12-21T09:57:00.275650"
+  },
+  {
+    "theme": "Morning Briefing: Entertainment news (10:18)",
+    "timestamp": "2025-12-21T10:18:58.195600"
+  },
+  {
+    "theme": "Morning Briefing: Entertainment news (10:42)",
+    "timestamp": "2025-12-21T10:42:04.548521"
+  },
+  {
+    "theme": "Morning Briefing: Entertainment news (11:04)",
+    "timestamp": "2025-12-21T11:04:26.197249"
+  },
+  {
+    "theme": "Morning Briefing: Entertainment news (11:27)",
+    "timestamp": "2025-12-21T11:27:20.154794"
+  },
+  {
+    "theme": "Morning Briefing: Entertainment news (11:50)",
+    "timestamp": "2025-12-21T11:50:45.841374"
+  },
+  {
+    "theme": "Midday Pulse: Entertainment news",
+    "timestamp": "2025-12-21T12:13:23.183411"
+  },
+  {
+    "theme": "Evening Wrap: Entertainment news",
+    "timestamp": "2025-12-22T20:19:55.868124"
+  },
+  {
+    "theme": "Evening Wrap: Entertainment news roundup",
+    "timestamp": "2025-12-22T20:30:04.714274"
+  },
+  {
+    "theme": "Evening Wrap: Latest entertainment news",
+    "timestamp": "2025-12-22T20:39:41.802748"
+  },
+  {
+    "theme": "Evening Wrap: Entertainment news highlights",
+    "timestamp": "2025-12-22T20:49:53.941686"
+  },
+  {
+    "theme": "Evening Wrap: Celebrity buzz",
+    "timestamp": "2025-12-22T21:26:17.086227"
+  },
+  {
+    "theme": "Evening Wrap: Today's entertainment news",
+    "timestamp": "2025-12-22T21:35:27.621664"
+  },
+  {
+    "theme": "Evening Wrap: Entertainment news (21:46)",
+    "timestamp": "2025-12-22T21:46:54.275140"
+  },
+  {
+    "theme": "Night Edition: Entertainment news",
+    "timestamp": "2025-12-22T22:09:30.016171"
+  },
+  {
+    "theme": "Night Edition: Entertainment news roundup",
+    "timestamp": "2025-12-22T22:28:24.569898"
+  },
+  {
+    "theme": "Night Edition: Latest entertainment news",
+    "timestamp": "2025-12-22T22:31:01.747530"
+  },
+  {
+    "theme": "Night Edition: Entertainment news highlights",
+    "timestamp": "2025-12-22T22:37:44.845842"
+  },
+  {
+    "theme": "Night Edition: Today's entertainment news",
+    "timestamp": "2025-12-22T22:50:48.806799"
+  },
+  {
+    "theme": "Night Edition: Entertainment news (23:06)",
+    "timestamp": "2025-12-22T23:06:47.591002"
+  },
+  {
+    "theme": "Night Edition: Entertainment news (23:14)",
+    "timestamp": "2025-12-22T23:14:37.640955"
   }
 ]

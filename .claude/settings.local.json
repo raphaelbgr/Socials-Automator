@@ -127,7 +127,10 @@
       "Bash(cmd /c \"type C:\\\\Users\\\\rbgnr\\\\git\\\\Socials-Automator\\\\logs\\\\ai_calls.log 2>nul | findstr /i /c:\"ImageOverlay\" /c:\"overlay\" /c:\"ERROR\" | tail -30\")",
       "Bash(cmd /c \"del /s /q C:\\\\Users\\\\rbgnr\\\\git\\\\Socials-Automator\\\\src\\\\socials_automator\\\\video\\\\pipeline\\\\__pycache__\\\\*.pyc 2>nul && echo Cache cleared\")",
       "Bash(cmd /c \"for /d /r C:\\\\Users\\\\rbgnr\\\\git\\\\Socials-Automator\\\\src %d in \\(__pycache__\\) do @if exist \"%d\" rd /s /q \"%d\" 2>nul\")",
-      "Bash(del \"C:\\\\Users\\\\rbgnr\\\\AppData\\\\Local\\\\Temp\\\\overlay_test_10s.jpg\" \"C:\\\\Users\\\\rbgnr\\\\AppData\\\\Local\\\\Temp\\\\overlay_test_25s.jpg\")"
+      "Bash(del \"C:\\\\Users\\\\rbgnr\\\\AppData\\\\Local\\\\Temp\\\\overlay_test_10s.jpg\" \"C:\\\\Users\\\\rbgnr\\\\AppData\\\\Local\\\\Temp\\\\overlay_test_25s.jpg\")",
+      "WebFetch(domain:pixabay.com)",
+      "WebFetch(domain:localhost)",
+      "WebFetch(domain:civitai.com)"
     ],
     "deny": [],
     "ask": []

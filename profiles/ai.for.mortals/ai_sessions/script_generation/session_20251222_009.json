@@ -1,0 +1,19 @@
+{
+  "id": "session_20251222_009",
+  "type": "script_generation",
+  "created_at": "2025-12-22T19:26:40.871284",
+  "updated_at": "2025-12-22T19:26:40.886950",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Free real-time research hack with GPT-5.2 + Perplexity Sonar—write content 10x faster",
+    "hook_text": "Just discovered the ultimate research combo that saved me hours!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 183,
+    "estimated_duration": 73.2,
+    "target_duration": 60.0
+  }
+}

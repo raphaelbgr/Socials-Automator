@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_002",
+  "type": "script_generation",
+  "created_at": "2025-12-23T00:25:49.994454",
+  "updated_at": "2025-12-23T00:25:50.013543",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Best AI for writing",
+    "hook_text": "Best AI writing tools for creators in 2025",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 151,
+    "estimated_duration": 60.4,
+    "target_duration": 60.0
+  }
+}

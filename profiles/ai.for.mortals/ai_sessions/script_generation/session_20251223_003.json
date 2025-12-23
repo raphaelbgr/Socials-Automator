@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_003",
+  "type": "script_generation",
+  "created_at": "2025-12-23T00:50:39.151277",
+  "updated_at": "2025-12-23T00:50:39.167397",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Mastering AI-Powered Affiliate Marketing: How to Automate Content Creation and Boost Earnings Using ChatGPT & Jasper.ai",
+    "hook_text": "Master AI Affiliate Magic Today!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 144,
+    "estimated_duration": 57.599999999999994,
+    "target_duration": 60.0
+  }
+}

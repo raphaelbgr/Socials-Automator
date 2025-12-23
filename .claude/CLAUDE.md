@@ -21,9 +21,10 @@ cli/ -> video/pipeline/orchestrator.py -> script_planner.py -> text.py (AI calls
 | `video/pipeline/orchestrator.py` | Coordinates video reel pipeline |
 | `video/pipeline/script_planner.py` | AI script generation for reels |
 | `video/pipeline/image_overlay_planner.py` | AI planning for image overlays |
-| `video/pipeline/image_resolver.py` | Local + Pexels image resolution |
+| `video/pipeline/image_resolver.py` | Multi-provider image resolution |
 | `video/pipeline/image_downloader.py` | Image downloading with caching |
 | `video/pipeline/image_overlay_renderer.py` | FFmpeg compositing with pop animations |
+| `video/pipeline/image_providers/` | Image provider implementations (pexels, pixabay, websearch, tor) |
 | `providers/text.py` | LiteLLM wrapper for all text AI |
 | `providers/image.py` | DALL-E, ComfyUI, fal.ai |
 | `instagram/client.py` | Instagram Graph API client |
@@ -551,11 +552,96 @@ Image overlays are applied AFTER video assembly but BEFORE subtitles to ensure p
 | File | Purpose |
 |------|---------|
 | `video/pipeline/image_overlay_planner.py` | AI planning for overlay timing/content |
-| `video/pipeline/image_resolver.py` | Local + Pexels image resolution |
+| `video/pipeline/image_resolver.py` | Multi-provider image resolution |
 | `video/pipeline/image_downloader.py` | Image downloading with profile cache |
 | `video/pipeline/image_overlay_renderer.py` | FFmpeg compositing with animations |
-| `video/pipeline/pexels_image.py` | Pexels Image API client |
 | `video/pipeline/image_cache.py` | Profile-scoped image caching |
+| `video/pipeline/image_providers/` | Image provider implementations |
+
+### Image Provider Architecture
+
+The image overlay system uses a provider abstraction to support multiple image sources:
+
+```
+image_providers/
+    __init__.py          # Exports, AVAILABLE_PROVIDERS list
+    base.py              # IImageSearchProvider interface, get_image_provider() factory
+    pexels.py            # Pexels API provider (default)
+    pixabay.py           # Pixabay API provider
+    websearch.py         # DuckDuckGo web search provider
+    tor_helper.py        # Embedded Tor support (pure Python, no external installation)
+```
+
+**IImageSearchProvider Interface:**
+```python
+class IImageSearchProvider(ABC):
+    @property
+    def provider_name(self) -> str: ...
+    @property
+    def cache_folder_name(self) -> str: ...
+    async def search(self, query: str, per_page: int, orientation: Optional[str]) -> list[ImageSearchResult]: ...
+    async def download(self, image_id: str, url: str, output_path: Path) -> Optional[Path]: ...
+    async def close(self) -> None: ...
+```
+
+**Available Providers:**
+
+| Provider | API Key | Cache Folder | Notes |
+|----------|---------|--------------|-------|
+| `pexels` | `PEXELS_API_KEY` | `image-cache` | Default, high quality |
+| `pixabay` | `PIXABAY_API_KEY` | `image-cache-pixabay` | Free tier: 100 req/min |
+| `websearch` | None | `image-cache-websearch` | DuckDuckGo, unlimited |
+
+**Factory Function:**
+```python
+from video.pipeline.image_providers import get_image_provider
+
+provider = get_image_provider("websearch", use_tor=True)
+results = await provider.search("Netflix logo")
+```
+
+### Embedded Tor Support
+
+The `tor_helper.py` module provides embedded Tor using `torpy` (pure Python):
+
+- **No external Tor installation required**
+- Thread-safe circuit management
+- IP rotation between video generations
+- Automatic circuit creation and cleanup
+
+**Key Components:**
+```python
+from video.pipeline.image_providers.tor_helper import (
+    get_tor_helper,      # Get global TorHelper instance
+    is_tor_available,    # Check if torpy is installed
+    rotate_tor_ip,       # Request new Tor circuit (new IP)
+)
+```
+
+**IP Rotation Flow:**
+```
+generate-reel --use-tor
+    |
+    v
+First video generation
+    |
+    v
+[Images downloaded via Tor]
+    |
+    v
+rotate_tor_ip()  <-- Called after each video
+    |
+    v
+New Tor circuit created
+    |
+    v
+Next video generation (different IP)
+```
+
+**Dependencies:**
+```bash
+pip install duckduckgo_search torpy
+```
 
 ### Usage
 
@@ -597,6 +683,8 @@ The planner generates a script like:
   - `--loop-count / -n <count>` - Generate multiple videos
   - `--loop-each <interval>` - Interval between loops (e.g., 5m, 30m, 1h) - default: 3s
   - `--overlay-images` - Add contextual images that illustrate narration
+  - `--image-provider <provider>` - Image source: pexels, pixabay, websearch (default: pexels)
+  - `--use-tor` - Route websearch through embedded Tor for anonymity
 
 **Upload Commands (USE --dry-run FOR TESTING):**
 - `upload-post <profile> [post_id]` - Upload carousel to Instagram

@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_012",
+  "type": "script_generation",
+  "created_at": "2025-12-23T06:32:31.938069",
+  "updated_at": "2025-12-23T06:32:31.952518",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "10 hidden productivity boosts with Prompt Templates in 60 Seconds",
+    "hook_text": "Boost your productivity with ChatGPT prompts!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 142,
+    "estimated_duration": 56.8,
+    "target_duration": 60.0
+  }
+}

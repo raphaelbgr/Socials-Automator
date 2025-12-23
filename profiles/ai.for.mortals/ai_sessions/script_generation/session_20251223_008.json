@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_008",
+  "type": "script_generation",
+  "created_at": "2025-12-23T02:04:19.234803",
+  "updated_at": "2025-12-23T02:04:19.248658",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "10 hidden productivity hacks using GPT-5.2 & Cursor 2025",
+    "hook_text": "Unlock hidden productivity hacks in minutes!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 181,
+    "estimated_duration": 72.4,
+    "target_duration": 60.0
+  }
+}

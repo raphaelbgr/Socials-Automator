@@ -1,0 +1,19 @@
+{
+  "id": "session_20251222_003",
+  "type": "script_generation",
+  "created_at": "2025-12-22T17:42:24.157624",
+  "updated_at": "2025-12-22T17:42:24.189208",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Adobe Podcast: Remove background noise from audio (FREE in 60 seconds)",
+    "hook_text": "60 seconds to crystal clear audio!",
+    "hook_type": "statement",
+    "segment_count": 3,
+    "word_count": 72,
+    "estimated_duration": 28.799999999999997,
+    "target_duration": 30.0
+  }
+}

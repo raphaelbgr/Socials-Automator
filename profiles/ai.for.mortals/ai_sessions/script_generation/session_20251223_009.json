@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_009",
+  "type": "script_generation",
+  "created_at": "2025-12-23T02:21:52.468333",
+  "updated_at": "2025-12-23T02:21:52.487142",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Master Free Video Scripting with Sora 2 & ElevenLabs v3: Create Polished Content in Minutes",
+    "hook_text": "Transform your videos in minutes with these free tools!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 179,
+    "estimated_duration": 71.6,
+    "target_duration": 60.0
+  }
+}

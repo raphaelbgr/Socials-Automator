@@ -1,0 +1,19 @@
+{
+  "id": "session_20251222_016",
+  "type": "script_generation",
+  "created_at": "2025-12-22T20:46:52.310669",
+  "updated_at": "2025-12-22T20:47:34.640608",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Master Free Video Editing with Runway Gen-4 & ElevenLabs v3:  A 60-Second Workflow",
+    "hook_text": "Level up your video editing FREE using Runway Gen-4 and ElevenLabs v3 – watch how in 60 seconds!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 195,
+    "estimated_duration": 78.0,
+    "target_duration": 60.0
+  }
+}

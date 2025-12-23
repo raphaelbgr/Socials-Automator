@@ -42,11 +42,12 @@ from socials_automator.constants import (
 logger = logging.getLogger("video.pipeline")
 
 
-# Blur intensity mapping (boxblur radius values)
-BLUR_INTENSITY = {
-    "light": 8,     # Subtle blur, background still visible
-    "medium": 15,   # Balanced blur, draws focus to overlay
-    "heavy": 30,    # Strong blur, overlay really pops
+# Dim intensity mapping (opacity values 0.0-1.0)
+# Uses dark overlay instead of blur for simplicity and GPU compatibility
+DIM_INTENSITY = {
+    "light": 0.3,    # Subtle dimming, background clearly visible
+    "medium": 0.5,   # Balanced dimming, draws focus to overlay
+    "heavy": 0.7,    # Strong dimming, overlay really pops
 }
 
 
@@ -62,12 +63,13 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
 
         Args:
             use_gpu: Whether to use GPU acceleration (overlay_cuda + NVENC).
-            blur: Blur background during overlays (light, medium, heavy). None = disabled.
+            blur: Dim background during overlays (light, medium, heavy). None = disabled.
+                  Uses dark overlay instead of blur for GPU compatibility.
         """
         super().__init__()
         self._use_gpu = use_gpu
-        self._blur = blur
-        self._blur_radius = BLUR_INTENSITY.get(blur, 0) if blur else 0
+        self._blur = blur  # Keep param name for CLI compatibility
+        self._dim_opacity = DIM_INTENSITY.get(blur, 0) if blur else 0
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """Execute image overlay rendering step.
@@ -187,64 +189,46 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
         # Get video stream
         video_stream = video.video
 
-        # Apply blur during overlay times (if enabled)
-        # Use split+overlay technique to avoid green screen artifacts with conditional boxblur
-        # Reference: https://medium.com/@allanlei/blur-out-videos-with-ffmpeg-92d3dc62d069
-        if self._blur_radius > 0 and overlays:
-            # Build blur enable expression: blur only when any overlay is showing
+        # Apply dim effect during overlay times (if enabled)
+        # Uses drawbox with semi-transparent black instead of blur for GPU compatibility
+        if self._dim_opacity > 0 and overlays:
+            # Build enable expression: dim only when any overlay is showing
             # Example: 'between(t,3.5,12.0)+between(t,15.0,25.0)'
-            blur_ranges = []
+            dim_ranges = []
             for overlay in overlays:
                 if overlay.image_path and overlay.image_path.exists():
-                    blur_ranges.append(f"between(t,{overlay.start_time},{overlay.end_time})")
+                    dim_ranges.append(f"between(t,{overlay.start_time},{overlay.end_time})")
 
-            if blur_ranges:
-                blur_enable = "+".join(blur_ranges)
-                self.log_progress(f"  [>] Background blur enabled ({self._blur}, radius={self._blur_radius})")
+            if dim_ranges:
+                dim_enable = "+".join(dim_ranges)
+                opacity_pct = int(self._dim_opacity * 100)
+                self.log_progress(f"  [>] Background dim enabled ({self._blur}, opacity={opacity_pct}%)")
 
                 if self._use_gpu:
-                    # GPU mode: download, split, blur, overlay, re-upload
-                    # 1. Download from CUDA to CPU
-                    # hwdownload can't output yuv420p directly - must go through nv12 first
-                    # Reference: https://www.mail-archive.com/ffmpeg-trac@avcodec.org/msg50559.html
-                    cpu_stream = (
+                    # GPU mode: download to CPU, apply drawbox, re-upload
+                    # drawbox filter doesn't have CUDA version, so we do it on CPU
+                    video_stream = (
                         video_stream
                         .filter('hwdownload')
                         .filter('format', 'nv12')
-                        .filter('format', 'yuv420p')
+                        .filter(
+                            'drawbox',
+                            x=0, y=0, w='iw', h='ih',
+                            color=f'black@{self._dim_opacity}',
+                            t='fill',
+                            enable=dim_enable
+                        )
+                        .filter('hwupload_cuda')
                     )
-
-                    # 2. Split into original and copy for blur
-                    # Use .split() method and bracket notation for multi-output filter
-                    split = cpu_stream.split()
-                    original = split[0]
-                    copy = split[1]
-
-                    # 3. Apply blur to copy (permanent, no conditional enable)
-                    blurred = copy.filter('boxblur', self._blur_radius)
-
-                    # 4. Overlay blurred onto original with enable expression
-                    # When enable is true -> show blurred, when false -> show original
-                    merged = ffmpeg.overlay(original, blurred, enable=blur_enable)
-
-                    # 5. Re-upload to CUDA
-                    video_stream = merged.filter('format', 'nv12').filter('hwupload_cuda')
                 else:
-                    # CPU mode: split, blur one copy, overlay with enable
-                    # This avoids green screen artifacts from conditional boxblur
-
-                    # 1. Ensure consistent format and split
-                    formatted = video_stream.filter('format', 'yuv420p')
-                    # Use .split() method and bracket notation for multi-output filter
-                    split = formatted.split()
-                    original = split[0]
-                    copy = split[1]
-
-                    # 2. Apply blur to copy (permanent, no conditional enable)
-                    blurred = copy.filter('boxblur', self._blur_radius)
-
-                    # 3. Overlay blurred onto original with enable expression
-                    video_stream = ffmpeg.overlay(original, blurred, enable=blur_enable)
+                    # CPU mode: simple drawbox with enable expression
+                    video_stream = video_stream.filter(
+                        'drawbox',
+                        x=0, y=0, w='iw', h='ih',
+                        color=f'black@{self._dim_opacity}',
+                        t='fill',
+                        enable=dim_enable
+                    )
 
         # Chain overlays one by one
         for i, overlay in enumerate(overlays):
@@ -432,25 +416,23 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
 
         current_stream = "[0:v]"
 
-        # Add blur filter if enabled (using split+overlay to avoid green screen artifacts)
-        if self._blur_radius > 0 and overlays:
-            # Build blur enable expression
-            blur_ranges = []
+        # Add dim effect if enabled (using drawbox with semi-transparent black)
+        if self._dim_opacity > 0 and overlays:
+            # Build dim enable expression
+            dim_ranges = []
             for overlay in overlays:
                 if overlay.image_path and overlay.image_path.exists():
-                    blur_ranges.append(f"between(t\\,{overlay.start_time}\\,{overlay.end_time})")
+                    dim_ranges.append(f"between(t\\,{overlay.start_time}\\,{overlay.end_time})")
 
-            if blur_ranges:
-                blur_enable = "+".join(blur_ranges)
-                self.log_progress(f"  [>] Background blur enabled ({self._blur}, radius={self._blur_radius})")
-                # Use split+overlay technique: split video, blur one copy, overlay with enable
-                # This avoids green screen artifacts from conditional boxblur
+            if dim_ranges:
+                dim_enable = "+".join(dim_ranges)
+                opacity_pct = int(self._dim_opacity * 100)
+                self.log_progress(f"  [>] Background dim enabled ({self._blur}, opacity={opacity_pct}%)")
+                # Simple drawbox filter with semi-transparent black
                 filter_parts.append(
-                    f"[0:v]format=yuv420p,split[original][copy];"
-                    f"[copy]boxblur={self._blur_radius}[blurred];"
-                    f"[original][blurred]overlay=enable='{blur_enable}'[merged]"
+                    f"[0:v]drawbox=x=0:y=0:w=iw:h=ih:color=black@{self._dim_opacity}:t=fill:enable='{dim_enable}'[dimmed]"
                 )
-                current_stream = "[merged]"
+                current_stream = "[dimmed]"
 
         for i, overlay in enumerate(overlays):
             if not overlay.image_path or not overlay.image_path.exists():
@@ -573,9 +555,9 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
         coverage = overlay_script.total_coverage
         if total_duration and total_duration > 0:
             coverage_pct = (coverage / total_duration) * 100
-            blur_info = f", blur={self._blur}" if self._blur else ""
+            dim_info = f", dim={self._blur}" if self._blur else ""
             self.log_progress(
-                f"\n  Coverage: {coverage:.1f}s / {total_duration:.1f}s ({coverage_pct:.0f}% of video{blur_info})"
+                f"\n  Coverage: {coverage:.1f}s / {total_duration:.1f}s ({coverage_pct:.0f}% of video{dim_info})"
             )
 
         self.log_progress("")

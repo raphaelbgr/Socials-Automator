@@ -1,0 +1,19 @@
+{
+  "id": "session_20251222_013",
+  "type": "script_generation",
+  "created_at": "2025-12-22T19:48:42.295321",
+  "updated_at": "2025-12-22T19:48:42.318887",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Unlock Free, High-Quality Audio with ElevenLabs v3 & Perplexity Sonar for Podcasters",
+    "hook_text": "Level up your podcast audio without breaking the bank! 🤯",
+    "hook_type": "statement",
+    "segment_count": 3,
+    "word_count": 94,
+    "estimated_duration": 37.6,
+    "target_duration": 30.0
+  }
+}

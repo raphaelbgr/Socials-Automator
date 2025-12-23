@@ -1,0 +1,19 @@
+{
+  "id": "session_20251222_006",
+  "type": "script_generation",
+  "created_at": "2025-12-22T18:28:29.208738",
+  "updated_at": "2025-12-22T18:29:24.246539",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Perplexity Sonar now outperforms GPT-5.2 at real-time research—try this free method",
+    "hook_text": "3 ways Perplexity Sonar beats GPT-5.2 in real-time research",
+    "hook_type": "number",
+    "segment_count": 8,
+    "word_count": 165,
+    "estimated_duration": 66.0,
+    "target_duration": 60.0
+  }
+}

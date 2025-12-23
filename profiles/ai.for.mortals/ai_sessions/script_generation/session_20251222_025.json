@@ -1,0 +1,19 @@
+{
+  "id": "session_20251222_025",
+  "type": "script_generation",
+  "created_at": "2025-12-22T23:32:02.448602",
+  "updated_at": "2025-12-22T23:34:23.455801",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Unleash Sora 2: Craft Captivating Short Stories with FREE AI in 60 Seconds",
+    "hook_text": "Want captivating short stories in SECONDS? Unleash Sora 2's FREE AI power!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 181,
+    "estimated_duration": 72.4,
+    "target_duration": 60.0
+  }
+}
