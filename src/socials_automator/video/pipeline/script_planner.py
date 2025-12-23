@@ -633,6 +633,34 @@ Respond with ONLY valid JSON, no other text."""
         # Clean up any placeholder text like "[context-specific ending...]"
         if "[" in cta_ending:
             cta_ending = "for more tips like this!"
+
+        # Strip any "Follow X" prefix that AI might have included
+        # This prevents doubled CTAs like "Follow X Follow X for more..."
+        import re
+        cta_ending_clean = cta_ending.strip()
+
+        # Check if cta_ending starts with "Follow" - if so, it's a complete CTA
+        if re.match(r'^follow\s+', cta_ending_clean, re.IGNORECASE):
+            # AI returned a full CTA, use it directly instead of adding prefix
+            cta_ending_clean = "for more tips like this!"
+
+        # Strip leading punctuation like "!" that might precede a "Follow"
+        cta_ending_clean = re.sub(r'^[!\s]+', '', cta_ending_clean).strip()
+
+        # Check again after stripping punctuation
+        if re.match(r'^follow\s+', cta_ending_clean, re.IGNORECASE):
+            cta_ending_clean = "for more tips like this!"
+
+        # Ensure cta_ending starts with "for" if it's a continuation phrase
+        if cta_ending_clean and not cta_ending_clean.lower().startswith('for '):
+            cta_ending_clean = f"for {cta_ending_clean}"
+
+        # Default if empty after cleanup
+        if not cta_ending_clean:
+            cta_ending_clean = "for more tips like this!"
+
+        cta_ending = cta_ending_clean
+
         cta = f"Follow {profile_name} {cta_ending}"
 
         self.log_detail(f"AI Hook: {hook[:50]}...")

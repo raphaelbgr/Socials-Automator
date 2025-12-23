@@ -36,8 +36,12 @@ class NewsContentHistory(BaseContentHistory):
     SESSION_TYPE = "news_stories"
     HISTORY_FILE = "story_history.json"
     DEFAULT_LOOKBACK_DAYS = 7  # News is more time-sensitive
-    SIMILARITY_THRESHOLD = 0.5
+    SIMILARITY_THRESHOLD = 0.35  # Lower threshold to catch similar headlines
     STORY_COOLDOWN_HOURS = 48  # Stories stay in cooldown for 48h
+
+    # Key entities that should only appear once per cooldown period
+    # These are extracted from headlines for entity-level deduplication
+    ENTITY_COOLDOWN_HOURS = 24
 
     def __init__(
         self,
@@ -149,7 +153,10 @@ class NewsContentHistory(BaseContentHistory):
     ) -> bool:
         """Check if a story headline is too similar to recent stories.
 
-        Uses both similarity checking and exact match on normalized text.
+        Uses multiple detection methods:
+        1. Jaccard similarity checking (catches similar wording)
+        2. Exact match on normalized text
+        3. Key entity overlap (catches same subject with different wording)
 
         Args:
             headline: Headline to check.
@@ -167,7 +174,117 @@ class NewsContentHistory(BaseContentHistory):
         normalized = self._normalize_headline(headline)
         recent_normalized = self._get_recent_normalized_headlines()
 
-        return normalized in recent_normalized
+        if normalized in recent_normalized:
+            return True
+
+        # Check key entity overlap (catches same subject with different headlines)
+        if self._has_recent_entity_overlap(headline):
+            return True
+
+        return False
+
+    def _has_recent_entity_overlap(self, headline: str) -> bool:
+        """Check if headline shares key entities with recent stories.
+
+        Extracts key entities (proper nouns, show names, product names) and
+        checks if any appear in recent headlines.
+
+        Args:
+            headline: Headline to check.
+
+        Returns:
+            True if headline shares key entity with recent story.
+        """
+        # Extract key entities from new headline
+        new_entities = self._extract_key_entities(headline)
+        if not new_entities:
+            return False
+
+        # Get entities from recent headlines
+        recent_entities = self._get_recent_entities()
+
+        # Check for overlap
+        overlap = new_entities & recent_entities
+        if overlap:
+            logger.debug(f"ENTITY_OVERLAP | {headline[:40]}... shares: {overlap}")
+            return True
+
+        return False
+
+    def _extract_key_entities(self, headline: str) -> set[str]:
+        """Extract key entities from a headline.
+
+        Looks for:
+        - Multi-word proper nouns (Stranger Things, Ranveer Singh)
+        - Known entity patterns (Season X, Part X)
+        - Capitalized phrases
+
+        Args:
+            headline: Headline text.
+
+        Returns:
+            Set of normalized entity strings.
+        """
+        entities = set()
+
+        # Clean headline
+        clean = headline.strip()
+
+        # Extract capitalized multi-word phrases (2-3 words)
+        # This catches "Stranger Things", "Ranveer Singh", "Black Mirror" etc.
+        words = clean.split()
+        for i in range(len(words) - 1):
+            # 2-word entities
+            if (words[i][0:1].isupper() and words[i+1][0:1].isupper()
+                and len(words[i]) > 2 and len(words[i+1]) > 2):
+                entity = f"{words[i].lower()} {words[i+1].lower()}"
+                # Filter out common non-entity phrases
+                if not self._is_common_phrase(entity):
+                    entities.add(entity)
+
+            # 3-word entities
+            if i + 2 < len(words):
+                if (words[i][0:1].isupper() and words[i+1][0:1].isupper()
+                    and words[i+2][0:1].isupper()
+                    and len(words[i]) > 2):
+                    entity = f"{words[i].lower()} {words[i+1].lower()} {words[i+2].lower()}"
+                    if not self._is_common_phrase(entity):
+                        entities.add(entity)
+
+        return entities
+
+    def _is_common_phrase(self, phrase: str) -> bool:
+        """Check if a phrase is a common non-entity expression."""
+        common = {
+            "box office", "breaking news", "season premiere",
+            "series finale", "release date", "coming soon",
+            "first look", "official trailer", "new episode",
+            "latest update", "exclusive interview", "behind scenes",
+        }
+        return phrase in common
+
+    def _get_recent_entities(self) -> set[str]:
+        """Get entities from recent headlines.
+
+        Returns:
+            Set of entity strings from recent history.
+        """
+        self._ensure_cache()
+
+        entities = set()
+
+        # From session history
+        for item in self._cached_session_items:
+            content = item.get("content", "")
+            if content:
+                entities.update(self._extract_key_entities(content))
+
+        # From posted content
+        for item in self._cached_posted_items:
+            for headline in item.headlines:
+                entities.update(self._extract_key_entities(headline))
+
+        return entities
 
     def get_recent_headlines(self) -> list[str]:
         """Get list of recent headline strings.
