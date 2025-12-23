@@ -313,6 +313,9 @@ class VoiceGenerator(IVoiceGenerator):
         current_idx = hook_end_idx
         previous_end_time = timestamps[min(hook_end_idx, len(timestamps) - 1)]["start_ms"] / 1000
 
+        # Store actual hook end time for overlay planner
+        script.hook_end_time = previous_end_time
+
         for i, segment in enumerate(script.segments):
             segment_start_idx = current_idx
             words_in_segment = segment_word_counts[i]
@@ -349,9 +352,13 @@ class VoiceGenerator(IVoiceGenerator):
                 first_segment.duration_seconds = first_segment.end_time - first_segment.start_time
                 self.log_detail(f"Extended segment 1 to include hook ({hook_duration:.1f}s)")
 
-            # Extend last segment to cover CTA (end of audio)
+            # Store CTA start time (before extending last segment)
             last_segment = script.segments[-1]
             audio_end_time = timestamps[-1]["end_ms"] / 1000
+            script.cta_start_time = last_segment.end_time  # Original end = CTA start
+            script.total_duration = audio_end_time  # Update to actual duration
+
+            # Extend last segment to cover CTA (end of audio)
             if last_segment.end_time < audio_end_time:
                 cta_duration = audio_end_time - last_segment.end_time
                 last_segment.end_time = audio_end_time

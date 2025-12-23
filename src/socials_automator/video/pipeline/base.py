@@ -113,6 +113,8 @@ class VideoScript(BaseModel):
     cta: str
     total_duration: float = 60.0
     full_narration: str = ""
+    hook_end_time: float = 3.0  # Actual time when hook ends (updated by VoiceGenerator)
+    cta_start_time: float = 57.0  # Actual time when CTA starts (updated by VoiceGenerator)
 
     def calculate_times(self) -> None:
         """Calculate start/end times for each segment."""

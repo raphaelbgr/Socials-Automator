@@ -191,6 +191,14 @@ class ImageOverlayPlanner(IImageOverlayPlanner):
         # Build prompt with script information
         prompt = self._build_prompt(script)
 
+        # Log actual timing source
+        hook_end = getattr(script, 'hook_end_time', 3.0)
+        cta_start = getattr(script, 'cta_start_time', script.total_duration - 3.0)
+        self.log_progress(
+            f"[>] Using voice timing: hook=0.0-{hook_end:.1f}s, "
+            f"CTA={cta_start:.1f}-{script.total_duration:.1f}s"
+        )
+
         # Get AI response
         provider = self._get_text_provider()
 
@@ -217,30 +225,28 @@ class ImageOverlayPlanner(IImageOverlayPlanner):
             Formatted prompt string.
         """
         # Build segment list with timing
+        # Use actual times from voice generation (hook_end_time, cta_start_time, total_duration)
         segments_text = []
 
-        # Add hook as segment 0
+        # Add hook as segment 0 (using actual hook end time from voice)
+        hook_end = getattr(script, 'hook_end_time', 3.0)
         segments_text.append(
-            f"Segment 0 (Hook): [0.0s - 3.0s]\n"
+            f"Segment 0 (Hook): [0.0s - {hook_end:.1f}s]\n"
             f'"{script.hook}"'
         )
 
-        # Add main segments
+        # Add main segments (timings updated by VoiceGenerator)
         for seg in script.segments:
             segments_text.append(
                 f"Segment {seg.index}: [{seg.start_time:.1f}s - {seg.end_time:.1f}s]\n"
                 f'"{seg.text}"'
             )
 
-        # Add CTA as last segment
-        if script.segments:
-            last_end = script.segments[-1].end_time
-        else:
-            last_end = 3.0
-
+        # Add CTA as last segment (using actual CTA start time from voice)
+        cta_start = getattr(script, 'cta_start_time', script.segments[-1].end_time if script.segments else 3.0)
         cta_index = len(script.segments) + 1
         segments_text.append(
-            f"Segment {cta_index} (CTA): [{last_end:.1f}s - {script.total_duration:.1f}s]\n"
+            f"Segment {cta_index} (CTA): [{cta_start:.1f}s - {script.total_duration:.1f}s]\n"
             f'"{script.cta}"'
         )
 
