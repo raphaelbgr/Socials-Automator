@@ -207,6 +207,7 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
                 if self._use_gpu:
                     # GPU mode: download to CPU, apply drawbox, re-upload
                     # drawbox filter doesn't have CUDA version, so we do it on CPU
+                    # Must ensure nv12 format before AND after drawbox for overlay_cuda compatibility
                     video_stream = (
                         video_stream
                         .filter('hwdownload')
@@ -218,6 +219,7 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
                             t='fill',
                             enable=dim_enable
                         )
+                        .filter('format', 'nv12')  # Ensure nv12 for hwupload_cuda
                         .filter('hwupload_cuda')
                     )
                 else:
