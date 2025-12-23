@@ -130,7 +130,17 @@
       "Bash(del \"C:\\\\Users\\\\rbgnr\\\\AppData\\\\Local\\\\Temp\\\\overlay_test_10s.jpg\" \"C:\\\\Users\\\\rbgnr\\\\AppData\\\\Local\\\\Temp\\\\overlay_test_25s.jpg\")",
       "WebFetch(domain:pixabay.com)",
       "WebFetch(domain:localhost)",
-      "WebFetch(domain:civitai.com)"
+      "WebFetch(domain:civitai.com)",
+      "Bash(cmd /c \"type C:\\\\Users\\\\rbgnr\\\\git\\\\Socials-Automator\\\\profiles\\\\news.but.quick\\\\reels\\\\2025\\\\12\\\\posted\\\\23-001-reel\\\\caption+hashtags.txt\")",
+      "Bash(cmd /c \"findstr /C:caption C:\\\\Users\\\\rbgnr\\\\git\\\\Socials-Automator\\\\logs\\\\ai_calls.log | tail -30\")",
+      "Bash(cmd /c \"dir /b C:\\\\Users\\\\rbgnr\\\\git\\\\Socials-Automator\\\\profiles\\\\news.but.quick\\\\ai_sessions\\\\news_stories\"\")",
+      "Bash(cmd /c \"for /f %d in \\(''dir /b /o-n C:\\\\Users\\\\rbgnr\\\\git\\\\Socials-Automator\\\\profiles\\\\news.but.quick\\\\reels\\\\2025\\\\12\\\\generated 2^>nul ^| head -1''\\) do @type C:\\\\Users\\\\rbgnr\\\\git\\\\Socials-Automator\\\\profiles\\\\news.but.quick\\\\reels\\\\2025\\\\12\\\\generated\\\\%d\\\\caption+hashtags.txt 2>nul\")",
+      "Bash(cmd /c \"for /f %d in \\(''dir /b /o-n C:\\\\Users\\\\rbgnr\\\\git\\\\Socials-Automator\\\\profiles\\\\ai.for.mortals\\\\reels\\\\2025\\\\12\\\\generated 2^>nul ^| head -1''\\) do @type C:\\\\Users\\\\rbgnr\\\\git\\\\Socials-Automator\\\\profiles\\\\ai.for.mortals\\\\reels\\\\2025\\\\12\\\\generated\\\\%d\\\\caption+hashtags.txt 2>nul\")",
+      "Bash(cmd /c \"for /f %d in \\(''dir /b /o-n C:\\\\Users\\\\rbgnr\\\\git\\\\Socials-Automator\\\\profiles\\\\ai.for.mortals\\\\reels\\\\2025\\\\12\\\\posted 2^>nul ^| head -1''\\) do @type C:\\\\Users\\\\rbgnr\\\\git\\\\Socials-Automator\\\\profiles\\\\ai.for.mortals\\\\reels\\\\2025\\\\12\\\\posted\\\\%d\\\\metadata.json 2>nul | findstr narration\")",
+      "Bash(cmd /c \"dir /b /o-n C:\\\\Users\\\\rbgnr\\\\git\\\\Socials-Automator\\\\profiles\\\\news.but.quick\\\\reels\\\\2025\\\\12\\\\posted 2>nul | head -3\")",
+      "Bash(find:*)",
+      "Bash(set PLAYWRIGHT_BROWSERS_PATH=C:UsersrbgnrgitSocials-Automator.playwright)",
+      "Bash(cmd /c:*)"
     ],
     "deny": [],
     "ask": []

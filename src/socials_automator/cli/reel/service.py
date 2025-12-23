@@ -271,6 +271,9 @@ class ReelGeneratorService:
             blur=params.blur,
             smart_pick=params.smart_pick,
             smart_pick_count=params.smart_pick_count,
+            # Dense overlay mode
+            overlay_image_ttl=params.overlay_image_ttl,
+            overlay_image_minimum=params.overlay_image_minimum,
         )
 
     def _create_news_pipeline(self, params: ReelGenerationParams, progress_callback):
@@ -310,6 +313,9 @@ class ReelGeneratorService:
             blur=params.blur,
             smart_pick=params.smart_pick,
             smart_pick_count=params.smart_pick_count,
+            # Dense overlay mode
+            overlay_image_ttl=params.overlay_image_ttl,
+            overlay_image_minimum=params.overlay_image_minimum,
         )
 
     def _create_output_dir(self, params: ReelGenerationParams) -> Path:

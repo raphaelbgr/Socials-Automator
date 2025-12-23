@@ -44,6 +44,9 @@ class ReelGenerationParams:
     blur: Optional[str] = None  # None=disabled, light/medium/heavy
     smart_pick: bool = False  # Use AI vision to select best image
     smart_pick_count: int = 10  # Number of candidates to compare
+    # Dense overlay mode (fixed TTL per image)
+    overlay_image_ttl: Optional[float] = None  # seconds, None=disabled (use segment-based)
+    overlay_image_minimum: Optional[int] = None  # target topic count, None=auto-calculate
 
     @classmethod
     def from_cli(
@@ -80,6 +83,9 @@ class ReelGenerationParams:
         blur: Optional[str] = None,  # None=disabled, light/medium/heavy
         smart_pick: bool = False,  # Use AI vision to select best image
         smart_pick_count: int = 10,  # Number of candidates to compare
+        # Dense overlay mode
+        overlay_image_ttl: Optional[str] = None,  # e.g., "3s" for 3 seconds
+        overlay_image_minimum: Optional[int] = None,  # target image count
         **kwargs,  # Ignore extra kwargs
     ) -> "ReelGenerationParams":
         """Create from CLI arguments with parsing and defaults.
@@ -126,6 +132,19 @@ class ReelGenerationParams:
             else:
                 blur_normalized = "medium"  # Default for invalid/empty values
 
+        # Parse overlay TTL string to seconds (e.g., "3s" -> 3.0)
+        # Default to 3s TTL and 20 minimum when --overlay-images is enabled
+        parsed_overlay_ttl: Optional[float] = None
+        parsed_overlay_minimum: Optional[int] = overlay_image_minimum
+        if overlay_images:
+            # Dense mode is default when overlay_images is enabled
+            if overlay_image_ttl:
+                parsed_overlay_ttl = _parse_ttl_string(overlay_image_ttl)
+            else:
+                parsed_overlay_ttl = 3.0  # Default: 3 seconds per image
+            if overlay_image_minimum is None:
+                parsed_overlay_minimum = 20  # Default: target 20 images
+
         return cls(
             profile=profile,
             profile_path=profile_path,
@@ -159,7 +178,33 @@ class ReelGenerationParams:
             blur=blur_normalized,
             smart_pick=smart_pick,
             smart_pick_count=smart_pick_count,
+            # Dense overlay mode (defaults: 3s TTL, 20 minimum when --overlay-images)
+            overlay_image_ttl=parsed_overlay_ttl,
+            overlay_image_minimum=parsed_overlay_minimum,
         )
+
+
+def _parse_ttl_string(ttl_str: str) -> float:
+    """Parse TTL string to seconds.
+
+    Args:
+        ttl_str: Time string like "3s", "2.5s", "3"
+
+    Returns:
+        Duration in seconds.
+
+    Examples:
+        "3s" -> 3.0
+        "2.5s" -> 2.5
+        "3" -> 3.0
+    """
+    ttl_str = ttl_str.strip().lower()
+    if ttl_str.endswith("s"):
+        ttl_str = ttl_str[:-1]
+    try:
+        return float(ttl_str)
+    except ValueError:
+        return 3.0  # Default to 3 seconds
 
 
 def _is_news_profile(profile_path: Path) -> bool:

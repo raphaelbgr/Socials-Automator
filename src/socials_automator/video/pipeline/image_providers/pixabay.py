@@ -11,7 +11,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import httpx
 
@@ -168,6 +168,8 @@ class PixabayImageProvider(IImageSearchProvider):
         image_id: str,
         url: str,
         output_path: Path,
+        source_page_url: Optional[str] = None,
+        log_callback: Optional[Callable[[str], None]] = None,
     ) -> Optional[Path]:
         """Download an image from Pixabay.
 
@@ -177,10 +179,14 @@ class PixabayImageProvider(IImageSearchProvider):
             image_id: Pixabay image ID.
             url: URL to download from.
             output_path: Path to save the image.
+            source_page_url: Unused (Pixabay API provides direct access).
+            log_callback: Unused (Pixabay downloads are straightforward).
 
         Returns:
             Path to downloaded image, or None if failed.
         """
+        # Pixabay provides reliable direct access - no fallbacks needed
+        _ = source_page_url, log_callback  # Mark as intentionally unused
         try:
             client = await self._get_client()
             response = await client.get(url, follow_redirects=True)

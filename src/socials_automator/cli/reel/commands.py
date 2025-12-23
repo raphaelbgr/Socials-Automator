@@ -57,6 +57,9 @@ def generate_reel(
     blur: Optional[str] = typer.Option(None, "--blur", help="Dim background during overlays: light, medium, heavy"),
     smart_pick: bool = typer.Option(False, "--smart-pick", help="Use AI vision to select best matching images"),
     smart_pick_count: int = typer.Option(10, "--smart-pick-count", help="Number of candidates to compare (default: 10)"),
+    # Dense overlay mode
+    overlay_image_ttl: Optional[str] = typer.Option(None, "--overlay-image-ttl", help="Fixed display time per image (e.g., '3s'). Enables dense mode."),
+    overlay_image_minimum: Optional[int] = typer.Option(None, "--overlay-image-minimum", help="Target number of images (default: auto-calculated from TTL)."),
 ) -> None:
     """Generate a video reel for a profile.
 
@@ -105,6 +108,9 @@ def generate_reel(
         blur=blur,
         smart_pick=smart_pick,
         smart_pick_count=smart_pick_count,
+        # Dense overlay mode
+        overlay_image_ttl=overlay_image_ttl,
+        overlay_image_minimum=overlay_image_minimum,
     )
 
     # Validate params

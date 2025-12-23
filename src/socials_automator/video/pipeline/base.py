@@ -167,6 +167,7 @@ class ImageOverlay(BaseModel):
     pexels_query: Optional[str] = None  # Fallback search query
     pexels_id: Optional[str] = None  # Resolved image ID (provider-agnostic)
     download_url: Optional[str] = None  # URL to download from (provider-specific)
+    source_page_url: Optional[str] = None  # Source page URL (for download fallback referer)
     image_path: Optional[Path] = None  # Final local path to image
 
     # Metadata

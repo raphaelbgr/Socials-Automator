@@ -5,6 +5,9 @@
 venv/
 env/
 
+# Sandboxed browsers (Playwright)
+.playwright/
+
 # Python
 __pycache__/
 *.py[cod]

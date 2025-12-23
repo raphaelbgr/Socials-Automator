@@ -179,6 +179,7 @@ class ImageResolver(IImageResolver):
                 overlay.source = self._provider_name
                 overlay.pexels_id = search_result.id  # Use generic ID field
                 overlay.download_url = search_result.url  # URL for downloading
+                overlay.source_page_url = search_result.photographer_url  # For fallback referer
                 overlay.width = search_result.width
                 overlay.height = search_result.height
                 overlay.alt_text = search_result.description or overlay.alt_text

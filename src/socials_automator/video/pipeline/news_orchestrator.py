@@ -46,6 +46,7 @@ from .voice_generator import VoiceGenerator
 
 # Image overlay components (optional feature)
 from .image_overlay_planner import ImageOverlayPlanner
+from .dense_overlay_planner import DenseOverlayPlanner
 from .image_resolver import ImageResolver
 from .image_selector import ImageSelector
 from .image_downloader import ImageDownloader
@@ -83,6 +84,7 @@ STEP_DESCRIPTIONS = {
     "ThumbnailGenerator": "Generating thumbnail for Instagram",
     # Image overlay steps (optional) - descriptions are updated dynamically
     "ImageOverlayPlanner": "Planning contextual image overlays with AI",
+    "DenseOverlayPlanner": "Extracting visual topics for dense image overlays",
     "ImageResolver": "Finding images from cache and provider",  # Updated dynamically
     "ImageSelector": "AI selecting best images from candidates",  # Updated dynamically
     "ImageDownloader": "Downloading overlay images",  # Updated dynamically
@@ -143,6 +145,9 @@ class NewsPipeline:
         # Smart pick (AI-powered image selection)
         smart_pick: bool = False,
         smart_pick_count: int = 10,
+        # Dense overlay mode (fixed TTL per image)
+        overlay_image_ttl: Optional[float] = None,  # seconds, None = use segment-based
+        overlay_image_minimum: Optional[int] = None,  # target topic count, None = auto
     ):
         """Initialize news pipeline.
 
@@ -172,6 +177,8 @@ class NewsPipeline:
             blur: Blur background during overlays (light, medium, heavy). None = disabled.
             smart_pick: Use AI vision to select best matching images.
             smart_pick_count: Number of candidates to compare for smart pick.
+            overlay_image_ttl: Fixed display time per image (seconds). Enables dense mode.
+            overlay_image_minimum: Target number of images. Auto-calculated if None.
         """
         self.profile_name = profile_name
         self.profile_path = profile_path
@@ -181,6 +188,8 @@ class NewsPipeline:
         self.blur = blur
         self.smart_pick = smart_pick
         self.smart_pick_count = smart_pick_count
+        self.overlay_image_ttl = overlay_image_ttl
+        self.overlay_image_minimum = overlay_image_minimum
         self.logger = logging.getLogger("video.news_pipeline")
         self.progress_callback = progress_callback
         self.text_ai = text_ai
@@ -276,17 +285,31 @@ class NewsPipeline:
 
         # Image overlay steps (optional feature)
         self.image_overlay_steps: list[PipelineStep] = []
+        self.logger.info(f"NewsPipeline: overlay_images={overlay_images}, ttl={overlay_image_ttl}, min={overlay_image_minimum}")
         if overlay_images:
             ai_client = text_provider_module.TextProvider(provider_override=text_ai)
             tor_info = " via Tor" if use_tor else ""
             blur_info = f", dim={blur}" if blur else ""
             smart_info = f", smart-pick={smart_pick_count}" if smart_pick else ""
-            self.display.info(f"Image overlays enabled ({image_provider}{tor_info}{blur_info}{smart_info})")
+            dense_info = f", dense={overlay_image_ttl}s" if overlay_image_ttl else ""
+            self.display.info(f"Image overlays enabled ({image_provider}{tor_info}{blur_info}{smart_info}{dense_info})")
+
+            # Choose planner: DenseOverlayPlanner (TTL mode) or ImageOverlayPlanner (segment mode)
+            if overlay_image_ttl is not None:
+                # Dense mode: fixed TTL per image, AI extracts maximum topics
+                planner = DenseOverlayPlanner(
+                    text_provider=ai_client,
+                    image_ttl=overlay_image_ttl,
+                    minimum_images=overlay_image_minimum,
+                )
+            else:
+                # Segment mode: one image per narration segment
+                planner = ImageOverlayPlanner(text_provider=ai_client)
 
             # Build overlay steps - use ImageSelector if smart_pick enabled
             if smart_pick:
                 self.image_overlay_steps = [
-                    ImageOverlayPlanner(text_provider=ai_client),
+                    planner,
                     ImageSelector(
                         image_provider=image_provider,
                         use_tor=use_tor,
@@ -299,7 +322,7 @@ class NewsPipeline:
                 ]
             else:
                 self.image_overlay_steps = [
-                    ImageOverlayPlanner(text_provider=ai_client),
+                    planner,
                     ImageResolver(image_provider=image_provider, use_tor=use_tor),
                     ImageDownloader(image_provider=image_provider, use_tor=use_tor),
                     ImageOverlayRenderer(use_gpu=gpu_accelerate, blur=blur),

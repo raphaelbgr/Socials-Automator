@@ -7,7 +7,7 @@ This allows swapping between Pexels, Pixabay, Unsplash, etc.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 
 @dataclass
@@ -83,6 +83,8 @@ class IImageSearchProvider(ABC):
         image_id: str,
         url: str,
         output_path: Path,
+        source_page_url: Optional[str] = None,
+        log_callback: Optional[Callable[[str], None]] = None,
     ) -> Optional[Path]:
         """Download an image to the specified path.
 
@@ -90,6 +92,8 @@ class IImageSearchProvider(ABC):
             image_id: Provider-specific image ID.
             url: URL to download from.
             output_path: Path to save the image.
+            source_page_url: URL of the page where image was found (for referer fallback).
+            log_callback: Optional callback for real-time progress logging.
 
         Returns:
             Path to downloaded image, or None if download failed.

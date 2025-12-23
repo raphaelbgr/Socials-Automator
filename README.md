@@ -450,10 +450,12 @@ python -m socials_automator.cli generate-reel <profile> [OPTIONS]
 | `--edition` | `-e` | News edition: morning, midday, evening, night | Auto |
 | `--stories` | `-s` | Number of news stories per video | 4 |
 | `--news-age` | | Max age of news articles in hours | 24 |
-| `--overlay-images` | | Add contextual images that illustrate narration (pop-in/pop-out) | False |
+| `--overlay-images` | | Add contextual images that illustrate narration (dense mode: 3s TTL, 20 images) | False |
 | `--image-provider` | | Image provider for overlays: websearch, pexels, pixabay | websearch |
 | `--use-tor` | | Route websearch requests through embedded Tor for anonymity | False |
 | `--blur` | | Blur background during overlays: light, medium, heavy | None |
+| `--overlay-image-ttl` | | Display time per image (e.g., 3s, 2.5s). | 3s |
+| `--overlay-image-minimum` | | Target number of overlay images. | 20 |
 
 **Available Voices:**
 | Voice | Description |
@@ -571,6 +573,17 @@ python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --
 
 # Heavy blur (strong effect, overlay really pops)
 python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --blur heavy
+
+# --- Dense Overlay Mode (default: 3s per image, 20 images target) ---
+
+# Enable overlays with defaults (3s TTL, 20 images)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images
+
+# Customize timing: 2 seconds per image
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --overlay-image-ttl 2s
+
+# Customize count: target 15 images
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --overlay-image-minimum 15
 
 # Control hashtag count (Instagram limit is 5 as of Dec 2025)
 python -m socials_automator.cli generate-reel ai.for.mortals --hashtags 3
@@ -696,6 +709,37 @@ python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --
 ```
 
 The blur is applied dynamically - only active when an overlay is showing, and the background returns to normal between overlays.
+
+**Dense Overlay Mode (default):**
+
+When `--overlay-images` is enabled, dense mode is automatically activated with sensible defaults:
+- **3 seconds** display time per image (`--overlay-image-ttl 3s`)
+- **20 images** target (`--overlay-image-minimum 20`)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--overlay-image-ttl` | 3s | Display time per image |
+| `--overlay-image-minimum` | 20 | Target number of images (AI extracts that many topics) |
+
+How it works:
+1. **AI Topic Extraction**: Analyzes narration to extract maximum visual topics (products, shows, brands, people)
+2. **SRT-Based Timing**: Matches topics to subtitle timestamps for natural appearance
+3. **Fixed TTL Distribution**: Each image gets exactly the specified display time
+4. **No Fallbacks**: If no image found for a topic, that slot is left empty (no generic images)
+
+```bash
+# Enable image overlays (uses defaults: 3s TTL, 20 images)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images
+
+# Customize: faster image rotation (2s each)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --overlay-image-ttl 2s
+
+# Customize: fewer images (10 target)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --overlay-image-minimum 10
+
+# Full customization with blur
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --overlay-image-ttl 4s --overlay-image-minimum 15 --blur medium
+```
 
 **Output:**
 ```

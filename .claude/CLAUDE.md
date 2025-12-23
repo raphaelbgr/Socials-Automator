@@ -20,7 +20,8 @@ cli/ -> video/pipeline/orchestrator.py -> script_planner.py -> text.py (AI calls
 | `content/planner.py` | 4-phase AI content generation |
 | `video/pipeline/orchestrator.py` | Coordinates video reel pipeline |
 | `video/pipeline/script_planner.py` | AI script generation for reels |
-| `video/pipeline/image_overlay_planner.py` | AI planning for image overlays |
+| `video/pipeline/image_overlay_planner.py` | AI planning for image overlays (segment-based) |
+| `video/pipeline/dense_overlay_planner.py` | AI planning for dense overlays (TTL-based) |
 | `video/pipeline/image_resolver.py` | Multi-provider image resolution |
 | `video/pipeline/image_downloader.py` | Image downloading with caching |
 | `video/pipeline/image_overlay_renderer.py` | FFmpeg compositing with pop animations |
@@ -516,9 +517,16 @@ py scripts/fix_empty_captions.py ai.for.mortals
 
 The `--overlay-images` flag adds contextual images that appear on-screen during narration to illustrate key points (TV shows, products, people, etc.).
 
+### Overlay Modes
+
+| Mode | Flag | Description |
+|------|------|-------------|
+| Segment-based | `--overlay-images` | One image per narration segment (default) |
+| Dense (TTL) | `--overlay-image-ttl 3s` | Fixed display time per image, AI extracts maximum topics |
+
 ### How It Works
 
-1. **ImageOverlayPlanner** - AI analyzes the script and plans image overlays:
+1. **ImageOverlayPlanner** (segment mode) or **DenseOverlayPlanner** (TTL mode) - AI plans overlays:
    - Identifies moments that benefit from visual illustration
    - Determines timing (start_time, end_time in seconds)
    - Classifies match type: "exact" (specific item) vs "illustrative" (stock OK)
@@ -551,7 +559,8 @@ Image overlays are applied AFTER video assembly but BEFORE subtitles to ensure p
 
 | File | Purpose |
 |------|---------|
-| `video/pipeline/image_overlay_planner.py` | AI planning for overlay timing/content |
+| `video/pipeline/image_overlay_planner.py` | AI planning for overlay timing/content (segment mode) |
+| `video/pipeline/dense_overlay_planner.py` | AI planning for dense overlays (TTL mode) |
 | `video/pipeline/image_resolver.py` | Multi-provider image resolution |
 | `video/pipeline/image_downloader.py` | Image downloading with profile cache |
 | `video/pipeline/image_overlay_renderer.py` | FFmpeg compositing with animations |
@@ -683,7 +692,9 @@ The planner generates a script like:
   - `--loop-count / -n <count>` - Generate multiple videos
   - `--loop-each <interval>` - Interval between loops (e.g., 5m, 30m, 1h) - default: 3s
   - `--overlay-images` - Add contextual images that illustrate narration
-  - `--image-provider <provider>` - Image source: pexels, pixabay, websearch (default: pexels)
+  - `--image-provider <provider>` - Image source: pexels, pixabay, websearch (default: websearch)
+  - `--overlay-image-ttl <time>` - Fixed display time per image (e.g., 3s). Enables dense mode.
+  - `--overlay-image-minimum <count>` - Target number of images for dense mode (auto if omitted)
   - `--use-tor` - Route websearch through embedded Tor for anonymity
 
 **Upload Commands (USE --dry-run FOR TESTING):**

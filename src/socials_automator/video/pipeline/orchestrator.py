@@ -47,6 +47,7 @@ from .voice_generator import VoiceGenerator
 
 # Image overlay components (optional feature)
 from .image_overlay_planner import ImageOverlayPlanner
+from .dense_overlay_planner import DenseOverlayPlanner
 from .image_resolver import ImageResolver
 from .image_selector import ImageSelector
 from .image_downloader import ImageDownloader
@@ -77,6 +78,7 @@ STEP_DESCRIPTIONS = {
     "GPUVideoAssembler": "Assembling clips into 9:16 vertical video (GPU NVENC)",
     # Image overlay steps (descriptions updated dynamically based on provider)
     "ImageOverlayPlanner": "AI planning image overlays for narration segments",
+    "DenseOverlayPlanner": "AI extracting visual topics for dense image overlays",
     "ImageResolver": "Resolving image sources (local library + provider)",  # Updated dynamically
     "ImageDownloader": "Downloading overlay images (with cache optimization)",  # Updated dynamically
     "ImageOverlayRenderer": "Rendering image overlays with pop animations",
@@ -146,6 +148,9 @@ class VideoPipeline:
         blur: Optional[str] = None,
         smart_pick: bool = False,
         smart_pick_count: int = 10,
+        # Dense overlay mode (fixed TTL per image)
+        overlay_image_ttl: Optional[float] = None,
+        overlay_image_minimum: Optional[int] = None,
     ):
         """Initialize video pipeline.
 
@@ -175,6 +180,8 @@ class VideoPipeline:
             blur: Dim background during overlays (light, medium, heavy). None = disabled.
             smart_pick: Use AI vision to select best matching images from candidates.
             smart_pick_count: Number of candidate images to compare (default 10).
+            overlay_image_ttl: Fixed display time per image (seconds). Enables dense mode.
+            overlay_image_minimum: Target number of images. Auto-calculated if None.
         """
         self.logger = logging.getLogger("video.pipeline")
         self.video_first = video_first
@@ -274,12 +281,25 @@ class VideoPipeline:
             tor_info = " via Tor" if use_tor else ""
             blur_info = f", dim={blur}" if blur else ""
             smart_info = f", smart-pick={smart_pick_count}" if smart_pick else ""
-            self.display.info(f"Image overlays enabled ({image_provider}{tor_info}{blur_info}{smart_info})")
+            dense_info = f", dense={overlay_image_ttl}s" if overlay_image_ttl else ""
+            self.display.info(f"Image overlays enabled ({image_provider}{tor_info}{blur_info}{smart_info}{dense_info})")
+
+            # Choose planner: DenseOverlayPlanner (TTL mode) or ImageOverlayPlanner (segment mode)
+            if overlay_image_ttl is not None:
+                # Dense mode: fixed TTL per image, AI extracts maximum topics
+                planner = DenseOverlayPlanner(
+                    text_provider=self.ai_client,
+                    image_ttl=overlay_image_ttl,
+                    minimum_images=overlay_image_minimum,
+                )
+            else:
+                # Segment mode: one image per narration segment
+                planner = ImageOverlayPlanner(text_provider=self.ai_client)
 
             if smart_pick:
                 # Use AI vision to select best matching images
                 self.image_overlay_steps = [
-                    ImageOverlayPlanner(text_provider=self.ai_client),
+                    planner,
                     ImageSelector(
                         image_provider=image_provider,
                         use_tor=use_tor,
@@ -293,7 +313,7 @@ class VideoPipeline:
             else:
                 # Standard first-result selection
                 self.image_overlay_steps = [
-                    ImageOverlayPlanner(text_provider=self.ai_client),
+                    planner,
                     ImageResolver(image_provider=image_provider, use_tor=use_tor),
                     ImageDownloader(image_provider=image_provider, use_tor=use_tor),
                     ImageOverlayRenderer(use_gpu=gpu_accelerate, blur=blur),
