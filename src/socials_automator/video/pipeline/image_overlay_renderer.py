@@ -205,7 +205,14 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
                 if self._use_gpu:
                     # GPU mode: download, split, blur, overlay, re-upload
                     # 1. Download from CUDA to CPU
-                    cpu_stream = video_stream.filter('hwdownload').filter('format', 'yuv420p')
+                    # hwdownload can't output yuv420p directly - must go through nv12 first
+                    # Reference: https://www.mail-archive.com/ffmpeg-trac@avcodec.org/msg50559.html
+                    cpu_stream = (
+                        video_stream
+                        .filter('hwdownload')
+                        .filter('format', 'nv12')
+                        .filter('format', 'yuv420p')
+                    )
 
                     # 2. Split into original and copy for blur
                     # Use .split() method and bracket notation for multi-output filter
