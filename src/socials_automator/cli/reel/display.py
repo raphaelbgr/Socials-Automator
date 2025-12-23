@@ -45,7 +45,8 @@ def show_reel_config(console: Console, params: ReelGenerationParams) -> None:
     overlay_style = "green" if params.overlay_images else "dim"
     if params.overlay_images:
         tor_info = " via Tor" if params.use_tor else ""
-        overlay_info = f"Enabled ({params.image_provider}{tor_info})"
+        blur_info = f", blur={params.blur}" if params.blur else ""
+        overlay_info = f"Enabled ({params.image_provider}{tor_info}{blur_info})"
     else:
         overlay_info = "Disabled"
 
