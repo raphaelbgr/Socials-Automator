@@ -155,3 +155,41 @@ WATERMARK_POSITION: Final[str] = "bottom_right"
 
 WATERMARK_MARGIN: Final[int] = 20
 """Margin from edge in pixels."""
+
+
+# =============================================================================
+# IMAGE OVERLAY SETTINGS
+# =============================================================================
+# Settings for image overlays that appear during narration
+
+IMAGE_OVERLAY_MARGIN_X: Final[int] = 40
+"""Horizontal margin from left/right edge in pixels."""
+
+IMAGE_OVERLAY_MAX_HEIGHT: Final[int] = 600
+"""Maximum image container height in pixels."""
+
+IMAGE_OVERLAY_MARGIN_BOTTOM: Final[int] = 20
+"""Margin above subtitle area in pixels."""
+
+IMAGE_OVERLAY_SUBTITLE_Y: Final[int] = 1400
+"""Y position where subtitles start (approx). Used to position overlay above."""
+
+IMAGE_OVERLAY_BLUR_STRENGTH: Final[int] = 20
+"""Blur strength for frosted glass backdrop effect."""
+
+IMAGE_OVERLAY_BORDER_RADIUS: Final[int] = 20
+"""Border radius for rounded corners in pixels."""
+
+# Animation durations (in seconds)
+IMAGE_OVERLAY_POP_IN_DURATION: Final[float] = 0.3
+"""Duration of pop-in animation in seconds."""
+
+IMAGE_OVERLAY_POP_OUT_DURATION: Final[float] = 0.2
+"""Duration of pop-out animation in seconds."""
+
+# Animation keyframe values (scale factor)
+IMAGE_OVERLAY_POP_OVERSHOOT: Final[float] = 1.1
+"""Scale overshoot for bounce effect (1.0 = no overshoot)."""
+
+IMAGE_OVERLAY_POP_BOUNCE: Final[float] = 0.95
+"""Scale bounce-back value after overshoot."""

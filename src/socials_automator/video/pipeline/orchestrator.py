@@ -45,6 +45,12 @@ from .video_searcher import VideoSearcher
 from .video_selector import VideoSelector
 from .voice_generator import VoiceGenerator
 
+# Image overlay components (optional feature)
+from .image_overlay_planner import ImageOverlayPlanner
+from .image_resolver import ImageResolver
+from .image_downloader import ImageDownloader
+from .image_overlay_renderer import ImageOverlayRenderer
+
 # GPU-accelerated renderers (optional)
 try:
     from .gpu_utils import validate_gpu_setup, GPUInfo
@@ -68,6 +74,12 @@ STEP_DESCRIPTIONS = {
     "VideoDownloader": "Downloading video clips (with cache optimization)",
     "VideoAssembler": "Assembling clips into 9:16 vertical video",
     "GPUVideoAssembler": "Assembling clips into 9:16 vertical video (GPU NVENC)",
+    # Image overlay steps
+    "ImageOverlayPlanner": "AI planning image overlays for narration segments",
+    "ImageResolver": "Resolving image sources (local library + Pexels)",
+    "ImageDownloader": "Downloading overlay images (with cache optimization)",
+    "ImageOverlayRenderer": "Rendering image overlays with pop animations",
+    # Subtitle and caption steps
     "SubtitleRenderer": "Rendering karaoke-style subtitles and adding audio",
     "GPUSubtitleRenderer": "Rendering subtitles and adding audio (GPU NVENC)",
     "ThumbnailGenerator": "Generating thumbnail with hook text for Instagram",
@@ -127,6 +139,7 @@ class VideoPipeline:
         gpu_index: Optional[int] = None,
         video_first: bool = True,
         profile_path: Optional[Path] = None,
+        overlay_images: bool = False,
     ):
         """Initialize video pipeline.
 
@@ -150,6 +163,7 @@ class VideoPipeline:
                 When True (default), selects videos to fill audio duration without repetition.
                 When False, uses legacy segment-based mode where segments define video boundaries.
             profile_path: Path to profile directory for session-based AI context.
+            overlay_images: Enable image overlays during narration segments.
         """
         self.logger = logging.getLogger("video.pipeline")
         self.video_first = video_first
@@ -164,6 +178,7 @@ class VideoPipeline:
         self.gpu_index = gpu_index
         self.gpu_info: Optional[GPUInfo] = None
         self.profile_path = profile_path
+        self.overlay_images = overlay_images
 
         # Initialize debug logger
         self.debug_logger = PipelineDebugLogger()
@@ -240,14 +255,27 @@ class VideoPipeline:
         # Video-first mode components
         self.video_selector = VideoSelector(ai_client=self.ai_client) if video_first else None
 
-        # Sequential: Assembly -> Thumbnail -> Subtitles -> Caption (need results from both parallel branches)
+        # Image overlay components (optional feature)
+        self.image_overlay_steps: list[PipelineStep] = []
+        if overlay_images:
+            self.display.info("Image overlays enabled")
+            self.image_overlay_steps = [
+                ImageOverlayPlanner(text_provider=self.ai_client),
+                ImageResolver(),  # Auto-creates PexelsImageClient
+                ImageDownloader(),  # Auto-creates PexelsImageClient and cache
+                ImageOverlayRenderer(use_gpu=gpu_accelerate),
+            ]
+
+        # Sequential: Assembly -> Thumbnail -> [Image Overlays] -> Subtitles -> Caption
         # ThumbnailGenerator runs BEFORE SubtitleRenderer to get clean frames without text
+        # Image overlays go after thumbnail (so thumbnail is clean) but before subtitles
         # Use GPU renderers if GPU acceleration is enabled
         if self.gpu_accelerate and self.gpu_info:
             self.display.info("Using GPU-accelerated video assembly and subtitle rendering (NVENC)")
             self.final_steps: list[PipelineStep] = [
                 GPUVideoAssembler(gpu=self.gpu_info),  # GPU NVENC assembly
                 ThumbnailGenerator(font=subtitle_font, font_size=90),  # Thumbnail from clean video (90px for grid visibility)
+                *self.image_overlay_steps,  # Image overlays (if enabled)
                 GPUSubtitleRenderer(gpu=self.gpu_info, font=subtitle_font, font_size=subtitle_size),  # GPU with ASS karaoke
                 CaptionGenerator(ai_client=self.ai_client, preferred_provider=text_ai),
             ]
@@ -255,6 +283,7 @@ class VideoPipeline:
             self.final_steps: list[PipelineStep] = [
                 VideoAssembler(),  # Uses audio duration as source of truth
                 ThumbnailGenerator(font=subtitle_font, font_size=90),  # Thumbnail from clean video (90px for grid visibility)
+                *self.image_overlay_steps,  # Image overlays (if enabled)
                 SubtitleRenderer(font=subtitle_font, font_size=subtitle_size),
                 CaptionGenerator(ai_client=self.ai_client, preferred_provider=text_ai),
             ]

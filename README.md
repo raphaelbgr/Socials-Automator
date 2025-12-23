@@ -450,6 +450,7 @@ python -m socials_automator.cli generate-reel <profile> [OPTIONS]
 | `--edition` | `-e` | News edition: morning, midday, evening, night | Auto |
 | `--stories` | `-s` | Number of news stories per video | 4 |
 | `--news-age` | | Max age of news articles in hours | 24 |
+| `--overlay-images` | | Add contextual images that illustrate narration (pop-in/pop-out) | False |
 
 **Available Voices:**
 | Voice | Description |
@@ -545,6 +546,12 @@ python -m socials_automator.cli generate-reel ai.for.mortals -n 5 --upload
 # Full pipeline: GPU acceleration, custom voice, auto-upload
 python -m socials_automator.cli generate-reel ai.for.mortals --text-ai lmstudio -g --voice adam_excited --upload
 
+# Add contextual image overlays (TV shows, products, etc.)
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images
+
+# Full pipeline with image overlays, GPU, and upload
+python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images -g --text-ai lmstudio --upload
+
 # Control hashtag count (Instagram limit is 5 as of Dec 2025)
 python -m socials_automator.cli generate-reel ai.for.mortals --hashtags 3
 
@@ -582,9 +589,13 @@ py -X utf8 -m socials_automator.cli generate-reel news.but.quick -n 25 -g --uplo
 7. Download video clips
 8. Assemble into 9:16 vertical video (matches narration length)
 9. Generate thumbnail with auto-fitted text (truncates long text to fit 3:4 container)
-10. Add karaoke-style subtitles with moving watermark
-11. [AI] Generate caption and hashtags (with AI validation and retry)
-12. Output final.mp4 + thumbnail.jpg
+10. **(Optional) Add image overlays** - with `--overlay-images` flag:
+    - [AI] Plan overlay timing and content from script
+    - Search Pexels for contextual images (TV shows, products, etc.)
+    - Composite images with pop-in/pop-out animations
+11. Add karaoke-style subtitles with moving watermark
+12. [AI] Generate caption and hashtags (with AI validation and retry)
+13. Output final.mp4 + thumbnail.jpg
 
 **News Pipeline (for news profiles):**
 1. Aggregate news from RSS feeds (TMZ, Variety, E!, Rolling Stone, etc.)

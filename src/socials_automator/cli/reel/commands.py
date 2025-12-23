@@ -50,6 +50,8 @@ def generate_reel(
     edition: Optional[str] = typer.Option(None, "--edition", "-e", help="News edition: morning, midday, evening, night"),
     story_count: Optional[str] = typer.Option("auto", "--stories", "-s", help="Number of news stories (auto = AI decides)"),
     news_max_age: int = typer.Option(24, "--news-age", help="Max news age in hours"),
+    # Image overlay feature
+    overlay_images: bool = typer.Option(False, "--overlay-images", help="Add contextual images that illustrate narration"),
 ) -> None:
     """Generate a video reel for a profile.
 
@@ -91,6 +93,8 @@ def generate_reel(
         edition=edition,
         story_count=story_count,
         news_max_age=news_max_age,
+        # Image overlay
+        overlay_images=overlay_images,
     )
 
     # Validate params

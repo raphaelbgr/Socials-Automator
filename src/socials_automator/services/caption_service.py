@@ -11,6 +11,7 @@ Uses LLMFallbackManager for automatic retry and provider switching.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -18,6 +19,37 @@ from .llm_fallback import LLMFallbackManager, FallbackConfig, FallbackResult
 from ..providers.config import load_provider_config
 
 _logger = logging.getLogger("caption_service")
+
+
+def sanitize_json_string(json_str: str) -> str:
+    """Sanitize JSON string by escaping literal newlines inside quoted strings.
+
+    LMStudio/local LLMs sometimes output literal newlines inside JSON string values,
+    which is invalid JSON. This function fixes that by escaping them.
+
+    Args:
+        json_str: Raw JSON string that may have literal newlines in values.
+
+    Returns:
+        Sanitized JSON string with escaped newlines inside quoted values.
+    """
+    # If it doesn't look like JSON, return as-is
+    if not json_str.strip().startswith("{"):
+        return json_str
+
+    # Replace literal newlines inside strings with escaped \n
+    # This regex matches content between double quotes and escapes any literal newlines
+    def escape_newlines_in_string(match: re.Match) -> str:
+        content = match.group(1)
+        # Escape literal newlines (but not already-escaped ones)
+        # Replace literal newline with \n escape sequence
+        content = content.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n")
+        return f'"{content}"'
+
+    # Pattern matches strings: "..." but not escaped quotes
+    # This is a simplified approach that works for most LLM outputs
+    result = re.sub(r'"([^"\\]*(?:\\.[^"\\]*)*)"', escape_newlines_in_string, json_str)
+    return result
 
 
 @dataclass
@@ -319,10 +351,17 @@ Return ONLY the hashtags, one per line, nothing else."""
         if caption.startswith("{") and "caption" in caption:
             import json
             try:
-                data = json.loads(caption)
+                # Sanitize JSON to handle literal newlines from local LLMs
+                sanitized = sanitize_json_string(caption)
+                data = json.loads(sanitized)
                 caption = data.get("caption", caption)
             except json.JSONDecodeError:
-                pass
+                # If still fails, try extracting caption value manually
+                # Pattern: "caption": "..." or "caption":"..."
+                import re
+                match = re.search(r'"caption"\s*:\s*"([^"]*(?:\\"[^"]*)*)"', caption, re.DOTALL)
+                if match:
+                    caption = match.group(1).replace('\\"', '"').replace('\\n', '\n')
 
         return caption.strip()
 

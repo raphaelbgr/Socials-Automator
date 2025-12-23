@@ -20,6 +20,10 @@ cli/ -> video/pipeline/orchestrator.py -> script_planner.py -> text.py (AI calls
 | `content/planner.py` | 4-phase AI content generation |
 | `video/pipeline/orchestrator.py` | Coordinates video reel pipeline |
 | `video/pipeline/script_planner.py` | AI script generation for reels |
+| `video/pipeline/image_overlay_planner.py` | AI planning for image overlays |
+| `video/pipeline/image_resolver.py` | Local + Pexels image resolution |
+| `video/pipeline/image_downloader.py` | Image downloading with caching |
+| `video/pipeline/image_overlay_renderer.py` | FFmpeg compositing with pop animations |
 | `providers/text.py` | LiteLLM wrapper for all text AI |
 | `providers/image.py` | DALL-E, ComfyUI, fal.ai |
 | `instagram/client.py` | Instagram Graph API client |
@@ -507,6 +511,81 @@ py scripts/fix_empty_captions.py ai.for.mortals
 | Empty captions after upload | Rate limiting during ghost publish | Use sync-captions to detect, fix script to repair |
 | Newlines not showing | Instagram's Lexical editor | Script uses Shift+Enter for line breaks |
 
+## Image Overlay Feature (--overlay-images)
+
+The `--overlay-images` flag adds contextual images that appear on-screen during narration to illustrate key points (TV shows, products, people, etc.).
+
+### How It Works
+
+1. **ImageOverlayPlanner** - AI analyzes the script and plans image overlays:
+   - Identifies moments that benefit from visual illustration
+   - Determines timing (start_time, end_time in seconds)
+   - Classifies match type: "exact" (specific item) vs "illustrative" (stock OK)
+   - Generates search queries for Pexels
+
+2. **ImageResolver** - Resolves images from multiple sources:
+   - Local cache lookup first
+   - Pexels API search with fallback queries
+   - Returns best matching image URL
+
+3. **ImageDownloader** - Downloads and caches images:
+   - Profile-scoped cache: `profiles/<name>/data/image_cache/`
+   - Avoids re-downloading same images
+
+4. **ImageOverlayRenderer** - Composites images onto video:
+   - Uses FFmpeg filter_complex with `enable` expressions
+   - Pop-in/pop-out animations (scale + fade)
+   - Positioned in corner (default: top-right)
+   - GPU acceleration support
+
+### Pipeline Position
+
+```
+VideoAssembler -> ThumbnailGenerator -> [ImageOverlay steps] -> SubtitleRenderer -> CaptionGenerator
+```
+
+Image overlays are applied AFTER video assembly but BEFORE subtitles to ensure proper layering.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `video/pipeline/image_overlay_planner.py` | AI planning for overlay timing/content |
+| `video/pipeline/image_resolver.py` | Local + Pexels image resolution |
+| `video/pipeline/image_downloader.py` | Image downloading with profile cache |
+| `video/pipeline/image_overlay_renderer.py` | FFmpeg compositing with animations |
+| `video/pipeline/pexels_image.py` | Pexels Image API client |
+| `video/pipeline/image_cache.py` | Profile-scoped image caching |
+
+### Usage
+
+```bash
+# Generate reel with image overlays
+py -m socials_automator.cli generate-reel ai.for.mortals --overlay-images
+
+# Combine with other options
+py -m socials_automator.cli generate-reel ai.for.mortals --overlay-images -g --text-ai lmstudio
+```
+
+### Image Overlay Script (JSON)
+
+The planner generates a script like:
+
+```json
+{
+  "overlays": [
+    {
+      "description": "Netflix logo or interface",
+      "search_query": "Netflix streaming service logo",
+      "match_type": "exact",
+      "start_time": 5.2,
+      "end_time": 8.5,
+      "position": "top-right"
+    }
+  ]
+}
+```
+
 ## Commands Overview
 
 **Generation Commands (safe to run):**
@@ -517,6 +596,7 @@ py scripts/fix_empty_captions.py ai.for.mortals
   - `--gpu <index>` - Specific GPU index
   - `--loop-count / -n <count>` - Generate multiple videos
   - `--loop-each <interval>` - Interval between loops (e.g., 5m, 30m, 1h) - default: 3s
+  - `--overlay-images` - Add contextual images that illustrate narration
 
 **Upload Commands (USE --dry-run FOR TESTING):**
 - `upload-post <profile> [post_id]` - Upload carousel to Instagram

@@ -110,7 +110,7 @@ class NewsScriptPlanner(PipelineStep):
     STORY_DURATION = 11.0  # ~11 seconds per story
 
     # Retry constants for word count validation
-    MAX_RETRY_ATTEMPTS = 3  # Retries per provider before switching
+    MAX_RETRY_ATTEMPTS = 10  # Retries per provider before switching
     MIN_WORD_RATIO = 0.75  # Script must have at least 75% of target words
     MAX_PROVIDER_FALLBACKS = 2  # Max number of provider switches
 

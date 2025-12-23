@@ -16,6 +16,7 @@ from .base import (
     PipelineStep,
 )
 from ...services.llm_fallback import LLMFallbackManager, FallbackConfig
+from ...services.caption_service import sanitize_json_string
 from ...providers.config import load_provider_config
 
 
@@ -204,6 +205,8 @@ class CaptionGenerator(PipelineStep):
     def _build_caption_prompt(self, context: PipelineContext, feedback: str | None = None) -> str:
         """Build the caption generation prompt.
 
+        Dispatches to profile-specific prompts (news vs tools).
+
         Args:
             context: Pipeline context.
             feedback: Optional feedback from previous validation failure.
@@ -219,13 +222,6 @@ class CaptionGenerator(PipelineStep):
         # Extract the full narration - this is the source of truth
         narration = context.script.full_narration or ""
 
-        # Extract tool/product names mentioned in narration (e.g., "Jasper.ai", "ChatGPT", etc.)
-        tool_pattern = r'\b([A-Z][a-zA-Z]*(?:\.[a-zA-Z]+)?(?:\'s)?)\b'
-        potential_tools = re.findall(tool_pattern, narration)
-        # Filter to likely tool names (capitalized, may have .ai/.io suffix)
-        tools_mentioned = [t for t in potential_tools if len(t) > 2 and t not in ['The', 'This', 'With', 'When', 'First', 'Next', 'Follow', 'Save', 'Here']]
-        tools_list = ", ".join(set(tools_mentioned[:10])) if tools_mentioned else "various AI tools"
-
         # Add feedback section if this is a retry
         feedback_section = ""
         if feedback:
@@ -235,6 +231,84 @@ IMPORTANT - Your previous caption was rejected. Fix these issues:
 
 Generate a NEW caption that addresses this feedback.
 """
+
+        # Detect if this is a news profile
+        is_news_profile = "news" in context.profile.name.lower() if context.profile.name else False
+
+        if is_news_profile:
+            return self._build_news_caption_prompt(
+                narration, profile_handle, profile_hashtag, feedback_section, context
+            )
+        else:
+            return self._build_tools_caption_prompt(
+                narration, profile_handle, profile_hashtag, feedback_section, context
+            )
+
+    def _build_news_caption_prompt(
+        self,
+        narration: str,
+        profile_handle: str,
+        profile_hashtag: str,
+        feedback_section: str,
+        context: PipelineContext,
+    ) -> str:
+        """Build caption prompt for news profiles.
+
+        News captions list stories with proper line breaks.
+        """
+        return f"""Write an engaging Instagram Reels caption for a NEWS video.
+{feedback_section}
+VIDEO NARRATION (contains the news stories covered):
+---
+{narration}
+---
+
+Topic: {context.topic.topic}
+Profile: {context.profile.display_name} ({profile_handle})
+
+CRITICAL REQUIREMENTS:
+1. Start with a short headline (e.g., "Night Edition: Entertainment news you can't miss!")
+2. List 3-5 news stories from the narration as bullet points
+3. EACH BULLET MUST BE ON ITS OWN LINE - use actual line breaks (\\n), NOT inline dashes
+4. Each bullet should summarize ONE story briefly (10-15 words max)
+5. End with: "Save this + follow {profile_handle} for more!"
+6. Keep under 200 words total
+7. NO EMOJIS in the caption text
+8. NO MARKDOWN FORMATTING
+
+IMPORTANT: In your JSON response, use \\n for line breaks between bullets. Example:
+"caption": "Headline here\\n\\n- First story summary\\n- Second story summary\\n- Third story summary\\n\\nSave this..."
+
+FORMAT - Return valid JSON only:
+{{
+    "caption": "Headline\\n\\n- Story 1\\n- Story 2\\n- Story 3\\n\\nSave this + follow {profile_handle} for more! {profile_hashtag}",
+    "hashtags": "#Entertainment #News #Hollywood ... (5 relevant hashtags)"
+}}
+
+EXAMPLE of correct format:
+{{
+    "caption": "Night Edition: Entertainment news you can't miss!\\n\\n- Netflix's Terminator Zero anime brings franchise-changing storytelling\\n- Disney's Avatar 4 reveals eight-year time skip mystery\\n- Disney+ streaming offers holiday entertainment deals\\n\\nSave this + follow @news.but.quick for more! #Newsbutquick",
+    "hashtags": "#Entertainment #Netflix #Disney #Hollywood #Streaming"
+}}
+
+Return ONLY the JSON, no markdown or explanation."""
+
+    def _build_tools_caption_prompt(
+        self,
+        narration: str,
+        profile_handle: str,
+        profile_hashtag: str,
+        feedback_section: str,
+        context: PipelineContext,
+    ) -> str:
+        """Build caption prompt for AI tools/tips profiles."""
+        import re
+
+        # Extract tool/product names mentioned in narration
+        tool_pattern = r'\b([A-Z][a-zA-Z]*(?:\.[a-zA-Z]+)?(?:\'s)?)\b'
+        potential_tools = re.findall(tool_pattern, narration)
+        tools_mentioned = [t for t in potential_tools if len(t) > 2 and t not in ['The', 'This', 'With', 'When', 'First', 'Next', 'Follow', 'Save', 'Here']]
+        tools_list = ", ".join(set(tools_mentioned[:10])) if tools_mentioned else "various AI tools"
 
         return f"""Write an engaging Instagram Reels caption based on this video narration.
 {feedback_section}
@@ -249,29 +323,22 @@ Tools/Products mentioned: {tools_list}
 
 CRITICAL REQUIREMENTS:
 1. Your caption MUST list 3-5 SPECIFIC tools or tips from the narration above
-2. Use emoji bullet points to list what the video covers
+2. EACH BULLET MUST BE ON ITS OWN LINE - use actual line breaks (\\n), NOT inline dashes
 3. Each bullet should name a specific tool AND what it does (e.g., "Jasper.ai for writing blog posts")
 4. Keep caption under 200 words total
 5. End with call-to-action: "Save this + follow {profile_handle} for more!"
 6. Add profile hashtag: {profile_hashtag}
-7. NO MARKDOWN FORMATTING - Do not use asterisks (*), underscores (_), backticks (`), or any other markdown syntax. Plain text only.
+7. NO EMOJIS in the caption text
+8. NO MARKDOWN FORMATTING
+
+IMPORTANT: In your JSON response, use \\n for line breaks between bullets. Example:
+"caption": "Headline here\\n\\n- First tool\\n- Second tool\\n\\nSave this..."
 
 FORMAT - Return valid JSON only:
 {{
-    "caption": "Your caption here with emoji bullet points listing specific tools from the narration...",
+    "caption": "AI productivity hacks you need to try today:\\n\\n- Jasper.ai for writing blog posts\\n- ChatGPT for drafting emails\\n- Canva for quick design work\\n\\nSave this + follow {profile_handle} for more! {profile_hashtag}",
     "hashtags": "#AI #ChatGPT #Productivity ... (8-12 relevant hashtags)"
 }}
-
-EXAMPLE of good caption style:
-"AI productivity hacks you need to try today:
-
-- Jasper.ai for writing blog posts in minutes
-- ChatGPT for drafting professional emails
-- Canva Magic Resize for quick design work
-- Grammarly for error-free documents
-- Otter.ai for meeting transcriptions
-
-Save this + follow @ai.for.mortals for more! #AiForMortals"
 
 Return ONLY the JSON, no markdown or explanation."""
 
@@ -300,7 +367,9 @@ Return ONLY the JSON, no markdown or explanation."""
         clean_response = clean_response.strip()
 
         try:
-            data = json.loads(clean_response)
+            # Sanitize JSON to handle literal newlines from local LLMs
+            sanitized = sanitize_json_string(clean_response)
+            data = json.loads(sanitized)
             caption = data.get("caption", "")
             hashtags = data.get("hashtags", "")
 
@@ -403,7 +472,9 @@ A caption is valid if score >= 7. Be strict - generic captions like "Check out t
                     clean_response = clean_response[4:]
             clean_response = clean_response.strip()
 
-            data = json.loads(clean_response)
+            # Sanitize JSON to handle literal newlines from local LLMs
+            sanitized = sanitize_json_string(clean_response)
+            data = json.loads(sanitized)
             is_valid = data.get("is_valid", False)
             score = data.get("score", 0)
             feedback = data.get("feedback", "Unknown validation error")
@@ -444,6 +515,11 @@ A caption is valid if score >= 7. Be strict - generic captions like "Check out t
         if not has_bullets:
             issues.append("Caption should have bullet points listing specific tips/tools")
 
+        # Check for LINE BREAKS - bullets should be on separate lines, not inline
+        has_line_breaks = '\n' in caption
+        if has_bullets and not has_line_breaks:
+            issues.append("Bullets should be on SEPARATE LINES with actual line breaks (\\n), not inline dashes")
+
         # Check for generic phrases (bad)
         generic_phrases = [
             "check out these tips",
@@ -456,17 +532,18 @@ A caption is valid if score >= 7. Be strict - generic captions like "Check out t
             if phrase in caption_lower:
                 issues.append(f"Remove generic phrase: '{phrase}'")
 
-        # Check that some content from narration appears
+        # Check that some content from narration appears (relaxed for news)
         # Extract key terms from narration
         import re
         tool_pattern = r'\b([A-Z][a-zA-Z]+(?:\.[a-zA-Z]+)?)\b'
-        narration_tools = set(re.findall(tool_pattern, narration))
+        narration_terms = set(re.findall(tool_pattern, narration))
         skip_words = {'The', 'This', 'With', 'When', 'First', 'Next', 'Follow', 'Save', 'Here', 'Want', 'AI'}
-        narration_tools = {t for t in narration_tools if t not in skip_words and len(t) > 2}
+        narration_terms = {t for t in narration_terms if t not in skip_words and len(t) > 2}
 
-        tools_in_caption = sum(1 for tool in narration_tools if tool in caption)
-        if tools_in_caption < 2:
-            issues.append(f"Caption should mention more specific tools from the video (found {tools_in_caption}, need at least 3)")
+        terms_in_caption = sum(1 for term in narration_terms if term in caption)
+        # Relaxed: only require 2 terms (works for both news and tools)
+        if terms_in_caption < 2:
+            issues.append(f"Caption should mention more specific content from the video (found {terms_in_caption}, need at least 2)")
 
         if issues:
             return False, "; ".join(issues)
