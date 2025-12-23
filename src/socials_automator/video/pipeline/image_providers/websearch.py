@@ -27,8 +27,23 @@ import httpx
 
 from .base import IImageSearchProvider, ImageSearchResult
 from .tor_helper import get_tor_helper, is_tor_available, rotate_tor_ip, close_tor
+from .headless_screenshot import (
+    capture_image_screenshot,
+    is_playwright_available,
+    close_browser,
+)
 
 logger = logging.getLogger("video.pipeline")
+
+
+# Download attempt result for logging
+class DownloadAttempt:
+    """Result of a download attempt for detailed logging."""
+    def __init__(self):
+        self.method: str = ""
+        self.success: bool = False
+        self.error: str = ""
+        self.size: tuple[int, int] = (0, 0)  # width, height
 
 
 class WebSearchImageProvider(IImageSearchProvider):
@@ -215,19 +230,92 @@ class WebSearchImageProvider(IImageSearchProvider):
         image_id: str,
         url: str,
         output_path: Path,
+        source_page_url: Optional[str] = None,
+        log_callback: Optional[callable] = None,
     ) -> Optional[Path]:
-        """Download an image from the web.
+        """Download an image from the web with fallback strategies.
+
+        Download flow:
+        1. Direct download with enhanced headers
+        2. If 403 -> Retry with source page referer
+        3. If still fails -> Headless browser screenshot
 
         Args:
             image_id: Image ID.
             url: URL to download from.
             output_path: Path to save the image.
+            source_page_url: URL of page where image was found (for referer/fallback).
+            log_callback: Optional callback for progress logging (callable(str)).
 
         Returns:
             Path to downloaded image, or None if failed.
         """
+        def log(msg: str):
+            if log_callback:
+                log_callback(msg)
+
         proxy = self._get_proxy()
 
+        # === ATTEMPT 1: Direct download with enhanced headers ===
+        log("[>] Direct download...")
+        result = await self._download_direct(url, output_path, proxy, referer="https://duckduckgo.com/")
+        if result:
+            size = result.stat().st_size
+            log(f"[OK] Downloaded ({size // 1024}KB)")
+            return result
+
+        # === ATTEMPT 2: Retry with source page referer ===
+        if source_page_url:
+            log("[!] 403 Forbidden - trying with source referer...")
+            result = await self._download_direct(url, output_path, proxy, referer=source_page_url)
+            if result:
+                size = result.stat().st_size
+                log(f"[OK] Downloaded with referer ({size // 1024}KB)")
+                return result
+
+        # === ATTEMPT 3: Headless browser screenshot (sandboxed Chromium) ===
+        if is_playwright_available():
+            log("[!] Direct failed - using headless screenshot...")
+            try:
+                result = await capture_image_screenshot(
+                    image_url=url,
+                    source_page_url=source_page_url,
+                    output_path=output_path.with_suffix(".png"),  # Screenshots are PNG
+                    use_tor=self.use_tor,  # Route through Tor if enabled
+                    log_callback=lambda msg: log(f"    {msg}"),
+                )
+                if result and result.exists():
+                    size = result.stat().st_size
+                    log(f"[OK] Screenshot captured ({size // 1024}KB)")
+                    return result
+                else:
+                    log("[X] Screenshot failed")
+            except Exception as e:
+                log(f"[X] Screenshot error: {str(e)[:40]}")
+        else:
+            log("[!] Playwright not available - skipping headless fallback")
+
+        log("[X] All download attempts failed")
+        return None
+
+    async def _download_direct(
+        self,
+        url: str,
+        output_path: Path,
+        proxy: Optional[str],
+        referer: str,
+    ) -> Optional[Path]:
+        """Direct HTTP download with specified referer.
+
+        Args:
+            url: Image URL.
+            output_path: Output path.
+            proxy: Proxy URL or None.
+            referer: Referer header value.
+
+        Returns:
+            Path to downloaded file, or None if failed.
+        """
         for attempt in range(self.MAX_RETRIES):
             try:
                 async with httpx.AsyncClient(
@@ -240,20 +328,28 @@ class WebSearchImageProvider(IImageSearchProvider):
                             "AppleWebKit/537.36 (KHTML, like Gecko) "
                             "Chrome/120.0.0.0 Safari/537.36"
                         ),
-                        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+                        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
                         "Accept-Language": "en-US,en;q=0.9",
-                        "Referer": "https://duckduckgo.com/",
+                        "Accept-Encoding": "gzip, deflate, br",
+                        "Referer": referer,
+                        "Origin": referer.split("/")[0] + "//" + referer.split("/")[2] if "/" in referer else referer,
+                        "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                        "Sec-Ch-Ua-Mobile": "?0",
+                        "Sec-Ch-Ua-Platform": '"Windows"',
                         "Sec-Fetch-Dest": "image",
                         "Sec-Fetch-Mode": "no-cors",
                         "Sec-Fetch-Site": "cross-site",
+                        "Cache-Control": "no-cache",
+                        "Pragma": "no-cache",
                     },
                 ) as client:
                     response = await client.get(url)
 
+                    if response.status_code == 403:
+                        # 403 Forbidden - don't retry, let caller try fallback
+                        return None
+
                     if response.status_code != 200:
-                        logger.warning(
-                            f"WebSearch download failed: HTTP {response.status_code} for {url[:80]}..."
-                        )
                         if attempt < self.MAX_RETRIES - 1:
                             await asyncio.sleep(self.RETRY_BASE_DELAY * (2 ** attempt))
                             continue
@@ -261,25 +357,7 @@ class WebSearchImageProvider(IImageSearchProvider):
 
                     # Determine file extension from content type
                     content_type = response.headers.get("content-type", "")
-                    if "jpeg" in content_type or "jpg" in content_type:
-                        ext = ".jpg"
-                    elif "png" in content_type:
-                        ext = ".png"
-                    elif "webp" in content_type:
-                        ext = ".webp"
-                    elif "gif" in content_type:
-                        ext = ".gif"
-                    else:
-                        # Try to infer from URL
-                        url_lower = url.lower()
-                        if ".png" in url_lower:
-                            ext = ".png"
-                        elif ".webp" in url_lower:
-                            ext = ".webp"
-                        elif ".gif" in url_lower:
-                            ext = ".gif"
-                        else:
-                            ext = ".jpg"
+                    ext = self._get_extension_from_content_type(content_type, url)
 
                     # Update output path with correct extension
                     if not output_path.suffix:
@@ -288,12 +366,6 @@ class WebSearchImageProvider(IImageSearchProvider):
                     # Validate it's actually an image (check magic bytes)
                     content = response.content
                     if not self._is_valid_image(content):
-                        # Log what we got instead
-                        content_preview = content[:100].decode('utf-8', errors='replace') if content else ""
-                        logger.warning(
-                            f"WebSearch: Invalid image data (not JPEG/PNG/GIF/WebP) from {url[:60]}... "
-                            f"Content-Type: {content_type}, First bytes: {content_preview[:50]}..."
-                        )
                         if attempt < self.MAX_RETRIES - 1:
                             continue
                         return None
@@ -308,16 +380,35 @@ class WebSearchImageProvider(IImageSearchProvider):
             except self.RETRYABLE_EXCEPTIONS as e:
                 if attempt < self.MAX_RETRIES - 1:
                     delay = self.RETRY_BASE_DELAY * (2 ** attempt)
-                    logger.warning(f"WebSearch download retry {attempt + 1}/{self.MAX_RETRIES}: {e}")
                     await asyncio.sleep(delay)
                     continue
-                logger.warning(f"WebSearch download failed after {self.MAX_RETRIES} attempts: {e}")
                 return None
-            except Exception as e:
-                logger.warning(f"WebSearch download error: {e}")
+            except Exception:
                 return None
 
         return None
+
+    def _get_extension_from_content_type(self, content_type: str, url: str) -> str:
+        """Determine file extension from content type or URL."""
+        if "jpeg" in content_type or "jpg" in content_type:
+            return ".jpg"
+        elif "png" in content_type:
+            return ".png"
+        elif "webp" in content_type:
+            return ".webp"
+        elif "gif" in content_type:
+            return ".gif"
+        else:
+            # Try to infer from URL
+            url_lower = url.lower()
+            if ".png" in url_lower:
+                return ".png"
+            elif ".webp" in url_lower:
+                return ".webp"
+            elif ".gif" in url_lower:
+                return ".gif"
+            else:
+                return ".jpg"
 
     def _is_valid_image(self, data: bytes) -> bool:
         """Check if data is a valid image by magic bytes.

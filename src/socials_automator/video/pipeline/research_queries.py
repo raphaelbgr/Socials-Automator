@@ -10,6 +10,7 @@ Usage:
     queries = await generator.generate_queries(
         topic="This FREE AI tool creates perfect meeting notes",
         pillar="productivity_hacks",
+        profile_name="ai.for.mortals",  # For query history tracking
     )
 """
 
@@ -18,12 +19,101 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 from socials_automator.providers.text import TextProvider
 
 logger = logging.getLogger("ai_calls")
+
+
+# =============================================================================
+# Research Query History Tracking
+# =============================================================================
+
+def get_research_query_history_path(profile_name: str) -> Path:
+    """Get path to research query history file for a profile."""
+    from socials_automator.constants import get_profiles_dir
+    return get_profiles_dir() / profile_name / "research_query_history.json"
+
+
+def load_research_query_history(profile_name: str, hours: int = 72) -> list[str]:
+    """Load recently used research queries.
+
+    Args:
+        profile_name: Profile to load history for.
+        hours: How far back to look (default 72h).
+
+    Returns:
+        List of query strings that have been used recently.
+    """
+    if not profile_name:
+        return []
+
+    history_path = get_research_query_history_path(profile_name)
+    if not history_path.exists():
+        return []
+
+    try:
+        with open(history_path, "r", encoding="utf-8") as f:
+            all_history = json.load(f)
+
+        # Filter to recent queries
+        cutoff = datetime.now() - timedelta(hours=hours)
+        recent_queries = []
+
+        for entry in all_history:
+            entry_time = datetime.fromisoformat(entry["timestamp"])
+            if entry_time > cutoff:
+                recent_queries.extend(entry.get("queries", []))
+
+        return list(set(recent_queries))  # Dedupe
+    except Exception as e:
+        logger.warning(f"Could not load research query history: {e}")
+        return []
+
+
+def save_research_queries_to_history(profile_name: str, queries: list[str]) -> None:
+    """Save used research queries to history.
+
+    This prevents similar queries from being regenerated across sessions.
+
+    Args:
+        profile_name: Profile to save history for.
+        queries: List of query strings that were used.
+    """
+    if not profile_name or not queries:
+        return
+
+    history_path = get_research_query_history_path(profile_name)
+
+    try:
+        # Load existing history
+        all_history = []
+        if history_path.exists():
+            with open(history_path, "r", encoding="utf-8") as f:
+                all_history = json.load(f)
+
+        # Add new entry
+        timestamp = datetime.now().isoformat()
+        all_history.append({
+            "timestamp": timestamp,
+            "queries": queries,
+        })
+
+        # Keep only last 50 entries
+        all_history = all_history[-50:]
+
+        # Save
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(history_path, "w", encoding="utf-8") as f:
+            json.dump(all_history, f, indent=2)
+
+        logger.info(f"RESEARCH_QUERY_HISTORY | saved {len(queries)} queries")
+
+    except Exception as e:
+        logger.warning(f"Could not save research query history: {e}")
 
 
 def get_ai_version_context() -> str:
@@ -86,6 +176,8 @@ CURRENT DATE: {current_date}
 
 {version_context}
 
+{recent_queries_context}
+
 Generate 12-15 diverse search queries that will help create accurate, engaging content.
 
 Requirements:
@@ -95,6 +187,8 @@ Requirements:
 4. Be specific - include tool names, features, use cases
 5. Vary query structure (questions, phrases, comparisons)
 6. Use CORRECT version numbers from the AI tool versions above (e.g., "GPT-5.2" not "GPT-4")
+7. CRITICAL: Do NOT reuse or closely paraphrase any query from the RECENTLY USED list above!
+8. If similar queries were used before, find DIFFERENT angles, tools, or approaches
 
 Return a JSON array:
 [
@@ -111,6 +205,8 @@ class ResearchQueryGenerator:
 
     Creates targeted search queries in multiple languages and categories
     to gather comprehensive information about a topic.
+
+    Tracks query history to avoid repetition across sessions.
     """
 
     # Default queries by category (fallback if AI fails)
@@ -154,13 +250,22 @@ class ResearchQueryGenerator:
         "{topic} como usar gratis",
     ]
 
-    def __init__(self, text_provider: Optional[TextProvider] = None):
+    def __init__(
+        self,
+        text_provider: Optional[TextProvider] = None,
+        profile_name: Optional[str] = None,
+        query_history_hours: int = 72,
+    ):
         """Initialize the generator.
 
         Args:
             text_provider: AI provider for query generation.
+            profile_name: Profile name for query history tracking.
+            query_history_hours: How far back to check for used queries (default 72h).
         """
         self._text_provider = text_provider
+        self.profile_name = profile_name
+        self.query_history_hours = query_history_hours
 
     @property
     def text_provider(self) -> TextProvider:
@@ -169,11 +274,38 @@ class ResearchQueryGenerator:
             self._text_provider = TextProvider()
         return self._text_provider
 
+    def _get_recent_queries_context(self, profile_name: Optional[str] = None) -> str:
+        """Get formatted text of recently used research queries.
+
+        Args:
+            profile_name: Profile name for history lookup.
+
+        Returns:
+            Formatted string with recently used queries, or empty string.
+        """
+        name = profile_name or self.profile_name
+        if not name:
+            return ""
+
+        recent_queries = load_research_query_history(name, self.query_history_hours)
+
+        if not recent_queries:
+            return "RECENTLY USED QUERIES: None (this is the first run for this profile)."
+
+        # Limit to 40 for prompt size
+        limited = recent_queries[:40]
+        lines = ["RECENTLY USED QUERIES (DO NOT reuse these or similar queries):"]
+        for q in limited:
+            lines.append(f"  - {q}")
+
+        return "\n".join(lines)
+
     async def generate_queries(
         self,
         topic: str,
         pillar: str = "general",
         count: int = 15,
+        profile_name: Optional[str] = None,
     ) -> list[ResearchQuery]:
         """Generate diverse research queries using AI.
 
@@ -181,21 +313,29 @@ class ResearchQueryGenerator:
             topic: The topic to research.
             pillar: Content pillar (e.g., productivity_hacks, tool_tutorials).
             count: Target number of queries.
+            profile_name: Optional profile name (overrides constructor value).
 
         Returns:
             List of ResearchQuery objects.
         """
+        # Use provided profile_name or fall back to constructor value
+        effective_profile = profile_name or self.profile_name
+
         now = datetime.now()
         current_date = now.strftime("%B %d, %Y")
 
         # Get AI tool version context for accurate queries
         version_context = get_ai_version_context()
 
+        # Get recent query history context
+        recent_queries_context = self._get_recent_queries_context(effective_profile)
+
         prompt = QUERY_GENERATION_PROMPT.format(
             topic=topic,
             pillar=pillar,
             current_date=current_date,
             version_context=version_context,
+            recent_queries_context=recent_queries_context,
         )
 
         try:
@@ -210,6 +350,12 @@ class ResearchQueryGenerator:
             queries = self._parse_response(response)
             if queries:
                 logger.info(f"RESEARCH_QUERIES | generated {len(queries)} AI queries")
+
+                # Save generated queries to history
+                if effective_profile:
+                    query_strings = [q.query for q in queries]
+                    save_research_queries_to_history(effective_profile, query_strings)
+
                 return queries
 
         except Exception as e:
@@ -334,6 +480,7 @@ async def generate_research_queries(
     pillar: str = "general",
     count: int = 15,
     text_provider: Optional[TextProvider] = None,
+    profile_name: Optional[str] = None,
 ) -> list[str]:
     """Convenience function to generate query strings.
 
@@ -342,10 +489,14 @@ async def generate_research_queries(
         pillar: Content pillar.
         count: Target number of queries.
         text_provider: Optional AI provider.
+        profile_name: Optional profile name for query history tracking.
 
     Returns:
         List of query strings.
     """
-    generator = ResearchQueryGenerator(text_provider=text_provider)
+    generator = ResearchQueryGenerator(
+        text_provider=text_provider,
+        profile_name=profile_name,
+    )
     queries = await generator.generate_queries(topic, pillar, count)
     return [q.query for q in queries]

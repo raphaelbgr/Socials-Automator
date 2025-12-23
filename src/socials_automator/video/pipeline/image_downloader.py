@@ -215,10 +215,16 @@ class ImageDownloader(IImageDownloader):
             # Download to temp path first
             temp_path = output_dir / f"{image_id}.jpg"
 
+            # Create progress callback for real-time CLI logging
+            def download_log(msg: str):
+                self.log_progress(f"  {self._provider_name}:{image_id} {msg}")
+
             downloaded_path = await provider.download(
                 image_id=image_id,
                 url=overlay.download_url,
                 output_path=temp_path,
+                source_page_url=overlay.source_page_url,
+                log_callback=download_log,
             )
 
             if downloaded_path and downloaded_path.exists():

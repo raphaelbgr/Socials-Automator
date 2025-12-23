@@ -66,13 +66,17 @@ class TopicResearcher(ITopicResearcher):
         self._query_generator: Optional[ResearchQueryGenerator] = None
         self._web_searcher = None
         self._content_pillar: str = "general"
+        self._profile_name: Optional[str] = None  # For query history tracking
 
     @property
     def query_generator(self) -> ResearchQueryGenerator:
         """Lazy-load the query generator."""
         if self._query_generator is None:
-            # Pass the AI client to use the same provider as the rest of the pipeline
-            self._query_generator = ResearchQueryGenerator(text_provider=self.ai_client)
+            # Pass the AI client and profile name for query history tracking
+            self._query_generator = ResearchQueryGenerator(
+                text_provider=self.ai_client,
+                profile_name=self._profile_name,
+            )
         return self._query_generator
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
@@ -88,6 +92,12 @@ class TopicResearcher(ITopicResearcher):
             raise ResearchError("No topic selected for research")
 
         self.log_start(f"Researching topic: {context.topic.topic}")
+
+        # Extract profile name from path for query history tracking
+        if context.profile_path:
+            self._profile_name = context.profile_path.name
+            # Reset query generator to pick up new profile_name
+            self._query_generator = None
 
         # Capture content pillar from topic if available
         if hasattr(context.topic, "pillar_id") and context.topic.pillar_id:

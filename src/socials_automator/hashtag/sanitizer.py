@@ -142,8 +142,11 @@ class HashtagSanitizer:
                 count=1,  # Only remove first occurrence
             )
 
-        # Clean up any double spaces or trailing whitespace
-        sanitized_text = re.sub(r'\s+', ' ', sanitized_text).strip()
+        # Clean up any double spaces but preserve newlines
+        # Only collapse multiple spaces, not newlines
+        sanitized_text = re.sub(r'[ \t]+', ' ', sanitized_text)  # Collapse spaces/tabs only
+        sanitized_text = re.sub(r' ?\n ?', '\n', sanitized_text)  # Clean space around newlines
+        sanitized_text = sanitized_text.strip()
 
         return SanitizeResult(
             original_text=text,
@@ -192,8 +195,10 @@ class HashtagSanitizer:
         # Remove all hashtags
         sanitized_text = self.HASHTAG_PATTERN.sub('', text)
 
-        # Clean up whitespace
-        sanitized_text = re.sub(r'\s+', ' ', sanitized_text).strip()
+        # Clean up whitespace but preserve newlines
+        sanitized_text = re.sub(r'[ \t]+', ' ', sanitized_text)  # Collapse spaces/tabs only
+        sanitized_text = re.sub(r' ?\n ?', '\n', sanitized_text)  # Clean space around newlines
+        sanitized_text = sanitized_text.strip()
 
         return SanitizeResult(
             original_text=text,

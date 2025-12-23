@@ -38,6 +38,12 @@ from .tor_helper import (
     rotate_tor_ip,
     close_tor,
 )
+from .headless_screenshot import (
+    capture_image_screenshot,
+    is_playwright_available,
+    close_browser,
+    get_browsers_info,
+)
 
 __all__ = [
     # Base
@@ -54,6 +60,11 @@ __all__ = [
     "is_tor_available",
     "rotate_tor_ip",
     "close_tor",
+    # Headless screenshot fallback
+    "capture_image_screenshot",
+    "is_playwright_available",
+    "close_browser",
+    "get_browsers_info",
 ]
 
 # Available providers for CLI help

@@ -35,6 +35,12 @@ def get_topic_history_path(profile_name: str) -> Path:
     return get_profiles_dir() / profile_name / "topic_history.json"
 
 
+def get_query_history_path(profile_name: str) -> Path:
+    """Get path to query history file for a profile."""
+    from socials_automator.constants import get_profiles_dir
+    return get_profiles_dir() / profile_name / "query_history.json"
+
+
 def load_topic_history(profile_name: str, hours: int = 48) -> list[dict]:
     """Load recently covered topics.
 
@@ -103,6 +109,79 @@ def save_topics_to_history(profile_name: str, topics: list[dict]) -> None:
 
     except Exception as e:
         logger.warning(f"Could not save topic history: {e}")
+
+
+def load_query_history(profile_name: str, hours: int = 72) -> list[str]:
+    """Load recently used search queries.
+
+    Args:
+        profile_name: Profile to load history for.
+        hours: How far back to look (default 72h for queries).
+
+    Returns:
+        List of query strings that have been used recently.
+    """
+    history_path = get_query_history_path(profile_name)
+    if not history_path.exists():
+        return []
+
+    try:
+        with open(history_path, "r", encoding="utf-8") as f:
+            all_history = json.load(f)
+
+        # Filter to recent queries
+        cutoff = datetime.now() - timedelta(hours=hours)
+        recent_queries = []
+
+        for entry in all_history:
+            entry_time = datetime.fromisoformat(entry["timestamp"])
+            if entry_time > cutoff:
+                recent_queries.extend(entry.get("queries", []))
+
+        return list(set(recent_queries))  # Dedupe
+    except Exception as e:
+        logger.warning(f"Could not load query history: {e}")
+        return []
+
+
+def save_queries_to_history(profile_name: str, queries: list[str]) -> None:
+    """Save used search queries to history.
+
+    This prevents the same queries from being regenerated, even if
+    the articles they found weren't selected for the final video.
+
+    Args:
+        profile_name: Profile to save history for.
+        queries: List of query strings that were used.
+    """
+    history_path = get_query_history_path(profile_name)
+
+    try:
+        # Load existing history
+        all_history = []
+        if history_path.exists():
+            with open(history_path, "r", encoding="utf-8") as f:
+                all_history = json.load(f)
+
+        # Add new entry
+        timestamp = datetime.now().isoformat()
+        all_history.append({
+            "timestamp": timestamp,
+            "queries": queries,
+        })
+
+        # Keep only last 50 entries
+        all_history = all_history[-50:]
+
+        # Save
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(history_path, "w", encoding="utf-8") as f:
+            json.dump(all_history, f, indent=2)
+
+        logger.info(f"QUERY_HISTORY | saved {len(queries)} queries")
+
+    except Exception as e:
+        logger.warning(f"Could not save query history: {e}")
 
 
 def extract_topics_from_stories(stories: list) -> list[dict]:
@@ -175,10 +254,18 @@ QUERY_GENERATION_PROMPT = """Generate {count} fresh search queries for entertain
 RECENTLY COVERED TOPICS (AVOID THESE):
 {covered_topics}
 
+RECENTLY USED QUERIES (DO NOT REGENERATE OR USE SIMILAR):
+{recent_queries}
+
 UNDERREPRESENTED CATEGORIES (prioritize these):
 {gap_categories}
 
 CURRENT DATE: {current_date}
+
+IMPORTANT:
+- Do NOT generate queries similar to the "RECENTLY USED QUERIES" list above
+- Vary the artists, shows, and topics - don't keep searching for the same celebrities
+- Each query should target a DIFFERENT subject than previous queries
 
 Return a JSON array of query objects:
 [
@@ -216,6 +303,7 @@ class DynamicQueryGenerator:
         profile_name: str,
         text_provider: Optional[TextProvider] = None,
         history_hours: int = 24,
+        query_history_hours: int = 72,
     ):
         """Initialize the generator.
 
@@ -223,9 +311,11 @@ class DynamicQueryGenerator:
             profile_name: Profile name for topic history.
             text_provider: AI provider for query generation.
             history_hours: How far back to check for covered topics.
+            query_history_hours: How far back to check for used queries (longer).
         """
         self.profile_name = profile_name
         self.history_hours = history_hours
+        self.query_history_hours = query_history_hours
         self._text_provider = text_provider
 
     @property
@@ -295,6 +385,20 @@ class DynamicQueryGenerator:
 
         return f"Underrepresented: {', '.join(gaps)}"
 
+    def _get_recent_queries_text(self) -> str:
+        """Get formatted text of recently used search queries."""
+        recent_queries = load_query_history(self.profile_name, self.query_history_hours)
+
+        if not recent_queries:
+            return "No recent queries (this is the first run)."
+
+        # Show the queries (limit to 30 for prompt size)
+        lines = ["The following queries were recently used - DO NOT use these or similar:"]
+        for q in recent_queries[:30]:
+            lines.append(f"  - {q}")
+
+        return "\n".join(lines)
+
     async def generate_queries(self, count: int = 10) -> list[GeneratedQuery]:
         """Generate fresh search queries using AI.
 
@@ -306,10 +410,12 @@ class DynamicQueryGenerator:
         """
         covered = self._get_covered_topics_text()
         gaps = self._get_gap_categories()
+        recent_queries = self._get_recent_queries_text()
 
         prompt = QUERY_GENERATION_PROMPT.format(
             count=count,
             covered_topics=covered,
+            recent_queries=recent_queries,
             gap_categories=gaps,
             current_date=datetime.now().strftime("%B %d, %Y"),
         )
@@ -324,6 +430,12 @@ class DynamicQueryGenerator:
             )
 
             queries = self._parse_response(response)
+
+            # Save the generated queries to history (prevents regeneration)
+            if queries:
+                query_strings = [q.query for q in queries]
+                save_queries_to_history(self.profile_name, query_strings)
+
             logger.info(f"DYNAMIC_QUERIES | generated {len(queries)} queries")
             return queries
 
