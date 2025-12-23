@@ -208,9 +208,10 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
                     cpu_stream = video_stream.filter('hwdownload').filter('format', 'yuv420p')
 
                     # 2. Split into original and copy for blur
-                    split = cpu_stream.filter('split')
-                    original = split.stream(0)
-                    copy = split.stream(1)
+                    # Use .split() method and bracket notation for multi-output filter
+                    split = cpu_stream.split()
+                    original = split[0]
+                    copy = split[1]
 
                     # 3. Apply blur to copy (permanent, no conditional enable)
                     blurred = copy.filter('boxblur', self._blur_radius)
@@ -227,9 +228,10 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
 
                     # 1. Ensure consistent format and split
                     formatted = video_stream.filter('format', 'yuv420p')
-                    split = formatted.filter('split')
-                    original = split.stream(0)
-                    copy = split.stream(1)
+                    # Use .split() method and bracket notation for multi-output filter
+                    split = formatted.split()
+                    original = split[0]
+                    copy = split[1]
 
                     # 2. Apply blur to copy (permanent, no conditional enable)
                     blurred = copy.filter('boxblur', self._blur_radius)
