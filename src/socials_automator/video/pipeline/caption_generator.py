@@ -377,54 +377,71 @@ Return ONLY the JSON, no markdown or explanation."""
         if '\n- ' in caption or '\n* ' in caption:
             return caption
 
-        # Pattern: sentence end (! or .) followed by space and dash
-        # Example: "miss! - First" -> "miss!\n\n- First"
+        # Look for inline bullets pattern: " - " between items
         if ' - ' in caption:
             # Check if this looks like inline bullets (multiple dashes)
             dash_count = caption.count(' - ')
             if dash_count >= 2:  # At least 2 inline bullets
-                # Split into parts: headline and bullets
-                # Find the first " - " that starts a bullet point
-                # (usually after ! or . or :)
-                pattern = r'([!.?:])\s*-\s+'
+                # Try to find headline end (punctuation before first dash)
+                # Pattern: sentence end (! or . or : or ?) followed by space and dash
+                pattern = r'([!.?:])\s+-\s+'
                 match = re.search(pattern, caption)
+
                 if match:
-                    # Split at the first bullet
-                    split_pos = match.end() - len(match.group(0)) + len(match.group(1))
+                    # Split at the punctuation
+                    split_pos = match.start() + 1
                     headline = caption[:split_pos].strip()
                     bullets_text = caption[split_pos:].strip()
+                else:
+                    # No punctuation found - split at first " - "
+                    # This handles: "News highlights - Story 1 - Story 2"
+                    first_dash = caption.find(' - ')
+                    headline = caption[:first_dash].strip()
+                    bullets_text = caption[first_dash:].strip()
 
-                    # Remove leading " - " from bullets_text
-                    bullets_text = re.sub(r'^[\s-]+', '', bullets_text)
+                # Remove leading " - " from bullets_text
+                bullets_text = re.sub(r'^[\s-]+', '', bullets_text)
 
-                    # Split remaining text by " - " pattern
-                    bullets = re.split(r'\s+-\s+', bullets_text)
+                # Split remaining text by " - " pattern
+                bullets = re.split(r'\s+-\s+', bullets_text)
 
-                    # Check if last bullet contains CTA (Save, Follow, etc.)
-                    cta = ""
-                    if bullets:
-                        last_bullet = bullets[-1]
-                        # Look for CTA pattern in last bullet
-                        cta_match = re.search(
-                            r'\s+(Save this|Follow|Tag|Share|Comment|Like|Check out)',
-                            last_bullet,
-                            re.IGNORECASE
-                        )
-                        if cta_match:
-                            # Split last bullet from CTA
-                            cta = last_bullet[cta_match.start():].strip()
-                            bullets[-1] = last_bullet[:cta_match.start()].strip()
+                # Check if last bullet contains CTA (Save, Follow, etc.)
+                cta = ""
+                sources = ""
+                if bullets:
+                    last_bullet = bullets[-1]
 
-                    # Filter out empty bullets
-                    bullets = [b.strip() for b in bullets if b.strip()]
+                    # Extract Sources section if present
+                    sources_match = re.search(r'\s*(Sources?:\s*.+?)(?:\s+#|$)', last_bullet, re.IGNORECASE)
+                    if sources_match:
+                        sources = sources_match.group(1).strip()
+                        last_bullet = last_bullet[:sources_match.start()].strip()
 
-                    # Reconstruct with proper line breaks
-                    if bullets:
-                        formatted_bullets = '\n- '.join(bullets)
-                        result = f"{headline}\n\n- {formatted_bullets}"
-                        if cta:
-                            result += f"\n\n{cta}"
-                        return result
+                    # Look for CTA pattern in last bullet
+                    cta_match = re.search(
+                        r'\s+(Save this|Follow|Tag|Share|Comment|Like|Check out)',
+                        last_bullet,
+                        re.IGNORECASE
+                    )
+                    if cta_match:
+                        # Split last bullet from CTA
+                        cta = last_bullet[cta_match.start():].strip()
+                        bullets[-1] = last_bullet[:cta_match.start()].strip()
+                    else:
+                        bullets[-1] = last_bullet
+
+                # Filter out empty bullets
+                bullets = [b.strip() for b in bullets if b.strip()]
+
+                # Reconstruct with proper line breaks
+                if bullets:
+                    formatted_bullets = '\n- '.join(bullets)
+                    result = f"{headline}\n\n- {formatted_bullets}"
+                    if cta:
+                        result += f"\n\n{cta}"
+                    if sources:
+                        result += f"\n\n{sources}"
+                    return result
 
         return caption
 

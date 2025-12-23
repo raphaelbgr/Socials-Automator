@@ -502,15 +502,14 @@ IMPORTANT: The total narration must be {word_requirement}. Target duration is {t
 Structure:
 - Hook ({int(self.HOOK_DURATION)} seconds, ~10 words): Attention-grabbing opener that stops the scroll
 - {num_segments} segments (~{segment_duration:.0f} seconds each, ~{words_per_segment} words each): Valuable content with specific tips
-- CTA ({int(self.CTA_DURATION)} seconds, ~12 words): Call to action mentioning the creator
+- The LAST segment MUST end with a CREATIVE call-to-action mentioning "{profile_name}"
 
 Format your response as JSON:
 {{
     "hook": "Your hook here - must be exactly 8-12 words, punchy and attention-grabbing",
     "segments": [
         {segment_template}
-    ],
-    "cta_ending": "for more AI tips!"
+    ]
 }}
 
 CRITICAL Rules:
@@ -520,8 +519,14 @@ CRITICAL Rules:
 - Include specific examples, numbers, or actionable tips in each segment
 - NO repetition of the same phrases or ideas
 - Each segment should deliver UNIQUE value, not repeat the topic
-- DO NOT include "Follow" or any CTA in the segments! Only provide content in segments.
-- The cta_ending should be a SHORT phrase like "for more AI tips!" (I will add "Follow {profile_name}" automatically)
+- The LAST segment MUST naturally end with a CREATIVE call-to-action that:
+  * Mentions "{profile_name}" by name
+  * Encourages following/subscribing
+  * Is unique and creative (NOT boring "Follow X for more tips!")
+  * Examples of creative CTAs:
+    - "Want more game-changing AI workflows? You know where to find me - {profile_name}!"
+    - "If this helped, hit follow on {profile_name} and let's keep leveling up together!"
+    - "This is just the beginning - follow {profile_name} and I'll show you what's next!"
 
 NO COMMERCIAL LANGUAGE - We are NOT selling anything:
 - NEVER mention courses, paid content, premium features, subscriptions, or purchases
@@ -610,8 +615,7 @@ Respond with ONLY valid JSON, no other text."""
         segments = []
         for i, seg in enumerate(ai_segments):
             text = self._clean_narration_text(seg.get("text", f"Point {i+1}"))
-            # Remove any CTA that AI might have included in segment text
-            text = self._strip_cta_from_text(text, profile_name)
+            # AI generates creative CTA in the last segment - don't strip it
             keywords = seg.get("keywords", topic.keywords[:3])
 
             segments.append(VideoSegment(
@@ -628,44 +632,12 @@ Respond with ONLY valid JSON, no other text."""
 
         hook = data.get("hook", self._generate_hook(topic, research))
 
-        # Build CTA from cta_ending (we add "Follow {profile_name}" ourselves)
-        cta_ending = data.get("cta_ending", "for more tips like this!")
-        # Clean up any placeholder text like "[context-specific ending...]"
-        if "[" in cta_ending:
-            cta_ending = "for more tips like this!"
-
-        # Strip any "Follow X" prefix that AI might have included
-        # This prevents doubled CTAs like "Follow X Follow X for more..."
-        import re
-        cta_ending_clean = cta_ending.strip()
-
-        # Check if cta_ending starts with "Follow" - if so, it's a complete CTA
-        if re.match(r'^follow\s+', cta_ending_clean, re.IGNORECASE):
-            # AI returned a full CTA, use it directly instead of adding prefix
-            cta_ending_clean = "for more tips like this!"
-
-        # Strip leading punctuation like "!" that might precede a "Follow"
-        cta_ending_clean = re.sub(r'^[!\s]+', '', cta_ending_clean).strip()
-
-        # Check again after stripping punctuation
-        if re.match(r'^follow\s+', cta_ending_clean, re.IGNORECASE):
-            cta_ending_clean = "for more tips like this!"
-
-        # Ensure cta_ending starts with "for" if it's a continuation phrase
-        if cta_ending_clean and not cta_ending_clean.lower().startswith('for '):
-            cta_ending_clean = f"for {cta_ending_clean}"
-
-        # Default if empty after cleanup
-        if not cta_ending_clean:
-            cta_ending_clean = "for more tips like this!"
-
-        cta_ending = cta_ending_clean
-
-        cta = f"Follow {profile_name} {cta_ending}"
+        # CTA is now included in the last segment by the AI (creative CTA)
+        # No programmatic CTA is added - AI generates it naturally
+        cta = ""
 
         self.log_detail(f"AI Hook: {hook[:50]}...")
-        self.log_detail(f"AI generated {len(segments)} segments")
-        self.log_detail(f"AI CTA: {cta[:50]}...")
+        self.log_detail(f"AI generated {len(segments)} segments (CTA in last segment)")
 
         # Build full narration
         full_narration = self._build_full_narration(hook, segments, cta)
@@ -891,39 +863,6 @@ Respond with ONLY valid JSON, no other text."""
 
         return text
 
-    def _strip_cta_from_text(self, text: str, profile_name: str) -> str:
-        """Remove any CTA that AI might have included in segment text.
-
-        Args:
-            text: Segment text that might contain CTA.
-            profile_name: Profile name to look for.
-
-        Returns:
-            Text with CTA removed.
-        """
-        import re
-
-        # Remove "Follow [profile] ..." patterns
-        patterns = [
-            rf"Follow\s+{re.escape(profile_name)}[^.!?]*[.!?]?\s*",
-            r"Follow\s+\w+\s+for\s+more[^.!?]*[.!?]?\s*",
-            r"Follow\s+us\s+for[^.!?]*[.!?]?\s*",
-            r"\[context-specific[^\]]*\]\.?\s*",
-        ]
-
-        for pattern in patterns:
-            text = re.sub(pattern, "", text, flags=re.IGNORECASE)
-
-        # Clean up any resulting double spaces or trailing punctuation issues
-        text = " ".join(text.split())
-        text = text.strip()
-
-        # Ensure it still ends with punctuation
-        if text and text[-1] not in ".!?":
-            text += "."
-
-        return text
-
     def _extract_video_keywords(self, text: str, topic: TopicInfo) -> list[str]:
         """Extract keywords for video search.
 
@@ -1054,7 +993,9 @@ Respond with ONLY valid JSON, no other text."""
         parts = [hook]
         for segment in segments:
             parts.append(segment.text)
-        parts.append(cta)
+        # Only append CTA if not empty (CTA is now in the last segment)
+        if cta:
+            parts.append(cta)
 
         narration = " ".join(parts)
 
