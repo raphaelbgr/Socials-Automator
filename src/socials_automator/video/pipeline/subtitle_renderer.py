@@ -113,9 +113,9 @@ class SubtitleRenderer(ISubtitleRenderer):
 
         # === DURATION CONTRACT VALIDATION ===
         if context.required_video_duration is not None:
-            self.log_progress(f"[Contract] Required final duration: {context.required_video_duration:.1f}s")
+            self.log_progress(f"[Duration Contract] {context.required_video_duration:.1f}s <- rendering to this length")
         else:
-            self.log_progress("[Contract] WARNING: No duration contract set")
+            self.log_progress("[Duration Contract] WARNING: NOT SET!")
 
         self.log_start("Rendering subtitles and combining audio...")
 

@@ -65,6 +65,12 @@ class VideoDownloader(IVideoDownloader):
 
         self.log_start(f"Downloading {len(search_results)} video clips")
 
+        # Log duration contract for tracking
+        if context.required_video_duration:
+            self.log_progress(f"[Duration Contract] {context.required_video_duration:.1f}s")
+        else:
+            self.log_progress("[Duration Contract] NOT SET")
+
         # Reset cache stats for this run
         self._cache_hits = 0
         self._cache_misses = 0
@@ -83,6 +89,24 @@ class VideoDownloader(IVideoDownloader):
                 self.log_progress(
                     f"Cache: {self._cache_hits} hits, {self._cache_misses} misses ({hit_rate:.0f}% hit rate)"
                 )
+
+            # Log downloaded clip durations
+            self.log_progress("--- Downloaded Clips ---")
+            total_downloaded = 0.0
+            for clip in clips:
+                self.log_progress(f"  Seg {clip.segment_index}: {clip.duration_seconds:.1f}s ({clip.path.name})")
+                total_downloaded += clip.duration_seconds
+            self.log_progress(f"  TOTAL: {total_downloaded:.1f}s downloaded")
+
+            # Compare to contract
+            if context.required_video_duration:
+                target = context.required_video_duration
+                if total_downloaded < target:
+                    shortage = target - total_downloaded
+                    self.log_progress(f"  [!] WARNING: Downloaded footage ({total_downloaded:.1f}s) < contract ({target:.1f}s) by {shortage:.1f}s")
+                else:
+                    surplus = total_downloaded - target
+                    self.log_progress(f"  [OK] Downloaded footage covers contract (+{surplus:.1f}s surplus)")
 
             self.log_success(f"Downloaded {len(clips)} clips to {clips_dir}")
             return context

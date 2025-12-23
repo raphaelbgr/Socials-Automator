@@ -99,18 +99,19 @@ def generate_reel(
         show_reel_error(console, validation.error, validation.details)
         raise typer.Exit(1)
 
-    # Display configuration
-    show_reel_config(console, params)
-
     # Handle dry run
     if params.dry_run:
+        show_reel_config(console, params)
         _run_dry_run(params)
         return
 
-    # Handle loop mode
+    # Handle loop mode (shows config at start of each iteration)
     if params.loop:
         _run_loop_mode(params)
         return
+
+    # Display configuration (single generation only)
+    show_reel_config(console, params)
 
     # Single generation
     reel_path = _run_single_generation(params)

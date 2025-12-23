@@ -230,8 +230,9 @@ class VoiceGenerator(IVoiceGenerator):
     ) -> None:
         """Update script segment times based on actual voice timing.
 
-        Maps word timestamps back to segments so video clips can be
-        properly synced with sentence/segment endings.
+        Uses proportional distribution based on word counts for reliable
+        segment boundary detection. Word-level matching is unreliable due
+        to TTS pronunciation variations.
 
         Args:
             script: The video script with segments.
@@ -240,52 +241,89 @@ class VoiceGenerator(IVoiceGenerator):
         if not timestamps or not script.segments:
             return
 
-        # Build a list of all words from timestamps
-        all_words = [ts["word"].lower().strip(".,!?;:") for ts in timestamps]
+        audio_end_ms = timestamps[-1]["end_ms"]
 
-        # Track which timestamp index we're at
-        ts_index = 0
+        # Count words in each part of the script
+        hook_word_count = len(script.hook.split())
+        cta_word_count = len(script.cta.split()) if script.cta else 0
+        segment_word_counts = [len(seg.text.split()) for seg in script.segments]
+        total_words = hook_word_count + sum(segment_word_counts) + cta_word_count
 
-        # Calculate hook timing
-        hook_words = script.hook.lower().split()
-        hook_end_ms = 0
+        if total_words == 0:
+            return
 
-        for word in hook_words:
-            clean_word = word.strip(".,!?;:")
-            # Find this word in timestamps
-            while ts_index < len(timestamps):
-                ts_word = timestamps[ts_index]["word"].lower().strip(".,!?;:")
-                hook_end_ms = timestamps[ts_index]["end_ms"]
-                ts_index += 1
-                if ts_word == clean_word or clean_word in ts_word or ts_word in clean_word:
-                    break
+        # Distribute timestamps proportionally by word count
+        # This is more reliable than word matching which fails on punctuation/pronunciation
+        ts_per_word = len(timestamps) / total_words
 
-        # Now process each segment
-        for segment in script.segments:
-            segment_words = segment.text.lower().split()
-            segment_start_ms = timestamps[min(ts_index, len(timestamps) - 1)]["start_ms"]
-            segment_end_ms = segment_start_ms
+        # Calculate hook end (in timestamp indices)
+        hook_end_idx = int(hook_word_count * ts_per_word)
+        hook_end_idx = min(hook_end_idx, len(timestamps) - 1)
 
-            for word in segment_words:
-                clean_word = word.strip(".,!?;:")
-                while ts_index < len(timestamps):
-                    ts_word = timestamps[ts_index]["word"].lower().strip(".,!?;:")
-                    segment_end_ms = timestamps[ts_index]["end_ms"]
-                    ts_index += 1
-                    if ts_word == clean_word or clean_word in ts_word or ts_word in clean_word:
-                        break
+        # Calculate segment boundaries (contiguous - no overlaps)
+        current_idx = hook_end_idx
+        previous_end_time = timestamps[min(hook_end_idx, len(timestamps) - 1)]["start_ms"] / 1000
 
-            # Update segment timing
-            segment.start_time = segment_start_ms / 1000
+        for i, segment in enumerate(script.segments):
+            segment_start_idx = current_idx
+            words_in_segment = segment_word_counts[i]
+            segment_end_idx = current_idx + int(words_in_segment * ts_per_word)
+            segment_end_idx = min(segment_end_idx, len(timestamps) - 1)
+
+            # Ensure at least 1 timestamp per segment
+            if segment_end_idx <= segment_start_idx and segment_start_idx < len(timestamps) - 1:
+                segment_end_idx = segment_start_idx + 1
+
+            # Get end time from timestamps
+            segment_end_ms = timestamps[min(segment_end_idx, len(timestamps) - 1)]["end_ms"]
+
+            # Update segment timing (start = previous end for contiguous segments)
+            segment.start_time = previous_end_time
             segment.end_time = segment_end_ms / 1000
             segment.duration_seconds = segment.end_time - segment.start_time
 
-        # Log the updated timing (file only - too verbose for console)
+            # Track for next segment
+            previous_end_time = segment.end_time
+            current_idx = segment_end_idx
+
+        # CRITICAL: Ensure segments cover the FULL audio duration
+        # The hook is narrated at the beginning and CTA at the end,
+        # but neither has a dedicated segment. So:
+        # - Segment 1's video must start at 0 (to cover hook)
+        # - Last segment's video must extend to audio end (to cover CTA)
+        if script.segments and timestamps:
+            # Extend segment 1 to start at 0 (cover hook)
+            first_segment = script.segments[0]
+            if first_segment.start_time > 0:
+                hook_duration = first_segment.start_time
+                first_segment.start_time = 0
+                first_segment.duration_seconds = first_segment.end_time - first_segment.start_time
+                self.log_detail(f"Extended segment 1 to include hook ({hook_duration:.1f}s)")
+
+            # Extend last segment to cover CTA (end of audio)
+            last_segment = script.segments[-1]
+            audio_end_time = timestamps[-1]["end_ms"] / 1000
+            if last_segment.end_time < audio_end_time:
+                cta_duration = audio_end_time - last_segment.end_time
+                last_segment.end_time = audio_end_time
+                last_segment.duration_seconds = last_segment.end_time - last_segment.start_time
+                self.log_detail(f"Extended last segment to include CTA ({cta_duration:.1f}s)")
+
+        # Log the updated timing with clear breakdown
+        audio_end_time = timestamps[-1]["end_ms"] / 1000 if timestamps else 0
+        total_segment_duration = sum(seg.duration_seconds for seg in script.segments)
+
+        self.log_progress("--- Segment Timing (Actual, After Voice) ---")
         for seg in script.segments:
-            self.log_detail(
-                f"Segment {seg.index}: {seg.start_time:.1f}s - {seg.end_time:.1f}s "
+            self.log_progress(
+                f"  Seg {seg.index}:    {seg.start_time:.1f}s - {seg.end_time:.1f}s "
                 f"({seg.duration_seconds:.1f}s)"
             )
+        self.log_progress(f"  TOTAL:    {total_segment_duration:.1f}s (audio: {audio_end_time:.1f}s)")
+
+        # Warn if there's a mismatch
+        if abs(total_segment_duration - audio_end_time) > 0.5:
+            self.log_progress(f"  [!] WARNING: Segment coverage ({total_segment_duration:.1f}s) != audio ({audio_end_time:.1f}s)")
 
     async def generate_voice(
         self,

@@ -3,6 +3,9 @@
 Converts text to speech using edge-tts + RVC with Adam's voice.
 This script runs in an isolated Python 3.12 environment.
 
+Uses faster-whisper to extract word-level timestamps AFTER audio generation,
+which allows edge-tts to produce more natural prosody (no WordBoundary mode).
+
 Usage:
     python rvc_adam_tts.py --text "Hello world" --output output.mp3 [--srt output.srt]
 """
@@ -12,6 +15,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 
 # Model paths (relative to this script)
@@ -70,52 +74,37 @@ BASE_VOICE = "en-US-ChristopherNeural"
 DEFAULT_RATE = "+0%"
 DEFAULT_PITCH = "+0Hz"
 
+# Whisper model for timestamp extraction
+# Options: "tiny", "base", "small", "medium", "large-v2", "large-v3"
+# "base" is a good balance of speed and accuracy for known text
+WHISPER_MODEL = "base"
+
+# Global whisper model instance (lazy loaded)
+_whisper_model = None
+
 
 async def generate_base_audio(
     text: str, output_path: Path, rate: str = DEFAULT_RATE, pitch: str = DEFAULT_PITCH
-) -> list[dict]:
-    """Generate base audio with edge-tts and return word timestamps."""
+) -> None:
+    """Generate base audio with edge-tts (no WordBoundary for better prosody).
+
+    Timestamps will be extracted separately using Whisper after audio generation.
+    This allows edge-tts to produce more natural speech with proper intonation.
+    """
     import edge_tts
 
+    # NO boundary parameter = better prosody, especially for questions
     communicate = edge_tts.Communicate(
         text,
         voice=BASE_VOICE,
         rate=rate,
         pitch=pitch,
-        boundary="WordBoundary",  # Enable word-level timestamps
     )
-
-    submaker = edge_tts.SubMaker()
-    word_timestamps = []
 
     with open(output_path, "wb") as audio_file:
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 audio_file.write(chunk["data"])
-            elif chunk["type"] == "WordBoundary":
-                offset = chunk["offset"]
-                duration = chunk["duration"]
-                word = chunk["text"]
-
-                # Add to submaker
-                try:
-                    submaker.feed(chunk)
-                except TypeError:
-                    try:
-                        submaker.feed(offset, duration, word)
-                    except TypeError:
-                        submaker.create_sub((offset, duration), word)
-
-                # Store timestamp (convert from 100-nanosecond units to ms)
-                start_ms = offset // 10000
-                end_ms = (offset + duration) // 10000
-                word_timestamps.append({
-                    "word": word,
-                    "start_ms": start_ms,
-                    "end_ms": end_ms,
-                })
-
-    return word_timestamps, submaker
 
 
 def convert_to_adam(input_path: Path, output_path: Path) -> None:
@@ -147,6 +136,63 @@ def convert_to_adam(input_path: Path, output_path: Path) -> None:
         if output_path.exists():
             output_path.unlink()
         result.rename(output_path)
+
+
+def get_whisper_model():
+    """Lazy-load the Whisper model (cached for reuse)."""
+    global _whisper_model
+    if _whisper_model is None:
+        from faster_whisper import WhisperModel
+        print(f"      Loading Whisper model ({WHISPER_MODEL})...", file=sys.stderr)
+        _whisper_model = WhisperModel(
+            WHISPER_MODEL,
+            device="cuda",  # Use GPU if available
+            compute_type="float16",  # Faster on GPU
+        )
+    return _whisper_model
+
+
+def extract_word_timestamps(audio_path: Path) -> list[dict]:
+    """Extract word-level timestamps from audio using faster-whisper.
+
+    Args:
+        audio_path: Path to the audio file (mp3 or wav).
+
+    Returns:
+        List of word timestamp dicts with keys: word, start_ms, end_ms
+    """
+    try:
+        model = get_whisper_model()
+    except Exception as e:
+        # Fallback to CPU if GPU fails
+        print(f"      GPU not available, using CPU: {e}", file=sys.stderr)
+        from faster_whisper import WhisperModel
+        global _whisper_model
+        _whisper_model = WhisperModel(
+            WHISPER_MODEL,
+            device="cpu",
+            compute_type="int8",  # Faster on CPU
+        )
+        model = _whisper_model
+
+    # Transcribe with word timestamps
+    segments, info = model.transcribe(
+        str(audio_path),
+        word_timestamps=True,
+        language="en",  # Force English for speed
+    )
+
+    word_timestamps = []
+    for segment in segments:
+        if segment.words:
+            for word in segment.words:
+                word_timestamps.append({
+                    "word": word.word.strip(),
+                    "start_ms": int(word.start * 1000),
+                    "end_ms": int(word.end * 1000),
+                })
+
+    return word_timestamps
 
 
 def generate_srt(word_timestamps: list[dict], output_path: Path) -> None:
@@ -189,15 +235,15 @@ async def main():
     # Temporary file for base audio
     temp_audio = output_path.parent / "temp_base_audio.mp3"
 
-    print(f"[1/3] Generating base audio with edge-tts...", file=sys.stderr)
+    # Step 1: Generate base audio with edge-tts (no WordBoundary for better prosody)
+    print(f"[1/4] Generating base audio with edge-tts (natural prosody)...", file=sys.stderr)
     if args.rate != DEFAULT_RATE or args.pitch != DEFAULT_PITCH:
         print(f"      Rate: {args.rate}, Pitch: {args.pitch}", file=sys.stderr)
-    word_timestamps, submaker = await generate_base_audio(
-        args.text, temp_audio, rate=args.rate, pitch=args.pitch
-    )
-    print(f"      Generated {len(word_timestamps)} word timestamps", file=sys.stderr)
+    await generate_base_audio(args.text, temp_audio, rate=args.rate, pitch=args.pitch)
+    print(f"      Base audio generated", file=sys.stderr)
 
-    print(f"[2/3] Converting to Adam's voice with RVC...", file=sys.stderr)
+    # Step 2: Convert to Adam's voice with RVC
+    print(f"[2/4] Converting to Adam's voice with RVC...", file=sys.stderr)
     print(f"      Model: {MODEL_PATH.name}", file=sys.stderr)
     if INDEX_PATH:
         print(f"      Index: {INDEX_PATH.name}", file=sys.stderr)
@@ -208,12 +254,19 @@ async def main():
     if temp_audio.exists():
         temp_audio.unlink()
 
-    # Generate SRT if requested
+    # Step 3: Extract word timestamps from FINAL audio using Whisper
+    print(f"[3/4] Extracting word timestamps with Whisper...", file=sys.stderr)
+    word_timestamps = extract_word_timestamps(output_path)
+    print(f"      Extracted {len(word_timestamps)} word timestamps", file=sys.stderr)
+
+    # Step 4: Generate SRT if requested
     if args.srt:
         srt_path = Path(args.srt)
-        print(f"[3/3] Generating SRT file...", file=sys.stderr)
+        print(f"[4/4] Generating SRT file...", file=sys.stderr)
         generate_srt(word_timestamps, srt_path)
         print(f"      Saved to {srt_path}", file=sys.stderr)
+    else:
+        print(f"[4/4] SRT generation skipped (no --srt provided)", file=sys.stderr)
 
     # Output timestamps JSON if requested
     if args.timestamps_json:

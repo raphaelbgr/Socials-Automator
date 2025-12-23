@@ -214,6 +214,12 @@ class VideoSearcher(IVideoSearcher):
 
         self.log_start(f"Searching videos for {len(context.script.segments)} segments")
 
+        # Log duration contract for tracking
+        if context.required_video_duration:
+            self.log_progress(f"[Duration Contract] {context.required_video_duration:.1f}s")
+        else:
+            self.log_progress("[Duration Contract] NOT SET (will be set after voice generation)")
+
         # Load fresh history (in case another process updated it)
         self._load_video_history()
         history_count = len(self._video_history)
@@ -260,6 +266,14 @@ class VideoSearcher(IVideoSearcher):
             List of search results, one per segment.
         """
         results = []
+
+        # Log segment durations we're searching for
+        self.log_progress("--- Video Search Targets ---")
+        total_needed = 0.0
+        for seg in script.segments:
+            self.log_progress(f"  Seg {seg.index}: {seg.duration_seconds:.1f}s needed")
+            total_needed += seg.duration_seconds
+        self.log_progress(f"  TOTAL: {total_needed:.1f}s of video needed")
 
         # Generate enhanced keywords using AI if available
         enhanced_keywords = await self._get_enhanced_keywords(script)
@@ -315,6 +329,23 @@ class VideoSearcher(IVideoSearcher):
                     "keywords_used": ["abstract", "technology"],
                     "duration_needed": segment.duration_seconds,
                 })
+
+        # Log what was found vs what was needed
+        self.log_progress("--- Video Search Results ---")
+        total_found = 0.0
+        for r in results:
+            video = r.get("video", {})
+            video_duration = video.get("duration", 0)
+            needed = r.get("duration_needed", 0)
+            seg_idx = r.get("segment_index", 0)
+            status = "[OK]" if video_duration >= needed else "[!]"
+            self.log_progress(f"  Seg {seg_idx}: {video_duration:.1f}s found (needed {needed:.1f}s) {status}")
+            total_found += video_duration
+        self.log_progress(f"  TOTAL: {total_found:.1f}s found / {total_needed:.1f}s needed")
+
+        if total_found < total_needed:
+            shortage = total_needed - total_found
+            self.log_progress(f"  [!] WARNING: Video footage SHORT BY {shortage:.1f}s")
 
         return results
 

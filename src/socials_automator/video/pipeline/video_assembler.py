@@ -108,11 +108,11 @@ class VideoAssembler(IVideoAssembler):
         # Use the contract set after voice generation - this is immutable source of truth
         if context.required_video_duration is not None:
             audio_duration = context.required_video_duration
-            self.log_progress(f"[Contract] Using required duration: {audio_duration:.1f}s")
+            self.log_progress(f"[Duration Contract] {audio_duration:.1f}s <- using contract")
         else:
             # Fallback to measuring audio (shouldn't happen if orchestrator runs correctly)
             audio_duration = self._get_audio_duration(context.audio_path)
-            self.log_progress(f"[Contract] WARNING: No contract set, measured audio: {audio_duration:.1f}s")
+            self.log_progress(f"[Duration Contract] WARNING: NOT SET! Measured audio: {audio_duration:.1f}s")
 
         # Check for video-first mode
         selected_videos = getattr(context, '_selected_videos', None)
@@ -333,7 +333,15 @@ class VideoAssembler(IVideoAssembler):
                 extend_index += 1
                 self.log_detail(f"  Added clip {clip_idx + 1} ({clip_duration:.1f}s) -> total: {current_duration:.1f}s / {target_duration:.1f}s")
 
-        self.log_progress(f"Processing {len(video_clips)} clips -> {current_duration:.1f}s total")
+        # Log assembly summary
+        self.log_progress("--- Video Assembly Summary ---")
+        self.log_progress(f"  Clips used: {len(video_clips)}")
+        self.log_progress(f"  Video duration: {current_duration:.1f}s")
+        self.log_progress(f"  Target (audio): {target_duration:.1f}s")
+        if current_duration >= target_duration:
+            self.log_progress(f"  [OK] Video covers audio (+{current_duration - target_duration:.1f}s surplus)")
+        else:
+            self.log_progress(f"  [!] Video SHORT BY {target_duration - current_duration:.1f}s")
         self.log_detail("Concatenating clips...")
 
         # Concatenate all clips
@@ -495,6 +503,16 @@ class VideoAssembler(IVideoAssembler):
 
             current_time += clip_duration
             self.log_detail(f"  Duration: {clip_duration:.1f}s | Total: {current_time:.1f}s / {target_duration:.1f}s")
+
+        # Log assembly summary
+        self.log_progress("--- Video Assembly Summary (Video-First) ---")
+        self.log_progress(f"  Clips used: {len(video_clips)} (unique, no repetition)")
+        self.log_progress(f"  Video duration: {current_time:.1f}s")
+        self.log_progress(f"  Target (audio): {target_duration:.1f}s")
+        if current_time >= target_duration - 0.5:
+            self.log_progress(f"  [OK] Video covers audio")
+        else:
+            self.log_progress(f"  [!] Video SHORT BY {target_duration - current_time:.1f}s")
 
         self.log_progress(f"Concatenating {len(video_clips)} clips...")
 

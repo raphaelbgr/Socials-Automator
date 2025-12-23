@@ -607,6 +607,12 @@ class GPUVideoAssembler(IVideoAssembler):
         total_planned = sum(segment_durations)
         self.log_progress(f"  TOTAL: {total_planned:.1f}s / {target_duration:.1f}s target")
 
+        # Check if footage is short (but don't loop - just warn)
+        if total_planned < target_duration - 0.5:
+            shortage = target_duration - total_planned
+            self.log_progress(f"  [!] WARNING: Video footage SHORT BY {shortage:.1f}s")
+            self.log_progress(f"  [!] Video will be {total_planned:.1f}s, audio is {target_duration:.1f}s")
+
         # =================================================================
         # STEP 3: Build FFmpeg Filter Chain (VIDEO-FIRST: NO LOOPING)
         # =================================================================
@@ -639,7 +645,7 @@ class GPUVideoAssembler(IVideoAssembler):
             # 4. Center crop to exact 9:16 dimensions
             filters = [
                 f"[{i}:v]",
-                f"trim=0:{seg_dur:.3f}",  # NO loop - just trim
+                f"trim=0:{seg_dur:.3f}",
                 f"setpts=PTS-STARTPTS",
             ]
 
