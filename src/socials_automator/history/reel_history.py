@@ -50,7 +50,7 @@ class ReelContentHistory(BaseContentHistory):
     SESSION_TYPE = "reel_topics"
     HISTORY_FILE = "topic_history.json"
     DEFAULT_LOOKBACK_DAYS = 30
-    SIMILARITY_THRESHOLD = 0.5
+    SIMILARITY_THRESHOLD = 0.35  # Lower = stricter (catches more similar topics)
 
     def __init__(
         self,

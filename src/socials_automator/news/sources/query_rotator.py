@@ -215,6 +215,19 @@ class QueryRotator:
         """
         return [q.query for q in self.get_current_queries()]
 
+    def get_all_queries(self) -> list[QueryConfig]:
+        """Get queries from ALL batches.
+
+        Useful for fallback when dynamic queries fail - uses maximum coverage.
+
+        Returns:
+            List of all query configurations across all batches.
+        """
+        all_queries = []
+        for batch in range(1, self.total_batches + 1):
+            all_queries.extend(self._registry.get_queries_by_batch(batch))
+        return all_queries
+
     def advance_batch(self) -> int:
         """Advance to the next batch (round-robin).
 

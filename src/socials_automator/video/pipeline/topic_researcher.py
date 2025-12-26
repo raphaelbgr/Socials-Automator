@@ -41,6 +41,7 @@ class TopicResearcher(ITopicResearcher):
     - Parallel search across multiple engines
     - Multi-language queries (EN, ES, PT)
     - Category-based research (tutorials, reviews, comparisons)
+    - High-volume batched search for comprehensive coverage
     """
 
     def __init__(
@@ -49,6 +50,7 @@ class TopicResearcher(ITopicResearcher):
         ai_client: Optional[object] = None,
         max_results: int = 10,
         use_enhanced_search: bool = True,
+        target_search_volume: int = 200,
     ):
         """Initialize topic researcher.
 
@@ -57,12 +59,14 @@ class TopicResearcher(ITopicResearcher):
             ai_client: AI client for summarization and query generation.
             max_results: Maximum search results per query.
             use_enhanced_search: If True, use AI-generated multi-source search.
+            target_search_volume: Target number of total searches (default 200).
         """
         super().__init__()
         self.search_client = search_client
         self.ai_client = ai_client
         self.max_results = max_results
         self.use_enhanced_search = use_enhanced_search
+        self.target_search_volume = target_search_volume
         self._query_generator: Optional[ResearchQueryGenerator] = None
         self._web_searcher = None
         self._content_pillar: str = "general"
@@ -154,14 +158,14 @@ class TopicResearcher(ITopicResearcher):
         return await self._process_results(topic.topic, all_results)
 
     async def _enhanced_research(self, topic: TopicInfo) -> ResearchResult:
-        """Enhanced research with AI-generated queries and multi-source search."""
+        """Enhanced research with AI-generated queries and high-volume batched search."""
         self.log_progress("Generating AI-powered research queries...")
 
         # Generate diverse queries using AI
         research_queries = await self.query_generator.generate_queries(
             topic=topic.topic,
             pillar=self._content_pillar,
-            count=12,
+            count=20,  # Generate more base queries
         )
 
         # Log query breakdown
@@ -176,13 +180,20 @@ class TopicResearcher(ITopicResearcher):
         # Sort by priority (1 = highest)
         research_queries.sort(key=lambda q: q.priority)
 
-        # Take top queries by priority
-        top_queries = research_queries[:8]
+        # Extract query strings and expand to target volume
+        base_query_strings = [q.query for q in research_queries]
+        expanded_queries = self._expand_queries_for_volume(
+            base_query_strings,
+            topic.topic,
+            target=self.target_search_volume,
+        )
 
-        self.log_progress("Searching across multiple sources in parallel...")
+        self.log_progress(
+            f"Searching {len(expanded_queries)} queries in batches of 50..."
+        )
 
-        # Search in parallel for speed
-        all_results = await self._parallel_search(top_queries)
+        # Use batched search for high volume
+        all_results = await self._batched_search(expanded_queries)
 
         # Deduplicate results by URL
         unique_results = self._deduplicate_results(all_results)
@@ -258,6 +269,155 @@ class TopicResearcher(ITopicResearcher):
                 unique.append(result)
 
         return unique
+
+    def _expand_queries_for_volume(
+        self,
+        base_queries: list[str],
+        topic: str,
+        target: int = 200,
+    ) -> list[str]:
+        """Expand base queries with modifiers to reach target volume.
+
+        Args:
+            base_queries: List of base query strings from AI.
+            topic: Original topic for additional variations.
+            target: Target number of queries to generate.
+
+        Returns:
+            Expanded list of query strings.
+        """
+        if not base_queries:
+            return []
+
+        # Start with original queries
+        expanded = list(base_queries)
+
+        now = datetime.now()
+        current_year = now.year
+        current_month = now.strftime("%B")
+
+        # Time-based modifiers
+        time_modifiers = [
+            f"{current_year}",
+            f"{current_month} {current_year}",
+            "latest",
+            "new",
+            "updated",
+            "recent",
+        ]
+
+        # Depth modifiers for comprehensive research
+        depth_modifiers = [
+            "tutorial",
+            "guide",
+            "how to",
+            "tips",
+            "tricks",
+            "best practices",
+            "examples",
+            "use cases",
+            "review",
+            "comparison",
+            "vs",
+            "alternative",
+            "free",
+            "beginner",
+            "advanced",
+        ]
+
+        # Platform/context modifiers
+        context_modifiers = [
+            "for productivity",
+            "for business",
+            "for content creation",
+            "for developers",
+            "for beginners",
+            "step by step",
+            "complete guide",
+        ]
+
+        # Generate variations until we reach target
+        modifier_idx = 0
+        all_modifiers = time_modifiers + depth_modifiers + context_modifiers
+
+        while len(expanded) < target and modifier_idx < len(all_modifiers):
+            modifier = all_modifiers[modifier_idx]
+            for base in base_queries[:10]:  # Use top 10 base queries
+                if len(expanded) >= target:
+                    break
+                variation = f"{base} {modifier}"
+                if variation not in expanded:
+                    expanded.append(variation)
+            modifier_idx += 1
+
+        # If still need more, create topic-specific variations
+        if len(expanded) < target:
+            topic_words = topic.lower().split()[:5]
+            for word in topic_words:
+                if len(word) > 3:
+                    for modifier in time_modifiers[:3]:
+                        if len(expanded) >= target:
+                            break
+                        variation = f"{word} {modifier}"
+                        if variation not in expanded:
+                            expanded.append(variation)
+
+        logger.info(
+            f"QUERY_EXPANSION | base:{len(base_queries)} | "
+            f"expanded:{len(expanded)} | target:{target}"
+        )
+
+        return expanded[:target]
+
+    async def _batched_search(
+        self,
+        queries: list[str],
+        batch_size: int = 50,
+    ) -> list[dict]:
+        """Execute searches in batches for high volume.
+
+        Args:
+            queries: List of query strings.
+            batch_size: Queries per batch.
+
+        Returns:
+            Combined results from all queries.
+        """
+        all_results = []
+
+        # Split into batches
+        batches = [queries[i:i + batch_size] for i in range(0, len(queries), batch_size)]
+        total_batches = len(batches)
+
+        for batch_num, batch in enumerate(batches, 1):
+            batch_results = []
+
+            # Search each query in the batch
+            tasks = [self._web_search(query) for query in batch]
+            results_list = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for result in results_list:
+                if isinstance(result, list):
+                    batch_results.extend(result)
+                elif isinstance(result, Exception):
+                    self.log_detail(f"Batch search error: {result}")
+
+            all_results.extend(batch_results)
+
+            self.log_detail(
+                f"Batch {batch_num}/{total_batches}: {len(batch_results)} results"
+            )
+
+            # Small delay between batches to avoid rate limiting
+            if batch_num < total_batches:
+                await asyncio.sleep(1.0)
+
+        logger.info(
+            f"BATCHED_SEARCH | queries:{len(queries)} | "
+            f"results:{len(all_results)}"
+        )
+
+        return all_results
 
     async def _process_results(
         self, topic_str: str, results: list[dict]

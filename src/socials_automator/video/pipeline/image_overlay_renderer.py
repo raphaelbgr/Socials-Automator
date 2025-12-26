@@ -346,7 +346,7 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
             self.log_detail(f"  Overlay {i+1}: {overlay.image_path.name} @ {overlay.start_time:.1f}s-{overlay.end_time:.1f}s")
 
         # Build output with encoding
-        # Note: Audio is handled via output kwargs to avoid input ordering issues
+        # Note: Input video has no audio (audio is added in SubtitleRenderer step)
         if self._use_gpu:
             output = ffmpeg.output(
                 video_stream,
@@ -377,11 +377,12 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
         # Run asynchronously
         await self._run_ffmpeg_python(output)
 
-    async def _run_ffmpeg_python(self, output_stream) -> None:
-        """Run ffmpeg-python stream asynchronously.
+    async def _run_ffmpeg_python(self, output_stream, timeout: int = 300) -> None:
+        """Run ffmpeg-python stream asynchronously with timeout.
 
         Args:
             output_stream: ffmpeg-python output stream.
+            timeout: Timeout in seconds (default 5 minutes for complex overlays).
         """
         loop = asyncio.get_event_loop()
 
@@ -395,7 +396,15 @@ class ImageOverlayRenderer(IImageOverlayRenderer):
                     error_tail = "(stderr was empty)"
                 raise ImageOverlayError(f"FFmpeg failed: {error_tail}")
 
-        await loop.run_in_executor(None, run_sync)
+        try:
+            await asyncio.wait_for(
+                loop.run_in_executor(None, run_sync),
+                timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            raise ImageOverlayError(
+                f"FFmpeg timed out after {timeout}s - try reducing overlay count or disabling GPU"
+            )
 
     async def _render_with_subprocess(
         self,

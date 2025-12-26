@@ -588,22 +588,22 @@ class NewsAggregator:
         if use_dynamic:
             try:
                 # Show progress - dynamic query generation can take time
-                print("  [>] Generating AI-powered search queries (timeout: 60s)...")
+                print("  [>] Generating AI-powered search queries (timeout: 120s)...")
                 # Generate fresh queries based on topic history with timeout
                 query_task = generate_dynamic_queries(
                     profile_name=self.profile_name,
-                    count=10,
+                    count=15,  # Generate more queries for variety
                     text_provider=self.text_provider,
                 )
-                dynamic_query_strings = await asyncio.wait_for(query_task, timeout=60.0)
+                dynamic_query_strings = await asyncio.wait_for(query_task, timeout=120.0)
                 print(f"  [OK] Generated {len(dynamic_query_strings)} dynamic queries")
                 logger.info(
                     f"DYNAMIC_QUERIES | generated {len(dynamic_query_strings)} AI queries | "
                     f"profile={self.profile_name}"
                 )
             except asyncio.TimeoutError:
-                print("  [!] Dynamic queries timed out (60s), using static queries")
-                logger.warning("DYNAMIC_QUERIES | timed out after 60s, using static")
+                print("  [!] Dynamic queries timed out (120s), using all static queries")
+                logger.warning("DYNAMIC_QUERIES | timed out after 120s, using static")
                 use_dynamic = False
             except Exception as e:
                 print(f"  [!] Dynamic queries failed, using static: {e}")
@@ -611,7 +611,9 @@ class NewsAggregator:
                 use_dynamic = False
 
         if not use_dynamic:
-            selected_queries = query_rotator.get_current_queries()
+            # On fallback, use ALL queries from ALL batches for maximum coverage
+            selected_queries = query_rotator.get_all_queries()
+            print(f"  [>] Using {len(selected_queries)} static queries (all batches)")
         else:
             selected_queries = []  # Will use dynamic_query_strings instead
 
@@ -637,23 +639,26 @@ class NewsAggregator:
             rss_count = len(rss_articles)
             print(f"  [OK] Got {rss_count} articles from RSS feeds")
 
-        # Fetch from search queries
+        # Fetch from search queries - use batched search for high volume
         if use_dynamic and dynamic_query_strings:
-            # Use AI-generated dynamic queries
-            print(f"  [>] Running {len(dynamic_query_strings)} web searches...")
-            search_articles, search_failed = await self._fetch_dynamic_queries(dynamic_query_strings)
+            # Expand dynamic queries with variations to reach target volume
+            expanded_queries = self._expand_queries_for_volume(dynamic_query_strings, target=500)
+            print(f"  [>] Running {len(expanded_queries)} web searches in batches of 50...")
+            search_articles, search_failed = await self._fetch_batched_queries(expanded_queries)
             all_articles.extend(search_articles)
             failed_queries.extend(search_failed)
             search_count = len(search_articles)
-            print(f"  [OK] Got {search_count} articles from web search")
+            print(f"  [OK] Got {search_count} articles from {len(expanded_queries)} searches")
         elif selected_queries:
-            # Use static YAML queries
-            print(f"  [>] Running {len(selected_queries)} web searches...")
-            search_articles, search_failed = await self._fetch_yaml_queries(selected_queries)
+            # Expand static queries with variations to reach target volume
+            base_query_strings = [q.query for q in selected_queries]
+            expanded_queries = self._expand_queries_for_volume(base_query_strings, target=500)
+            print(f"  [>] Running {len(expanded_queries)} web searches in batches of 50...")
+            search_articles, search_failed = await self._fetch_batched_queries(expanded_queries)
             all_articles.extend(search_articles)
             failed_queries.extend(search_failed)
             search_count = len(search_articles)
-            print(f"  [OK] Got {search_count} articles from web search")
+            print(f"  [OK] Got {search_count} articles from {len(expanded_queries)} searches")
 
         total_before_dedup = len(all_articles)
 
@@ -918,6 +923,138 @@ class NewsAggregator:
             logger.error(f"Search fetch error: {e}")
             failed.append(f"parallel_search: {e}")
 
+        return all_articles, failed
+
+    def _expand_queries_for_volume(
+        self,
+        base_queries: list[str],
+        target: int = 500,
+    ) -> list[str]:
+        """Expand base queries with variations to reach target volume.
+
+        Uses modifiers, time frames, and regional variations to create
+        more search queries from a base set.
+
+        Args:
+            base_queries: List of base query strings.
+            target: Target number of queries to generate.
+
+        Returns:
+            Expanded list of query strings.
+        """
+        if not base_queries:
+            return []
+
+        # Start with original queries
+        expanded = list(base_queries)
+
+        # Modifiers to create variations
+        time_modifiers = [
+            "today", "this week", "latest", "breaking", "just now",
+            "2024", "2025", "December 2024", "recent", "new"
+        ]
+
+        topic_modifiers = [
+            "viral", "trending", "exclusive", "update", "news",
+            "drama", "controversy", "shocking", "revealed"
+        ]
+
+        # US-focused modifiers
+        us_modifiers = [
+            "USA", "America", "American", "Hollywood", "NYC",
+            "Los Angeles", "US celebrity", "US entertainment"
+        ]
+
+        # Combine modifiers
+        all_modifiers = time_modifiers + topic_modifiers + us_modifiers
+
+        # Generate variations until we reach target
+        modifier_idx = 0
+        while len(expanded) < target and modifier_idx < len(all_modifiers):
+            modifier = all_modifiers[modifier_idx]
+            for base in base_queries:
+                if len(expanded) >= target:
+                    break
+                # Add modifier to query
+                variation = f"{base} {modifier}"
+                if variation not in expanded:
+                    expanded.append(variation)
+            modifier_idx += 1
+
+        # If still not enough, create cross-product variations
+        if len(expanded) < target:
+            for time_mod in time_modifiers[:5]:
+                for topic_mod in topic_modifiers[:5]:
+                    for base in base_queries[:10]:
+                        if len(expanded) >= target:
+                            break
+                        variation = f"{base} {time_mod} {topic_mod}"
+                        if variation not in expanded:
+                            expanded.append(variation)
+
+        logger.info(
+            f"QUERY_EXPANSION | base:{len(base_queries)} | "
+            f"expanded:{len(expanded)} | target:{target}"
+        )
+
+        return expanded[:target]
+
+    async def _fetch_batched_queries(
+        self,
+        query_strings: list[str],
+        batch_size: int = 50,
+    ) -> tuple[list[NewsArticle], list[str]]:
+        """Fetch articles using batched search for high volume.
+
+        Args:
+            query_strings: List of query strings.
+            batch_size: Queries per batch.
+
+        Returns:
+            Tuple of (articles, failed_query_strings)
+        """
+        all_articles: list[NewsArticle] = []
+        failed: list[str] = []
+
+        def progress_callback(batch_num: int, total: int, results: int):
+            print(f"    Batch {batch_num}/{total}: {results} results so far...")
+
+        try:
+            response = await self.web_searcher.batched_news_search(
+                queries=query_strings,
+                max_results=10,
+                batch_size=batch_size,
+                delay_between_batches=1.5,  # 1.5s delay to avoid rate limits
+                progress_callback=progress_callback,
+            )
+
+            # Convert search results to NewsArticle
+            for query_response in response.queries:
+                if not query_response.success:
+                    failed.append(f"{query_response.query}: {query_response.error}")
+                    continue
+
+                for result in query_response.results:
+                    article = NewsArticle(
+                        title=result.title,
+                        summary=result.snippet,
+                        source_name=result.domain.replace(".com", "").replace(".org", "").title(),
+                        source_url=f"https://{result.domain}",
+                        article_url=result.url,
+                        published_at=datetime.utcnow(),
+                        category=NewsCategory.GENERAL,
+                        image_url=None,
+                        content_hash=_generate_content_hash(result.title, result.domain),
+                        source_language="en",
+                        was_translated=False,
+                    )
+                    all_articles.append(article)
+
+        except Exception as e:
+            logger.error(f"Batched search fetch error: {e}")
+            failed.append(f"batched_search: {e}")
+
+        logger.info(f"BATCHED_QUERIES_FETCH | articles={len(all_articles)} | failed={len(failed)}")
         return all_articles, failed
 
     async def _fetch_dynamic_queries(

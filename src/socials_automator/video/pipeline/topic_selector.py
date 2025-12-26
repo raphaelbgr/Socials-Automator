@@ -3,11 +3,16 @@
 Selects a topic based on:
 - Content pillars and their frequency weights
 - Trending keywords
-- AI-driven topic generation
+- AI-driven topic generation with history analysis
 - Hidden gems from AI tools registry
 - Topic history to avoid repetition (via ReelContentHistory)
+
+The topic selector uses a two-stage AI approach:
+1. ANALYSIS: AI analyzes recent topics to identify overused patterns
+2. GENERATION: AI generates new topic avoiding those patterns
 """
 
+import json
 import logging
 import random
 from datetime import datetime
@@ -23,6 +28,43 @@ from .base import (
 )
 
 logger = logging.getLogger("ai_calls")
+
+
+# =============================================================================
+# Topic Analysis Prompts
+# =============================================================================
+
+TOPIC_ANALYSIS_SYSTEM = """You are a content strategist analyzing topic history to ensure variety.
+
+Your job is to identify patterns in recent content and provide actionable constraints
+for generating fresh, unique topics. Be specific and quantitative."""
+
+TOPIC_ANALYSIS_PROMPT = """Analyze these {count} recent video topics and identify overused patterns:
+
+RECENT TOPICS:
+{topics_list}
+
+Analyze and return a JSON object with:
+{{
+  "overused_tools": [
+    {{"tool": "tool name", "count": N, "percentage": X, "block": true/false}}
+  ],
+  "overused_patterns": [
+    {{"pattern": "description", "examples": ["topic1", "topic2"], "count": N}}
+  ],
+  "underused_categories": ["category1", "category2"],
+  "suggested_angles": ["specific suggestion 1", "specific suggestion 2"],
+  "tools_to_feature": ["tool not recently covered", "another fresh tool"],
+  "avoid_phrases": ["phrase appearing too often", "another overused phrase"]
+}}
+
+Rules:
+- Mark a tool as "block": true if it appears in >15% of recent topics
+- Identify patterns like "N prompts that...", "This FREE tool...", "X vs Y"
+- Suggest SPECIFIC tools/angles that haven't been covered recently
+- Keep avoid_phrases to the most egregious repetitions (top 5)
+
+Return ONLY valid JSON, no markdown."""
 
 
 class TopicSelector(ITopicSelector):
@@ -51,6 +93,140 @@ class TopicSelector(ITopicSelector):
             from socials_automator.history import ReelContentHistory
             self._history = ReelContentHistory(profile_path)
         return self._history
+
+    async def _analyze_topic_history(self, profile_path: Path) -> dict:
+        """Analyze recent topics using AI to identify overused patterns.
+
+        This is the first stage of the two-stage topic generation:
+        1. ANALYSIS: Identify what's overused
+        2. GENERATION: Create topic avoiding those patterns
+
+        Args:
+            profile_path: Path to profile directory.
+
+        Returns:
+            Analysis dict with overused_tools, patterns, suggestions, etc.
+        """
+        if not self.ai_client:
+            return {}
+
+        history = self._get_history(profile_path)
+        recent_topics = history.get_recent_topics()
+
+        # Need at least 10 topics to analyze patterns
+        if len(recent_topics) < 10:
+            self.log_detail(f"Only {len(recent_topics)} topics, skipping analysis")
+            return {}
+
+        # Format topics for analysis (most recent 100)
+        topics_to_analyze = recent_topics[-100:]
+        topics_list = "\n".join(f"- {t}" for t in topics_to_analyze)
+
+        prompt = TOPIC_ANALYSIS_PROMPT.format(
+            count=len(topics_to_analyze),
+            topics_list=topics_list,
+        )
+
+        try:
+            self.log_progress("Analyzing topic patterns with AI...")
+
+            response = await self.ai_client.generate(
+                prompt=prompt,
+                system=TOPIC_ANALYSIS_SYSTEM,
+                task="topic_analysis",
+                temperature=0.3,  # Low temperature for analytical task
+                max_tokens=1500,
+            )
+
+            # Parse JSON response
+            response = response.strip()
+            if response.startswith("```"):
+                lines = response.split("\n")
+                lines = [l for l in lines if not l.startswith("```")]
+                response = "\n".join(lines)
+
+            analysis = json.loads(response)
+
+            # Log key findings
+            blocked_tools = [t["tool"] for t in analysis.get("overused_tools", []) if t.get("block")]
+            if blocked_tools:
+                self.log_detail(f"Blocked tools (>15%): {', '.join(blocked_tools)}")
+
+            patterns = analysis.get("overused_patterns", [])
+            if patterns:
+                self.log_detail(f"Overused patterns: {len(patterns)} detected")
+
+            suggested = analysis.get("tools_to_feature", [])
+            if suggested:
+                self.log_detail(f"Suggested tools: {', '.join(suggested[:3])}")
+
+            logger.info(f"TOPIC_ANALYSIS | blocked={len(blocked_tools)} patterns={len(patterns)}")
+            return analysis
+
+        except json.JSONDecodeError as e:
+            self.log_detail(f"Analysis JSON parse error: {e}")
+            return {}
+        except Exception as e:
+            self.log_detail(f"Analysis failed: {e}")
+            return {}
+
+    def _format_analysis_constraints(self, analysis: dict) -> str:
+        """Format analysis results as constraints for topic generation.
+
+        Args:
+            analysis: Analysis dict from _analyze_topic_history.
+
+        Returns:
+            Formatted constraint text for the generation prompt.
+        """
+        if not analysis:
+            return ""
+
+        lines = ["\n=== CONTENT DIVERSITY CONSTRAINTS (from AI analysis) ==="]
+
+        # Blocked tools
+        blocked = [t["tool"] for t in analysis.get("overused_tools", []) if t.get("block")]
+        if blocked:
+            lines.append(f"\nBLOCKED TOOLS (do NOT feature these - overused):")
+            for tool in blocked:
+                lines.append(f"  - {tool}")
+
+        # Overused patterns
+        patterns = analysis.get("overused_patterns", [])
+        if patterns:
+            lines.append(f"\nAVOID THESE PATTERNS (overused):")
+            for p in patterns[:5]:
+                lines.append(f"  - {p.get('pattern', 'unknown')}")
+
+        # Phrases to avoid
+        avoid = analysis.get("avoid_phrases", [])
+        if avoid:
+            lines.append(f"\nAVOID THESE PHRASES:")
+            for phrase in avoid[:5]:
+                lines.append(f"  - \"{phrase}\"")
+
+        # Suggested tools
+        suggested = analysis.get("tools_to_feature", [])
+        if suggested:
+            lines.append(f"\nSUGGESTED TOOLS (not recently covered):")
+            for tool in suggested[:5]:
+                lines.append(f"  - {tool}")
+
+        # Suggested angles
+        angles = analysis.get("suggested_angles", [])
+        if angles:
+            lines.append(f"\nSUGGESTED ANGLES:")
+            for angle in angles[:3]:
+                lines.append(f"  - {angle}")
+
+        # Underused categories
+        categories = analysis.get("underused_categories", [])
+        if categories:
+            lines.append(f"\nUNDERUSED CATEGORIES (prioritize):")
+            for cat in categories:
+                lines.append(f"  - {cat}")
+
+        return "\n".join(lines)
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """Execute topic selection step.
@@ -124,10 +300,12 @@ class TopicSelector(ITopicSelector):
         profile: ProfileMetadata,
         profile_path: Optional[Path] = None,
     ) -> str:
-        """Generate a topic using AI.
+        """Generate a topic using AI with two-stage approach.
+
+        Stage 1: Analyze recent topics to identify overused patterns
+        Stage 2: Generate new topic with constraints from analysis
 
         Integrates with AIToolsRegistry for accurate version info and hidden gems.
-        Avoids recently used topics from history.
 
         Args:
             pillar: Selected content pillar.
@@ -138,6 +316,12 @@ class TopicSelector(ITopicSelector):
             AI-generated topic string.
         """
         try:
+            # STAGE 1: Analyze topic history for patterns
+            analysis_constraints = ""
+            if profile_path:
+                analysis = await self._analyze_topic_history(profile_path)
+                analysis_constraints = self._format_analysis_constraints(analysis)
+
             # Build prompt for AI
             examples = pillar.get("examples", [])
             examples_text = "\n".join(f"- {ex}" for ex in examples[:5]) if examples else "No examples"
@@ -152,9 +336,10 @@ class TopicSelector(ITopicSelector):
             version_context = self._get_version_context()
             hidden_gems_context = self._get_hidden_gems_context(profile_path)
 
-            # Get topic history context using new history module
+            # Get topic history context (raw list) - now less important with analysis
             topic_history_context = self._get_topic_history_context(profile_path)
 
+            # STAGE 2: Generate topic with constraints
             prompt = f"""Generate ONE compelling video topic for a 60-second Instagram Reel.
 
 TODAY'S DATE: {current_date}
@@ -171,7 +356,7 @@ Example topics from this pillar:
 
 Trending keywords: {keywords}
 {hidden_gems_context}
-{topic_history_context}
+{analysis_constraints}
 
 Requirements:
 - Topic must be specific and actionable (not vague)
@@ -183,15 +368,11 @@ Requirements:
 - NO selling, NO courses, NO paid products - just free value!
 - When mentioning AI tools, reference their CURRENT versions (listed above)
 - Content should feel fresh and up-to-date for {current_year}
-- PRIORITIZE hidden gem tools for unique content that stands out!
-- CRITICAL: Do NOT repeat or rephrase any topic from the "RECENTLY USED" list above!
+- PRIORITIZE hidden gem tools and suggested tools for unique content!
+- CRITICAL: Follow ALL constraints from the CONTENT DIVERSITY CONSTRAINTS section above!
+- CRITICAL: Do NOT use any BLOCKED TOOLS or AVOID patterns listed above!
 
-Respond with ONLY the topic text, nothing else. No quotes, no explanation.
-Example good responses:
-- 5 ChatGPT prompts that save 2 hours daily
-- Claude Opus 4.5 just changed everything
-- This AI tool replaces 5 apps (NotebookLM)
-- 3 free AI tools you need to try in {current_year}"""
+Respond with ONLY the topic text, nothing else. No quotes, no explanation."""
 
             # System prompt for topic generation
             system_prompt = f"""You are a creative content strategist for social media video content.

@@ -486,8 +486,9 @@ feeds:
 
 queries:
   # ---------------------------------------------------------------------------
-  # English Queries (12)
+  # US English Queries (24) - Primary focus for American entertainment
   # ---------------------------------------------------------------------------
+  # Batch 1 - High priority US news
   - query: "celebrity news today"
     category: celebrity
     language: en
@@ -512,6 +513,31 @@ queries:
     priority: 2
     batch: 1
 
+  - query: "Hollywood news today"
+    category: celebrity
+    language: en
+    priority: 1
+    batch: 1
+
+  - query: "trending TikTok celebrity"
+    category: viral
+    language: en
+    priority: 1
+    batch: 1
+
+  - query: "red carpet celebrity fashion"
+    category: celebrity
+    language: en
+    priority: 2
+    batch: 1
+
+  - query: "new album release Friday"
+    category: music
+    language: en
+    priority: 2
+    batch: 1
+
+  # Batch 2 - Streaming and TV
   - query: "tv show premiere this week"
     category: tv
     language: en
@@ -536,6 +562,31 @@ queries:
     priority: 3
     batch: 2
 
+  - query: "reality TV show news"
+    category: tv
+    language: en
+    priority: 2
+    batch: 2
+
+  - query: "late night show celebrity interview"
+    category: tv
+    language: en
+    priority: 2
+    batch: 2
+
+  - query: "hulu max peacock new releases"
+    category: streaming
+    language: en
+    priority: 2
+    batch: 2
+
+  - query: "SNL celebrity host announcement"
+    category: tv
+    language: en
+    priority: 2
+    batch: 2
+
+  # Batch 3 - Box office, awards, drama
   - query: "celebrity drama today"
     category: viral
     language: en
@@ -558,6 +609,30 @@ queries:
     category: streaming
     language: en
     priority: 2
+    batch: 3
+
+  - query: "celebrity couple relationship news"
+    category: celebrity
+    language: en
+    priority: 2
+    batch: 3
+
+  - query: "movie trailer just dropped"
+    category: movies
+    language: en
+    priority: 2
+    batch: 3
+
+  - query: "celebrity social media post viral"
+    category: viral
+    language: en
+    priority: 2
+    batch: 3
+
+  - query: "music festival lineup 2025"
+    category: music
+    language: en
+    priority: 3
     batch: 3
 
   # ---------------------------------------------------------------------------

@@ -398,6 +398,112 @@ class WebSearcher:
 
         return response
 
+    async def batched_news_search(
+        self,
+        queries: list[str],
+        max_results: int | None = None,
+        batch_size: int = 50,
+        delay_between_batches: float = 2.0,
+        progress_callback: callable | None = None,
+    ) -> ParallelSearchResponse:
+        """Execute large-scale news searches in batches.
+
+        Processes queries in batches to avoid rate limiting while
+        achieving high volume searches (e.g., 500 searches).
+
+        Args:
+            queries: List of search queries (no limit).
+            max_results: Max results per query.
+            batch_size: Number of queries per batch (default 50).
+            delay_between_batches: Seconds to wait between batches.
+            progress_callback: Optional callback(batch_num, total_batches, results_so_far).
+
+        Returns:
+            ParallelSearchResponse with all news results combined.
+        """
+        if not queries:
+            return ParallelSearchResponse()
+
+        max_results = max_results or self.max_results_per_query
+        start_time = time.time()
+
+        # Split queries into batches
+        batches = [queries[i:i + batch_size] for i in range(0, len(queries), batch_size)]
+        total_batches = len(batches)
+
+        logger.info(
+            f"BATCHED_NEWS_START | total_queries:{len(queries)} | "
+            f"batches:{total_batches} | batch_size:{batch_size}"
+        )
+
+        # Combined response
+        combined = ParallelSearchResponse(
+            total_queries=len(queries),
+        )
+        seen_urls: set[str] = set()
+
+        for batch_num, batch in enumerate(batches, 1):
+            batch_start = time.time()
+
+            # Execute batch
+            tasks = [self.search_news(query, max_results) for query in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            batch_duration_ms = int((time.time() - batch_start) * 1000)
+
+            # Process results
+            batch_success = 0
+            batch_results = 0
+
+            for result in results:
+                if isinstance(result, Exception):
+                    combined.queries.append(SearchResponse(
+                        query="unknown",
+                        success=False,
+                        error=str(result),
+                    ))
+                elif isinstance(result, SearchResponse):
+                    combined.queries.append(result)
+
+                    if result.success:
+                        batch_success += 1
+                        combined.successful_queries += 1
+                        combined.total_results += result.result_count
+                        batch_results += result.result_count
+
+                        for source in result.results:
+                            if source.url not in seen_urls:
+                                seen_urls.add(source.url)
+                                combined.all_sources.append(source)
+
+            logger.info(
+                f"BATCH_NEWS | batch:{batch_num}/{total_batches} | "
+                f"queries:{len(batch)} | success:{batch_success} | "
+                f"results:{batch_results} | {batch_duration_ms}ms"
+            )
+
+            # Progress callback
+            if progress_callback:
+                try:
+                    progress_callback(batch_num, total_batches, combined.total_results)
+                except Exception:
+                    pass
+
+            # Delay between batches (except last)
+            if batch_num < total_batches and delay_between_batches > 0:
+                await asyncio.sleep(delay_between_batches)
+
+        combined.duration_ms = int((time.time() - start_time) * 1000)
+
+        logger.info(
+            f"BATCHED_NEWS_DONE | queries:{combined.total_queries} | "
+            f"success:{combined.successful_queries} | "
+            f"results:{combined.total_results} | "
+            f"unique:{len(combined.all_sources)} | {combined.duration_ms}ms"
+        )
+
+        return combined
+
     def _ddgs_search_sync(self, query: str, max_results: int) -> list[dict]:
         """Synchronous DuckDuckGo web search."""
         try:

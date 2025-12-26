@@ -373,7 +373,7 @@ Return ONLY the JSON, no markdown or explanation."""
         """
         import re
 
-        # If already has proper line breaks, don't modify
+        # If already has proper line breaks with bullets, don't modify
         if '\n- ' in caption or '\n* ' in caption:
             return caption
 
@@ -382,6 +382,13 @@ Return ONLY the JSON, no markdown or explanation."""
             # Check if this looks like inline bullets (multiple dashes)
             dash_count = caption.count(' - ')
             if dash_count >= 2:  # At least 2 inline bullets
+                # Extract hashtags first (they should go at the end)
+                hashtags = ""
+                hashtag_match = re.search(r'(#\w+(?:\s+#\w+)*)\s*$', caption)
+                if hashtag_match:
+                    hashtags = hashtag_match.group(1).strip()
+                    caption = caption[:hashtag_match.start()].strip()
+
                 # Try to find headline end (punctuation before first dash)
                 # Pattern: sentence end (! or . or : or ?) followed by space and dash
                 pattern = r'([!.?:])\s+-\s+'
@@ -412,7 +419,7 @@ Return ONLY the JSON, no markdown or explanation."""
                     last_bullet = bullets[-1]
 
                     # Extract Sources section if present
-                    sources_match = re.search(r'\s*(Sources?:\s*.+?)(?:\s+#|$)', last_bullet, re.IGNORECASE)
+                    sources_match = re.search(r'\s*(Sources?:\s*.+?)$', last_bullet, re.IGNORECASE)
                     if sources_match:
                         sources = sources_match.group(1).strip()
                         last_bullet = last_bullet[:sources_match.start()].strip()
@@ -441,6 +448,8 @@ Return ONLY the JSON, no markdown or explanation."""
                         result += f"\n\n{cta}"
                     if sources:
                         result += f"\n\n{sources}"
+                    if hashtags:
+                        result += f"\n\n{hashtags}"
                     return result
 
         return caption

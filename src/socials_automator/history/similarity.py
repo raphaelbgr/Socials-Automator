@@ -29,7 +29,20 @@ FILLER_WORDS = frozenset({
     "2024", "2025", "2026",
     # Numbers written as words
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+    # Time units (don't differentiate "save 2 hours" vs "save 10 minutes")
+    "hours", "hour", "minutes", "minute", "seconds", "second",
+    "daily", "weekly", "monthly", "week", "day", "month", "year",
+    # Common action verbs in AI content (don't differentiate topics)
+    "save", "change", "replace", "automate", "make", "turn", "use", "create",
+    "boost", "improve", "transform", "revolutionize", "unlock", "master",
+    # Common result words
+    "forever", "instantly", "faster", "better", "smarter", "obsolete",
+    # Common patterns in AI topics
+    "workflow", "productivity", "work", "tasks", "life",
 })
+
+# Default similarity threshold - lower = stricter (catches more similar topics)
+DEFAULT_SIMILARITY_THRESHOLD = 0.35
 
 
 def normalize_text(text: str) -> set[str]:
@@ -39,7 +52,8 @@ def normalize_text(text: str) -> set[str]:
     1. Converting to lowercase
     2. Removing punctuation
     3. Filtering out filler words
-    4. Keeping only words with 3+ characters
+    4. Filtering out digit-only words (3, 5, 10, etc.)
+    5. Keeping only words with 3+ characters
 
     Args:
         text: Text to normalize (topic, headline, etc.)
@@ -57,7 +71,9 @@ def normalize_text(text: str) -> set[str]:
     # Split and filter
     words = {
         word for word in normalized.split()
-        if word not in FILLER_WORDS and len(word) > 2
+        if word not in FILLER_WORDS
+        and len(word) > 2
+        and not word.isdigit()  # Filter out "3", "5", "10", etc.
     }
 
     return words
@@ -90,14 +106,15 @@ def jaccard_similarity(set_a: set[str], set_b: set[str]) -> float:
 def is_similar(
     text: str,
     existing_texts: list[str],
-    threshold: float = 0.5,
+    threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
 ) -> tuple[bool, str | None]:
     """Check if text is too similar to any existing texts.
 
     Args:
         text: New text to check.
         existing_texts: List of existing texts to compare against.
-        threshold: Similarity threshold (0.5 = 50% word overlap).
+        threshold: Similarity threshold (default 0.35 = 35% word overlap).
+                   Lower = stricter, catches more similar topics.
 
     Returns:
         Tuple of (is_similar, matching_text or None).

@@ -41,7 +41,7 @@ class BaseContentHistory(ABC):
     SESSION_TYPE: str = "content_history"
     HISTORY_FILE: str = "content_history.json"
     DEFAULT_LOOKBACK_DAYS: int = 30
-    SIMILARITY_THRESHOLD: float = 0.5
+    SIMILARITY_THRESHOLD: float = 0.35  # Lower = stricter (catches more similar topics)
 
     def __init__(
         self,

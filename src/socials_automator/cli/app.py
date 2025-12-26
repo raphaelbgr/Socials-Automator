@@ -112,10 +112,11 @@ app = typer.Typer(
 def register_commands() -> None:
     """Register all commands from feature modules."""
     # Import and register reel commands
-    from .reel.commands import generate_reel, upload_reel
+    from .reel.commands import generate_reel, upload_reel, upload_tiktok_browser
 
     app.command(name="generate-reel")(generate_reel)
     app.command(name="upload-reel")(upload_reel)
+    app.command(name="upload-tiktok-browser")(upload_tiktok_browser)
 
     # Import and register post commands
     from .post.commands import generate_post, upload_post
@@ -197,6 +198,29 @@ def setup_logging() -> None:
     # Ensure instagram_api logger doesn't propagate to console
     instagram_logger = logging.getLogger("instagram_api")
     instagram_logger.propagate = False
+
+    # Setup tiktok_browser logger with FileHandler for TikTok upload logging
+    tiktok_logger = logging.getLogger("tiktok_browser")
+    tiktok_logger.setLevel(logging.DEBUG)
+    tiktok_logger.propagate = False
+    tiktok_logger.handlers = []  # Clear any existing handlers
+    tiktok_file_handler = logging.FileHandler(log_dir / "tiktok_browser.log", encoding="utf-8")
+    tiktok_file_handler.setLevel(logging.DEBUG)
+    tiktok_file_handler.setFormatter(
+        logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+    )
+    tiktok_logger.addHandler(tiktok_file_handler)
+
+    # Setup tiktok_json logger for JSON Lines format (machine-readable)
+    # Each line is a complete JSON object - no timestamp prefix from formatter
+    tiktok_json_logger = logging.getLogger("tiktok_json")
+    tiktok_json_logger.setLevel(logging.INFO)
+    tiktok_json_logger.propagate = False
+    tiktok_json_logger.handlers = []  # Clear any existing handlers
+    tiktok_json_handler = logging.FileHandler(log_dir / "tiktok_uploads.jsonl", encoding="utf-8")
+    tiktok_json_handler.setLevel(logging.INFO)
+    tiktok_json_handler.setFormatter(logging.Formatter("%(message)s"))  # Raw JSON, no prefix
+    tiktok_json_logger.addHandler(tiktok_json_handler)
 
 
 # Initialize logging on module import
