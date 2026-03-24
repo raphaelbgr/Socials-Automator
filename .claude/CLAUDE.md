@@ -4,9 +4,10 @@
 
 ### Pipeline Flow
 ```
-cli/ -> video/pipeline/orchestrator.py -> script_planner.py -> text.py (AI calls)
-     -> content/orchestrator.py -> planner.py -> slides/ (image composition)
-                                              -> output.py (save files)
+cli/ -> video/pipeline/orchestrator.py    -> script_planner.py    -> text.py (AI calls)
+     -> video/pipeline/orchestrator_v2.py -> script_planner_v2.py -> cinematic/ (multi-hook)
+     -> news/orchestrator.py              -> news_script_planner.py (news briefings)
+     -> content/orchestrator.py           -> planner.py -> slides/ (image composition)
 ```
 
 ### Key Files
@@ -34,6 +35,80 @@ cli/ -> video/pipeline/orchestrator.py -> script_planner.py -> text.py (AI calls
 | `hashtag/constants.py` | INSTAGRAM_MAX_HASHTAGS = 5 |
 | `hashtag/sanitizer.py` | HashtagSanitizer class for trimming/removal |
 | `hashtag/validator.py` | validate_hashtags_in_caption() for pipelines |
+
+### V2 Cinematic Script Generation (generate-reel-v2)
+
+Enhanced script generation with multi-hook scoring and pattern breaks. **Only for non-news profiles** (ai.for.mortals style content).
+
+**Key Files:**
+| File | Purpose |
+|------|---------|
+| `video/pipeline/cinematic/` | Cinematic script generation module |
+| `video/pipeline/cinematic/models.py` | HookCandidate, Beat, CinematicScript, HookScores |
+| `video/pipeline/cinematic/prompts.py` | Centralized AI prompts |
+| `video/pipeline/cinematic/hook_generator.py` | Generates 5-8 hook candidates with different angles |
+| `video/pipeline/cinematic/hook_scorer.py` | Scores hooks with 6 metrics (0-60 total) |
+| `video/pipeline/cinematic/beat_planner.py` | Creates timed beats with pattern breaks |
+| `video/pipeline/cinematic/script_generator.py` | Orchestrates the cinematic flow |
+| `video/pipeline/script_planner_v2.py` | Pipeline step wrapper for cinematic module |
+| `video/pipeline/orchestrator_v2.py` | Full pipeline using ScriptPlannerV2 |
+| `cli/reel/commands_v2.py` | CLI command with --hooks and --show-scores |
+| `cli/reel/service.py` | ReelGeneratorServiceV2 class |
+
+**V2 Flow:**
+```
+TopicSelector -> TopicResearcher -> ScriptPlannerV2 (cinematic) -> VoiceGenerator -> ...
+                                          |
+                                          v
+                                   HookGenerator (5-8 candidates)
+                                          |
+                                          v
+                                   HookScorer (6 metrics each)
+                                          |
+                                          v
+                                   BeatPlanner (timed beats + pattern breaks)
+                                          |
+                                          v
+                                   CinematicScript.to_video_script()
+```
+
+**Hook Scoring Metrics (0-10 each, 60 max):**
+| Metric | Description |
+|--------|-------------|
+| Curiosity | Does it create a question in viewer's mind? |
+| Clarity | Can a stranger understand instantly? |
+| Specificity | Who is it for + what outcome? |
+| Credibility | Does it sound true, not hypey? |
+| Retention | Open loops + pattern break potential? |
+| Shareability | Would someone send/save this? |
+
+**Hook Angles:**
+| Angle | Example |
+|-------|---------|
+| contrarian | "Stop doing X if you want Y" |
+| story | "I tested X for 30 days..." |
+| myth_bust | "Everyone thinks X, but actually..." |
+| checklist | "3 things you need to know about X" |
+| demo | "Watch me do X in 60 seconds" |
+| curiosity | "Here's why X changes everything" |
+| urgency | "You're missing out on X right now" |
+
+**Beat Types:**
+| Beat | Time | Purpose |
+|------|------|---------|
+| hook | 0-2s | Grab attention |
+| promise | 2-4s | What they'll learn |
+| payoff | 4-8s | Show the result early |
+| step | Variable | Each step/point |
+| recap | 2-3s | Quick summary |
+| cta | 2-3s | Call to action |
+
+**Pattern Breaks (every 2-4s):**
+- `punch_in` - Quick zoom in
+- `hard_cut` - Abrupt cut to new shot
+- `zoom_keyword` - Zoom to text/keyword
+- `whip_pan` - Fast pan transition
+- `snap_cut` - Quick series of cuts
 
 ## CLI Architecture (Modular, Feature-Based)
 
@@ -681,6 +756,84 @@ The planner generates a script like:
 }
 ```
 
+## Smart Video Selection (--smart-video)
+
+The `--smart-video` flag enables vision AI-based video selection for Pexels videos. Instead of using the first search result, the AI analyzes video frames to select the best match for your topic.
+
+### How It Works
+
+1. **Frame Extraction** - Downloads video previews and extracts 5 frames using FFmpeg
+2. **Vision Analysis** - Sends frames to vision AI (LMStudio by default) for content analysis
+3. **Context Matching** - Matches video content to topic and requirements
+4. **Ranking** - Ranks candidates by relevance score and selects the best match
+
+### Global Cache Structure
+
+The cache is **global** (shared across all profiles) since video content is the same regardless of which profile uses it:
+
+```
+data/pexels/cache/              # Global cache (all profiles share)
+    <video-id>/
+        metadata.json           # Video info from Pexels
+        frame_001.jpg           # Extracted preview frames
+        frame_002.jpg
+        ...
+        analysis.json           # Base video analysis (context-independent)
+        context/
+            <hash>.json         # Context-specific match results
+```
+
+### Context-Aware Caching
+
+- **Frames**: Cached permanently (video content doesn't change)
+- **Base analysis**: Cached after first analysis (what's in the video)
+- **Context matches**: Cached per topic hash (how well it fits specific topics)
+
+This means:
+- Same video analyzed once, reused across profiles
+- Different topics get fresh context matching
+- Massive speedup on repeat queries
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `video/pipeline/smart_video/__init__.py` | Module exports |
+| `video/pipeline/smart_video/models.py` | VideoCandidate, VideoAnalysis, SelectionContext |
+| `video/pipeline/smart_video/cache.py` | Global cache management |
+| `video/pipeline/smart_video/frame_extractor.py` | FFmpeg frame extraction |
+| `video/pipeline/smart_video/analyzer.py` | Vision AI analysis |
+| `video/pipeline/smart_video/selector.py` | SmartVideoSelector main class |
+| `tests/video/pipeline/test_smart_video.py` | Comprehensive unit tests (78 tests) |
+
+### Running Tests
+
+```bash
+# Run smart video tests
+py -m pytest tests/video/pipeline/test_smart_video.py -v
+
+# Run with coverage
+py -m pytest tests/video/pipeline/test_smart_video.py --cov=src/socials_automator/video/pipeline/smart_video
+```
+
+### Usage
+
+```bash
+# Enable smart video selection (uses LMStudio by default)
+py -m socials_automator.cli generate-reel-v2 ai.for.mortals --smart-video
+
+# Use a different vision provider
+py -m socials_automator.cli generate-reel-v2 ai.for.mortals --smart-video --smart-video-provider openai
+```
+
+### Vision Provider Options
+
+| Provider | Speed | Quality | Cost |
+|----------|-------|---------|------|
+| `lmstudio` | Slow | Good | Free (local) |
+| `openai` | Fast | Excellent | $$$ |
+| `gemini` | Fast | Excellent | $$ |
+
 ## Commands Overview
 
 **Generation Commands (safe to run):**
@@ -696,6 +849,12 @@ The planner generates a script like:
   - `--overlay-image-ttl <time>` - Fixed display time per image (e.g., 3s). Enables dense mode.
   - `--overlay-image-minimum <count>` - Target number of images for dense mode (auto if omitted)
   - `--use-tor` - Route websearch through embedded Tor for anonymity
+- `generate-reel-v2 <profile>` - Cinematic script with multi-hook scoring (non-news profiles)
+  - `--hooks N` - Number of hook candidates (default: 5)
+  - `--show-scores/--hide-scores` - Display hook score table (default: show)
+  - `--smart-video` - Vision AI to select best Pexels videos (default: off)
+  - `--smart-video-provider` - Vision provider: lmstudio, openai (default: lmstudio)
+  - All other generate-reel options are supported
 
 **Upload Commands (USE --dry-run FOR TESTING):**
 - `upload-post <profile> [post_id]` - Upload carousel to Instagram

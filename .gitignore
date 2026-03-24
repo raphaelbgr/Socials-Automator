@@ -73,6 +73,7 @@ temp/
 
 # Stock media downloads
 pexels/
+data/pexels/cache/
 
 # RVC (Voice Conversion) sandbox and models
 rvc_sandbox/

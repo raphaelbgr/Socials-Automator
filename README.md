@@ -84,6 +84,7 @@ python -m socials_automator.cli generate-post <profile> [OPTIONS]
 | `--topic` | `-t` | Specific topic | AI generates |
 | `--slides` | `-s` | Number of slides | AI decides (3-10) |
 | `--text-ai` | | Text provider (lmstudio, zai, openai, groq) | Config priority |
+| `--model` | `-m` | Model override (see Model Selection) | Provider default |
 | `--image-ai` | | Image provider (comfyui, dalle, fal) | Config priority |
 | `--upload` | | Upload after generating | False |
 | `--loop-each` | | Loop interval (5m, 1h) | - |
@@ -115,6 +116,7 @@ python -m socials_automator.cli generate-reel <profile> [OPTIONS]
 | `--length` | `-l` | Duration (30s, 1m, 1m30s) | 1m |
 | `--voice` | `-v` | TTS voice | rvc_adam |
 | `--text-ai` | | Text provider | Config priority |
+| `--model` | `-m` | Model override (see Model Selection) | Provider default |
 | `--video-matcher` | | Video source (pexels) | pexels |
 | `--upload` | | Upload after generating | False |
 | `--loop-count` | `-n` | Number of reels | 1 |
@@ -144,6 +146,10 @@ python -m socials_automator.cli generate-reel ai.for.mortals --topic "AI tips" -
 python -m socials_automator.cli generate-reel ai.for.mortals -n 10 -g --upload
 python -m socials_automator.cli generate-reel news.but.quick --edition morning --stories 5
 python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --blur medium
+
+# Use specific model within a provider
+python -m socials_automator.cli generate-reel ai.for.mortals --text-ai zai --model glm-4.7
+python -m socials_automator.cli generate-reel ai.for.mortals --text-ai groq --model llama-3.1-8b
 ```
 
 **Available Voices:**
@@ -152,6 +158,111 @@ python -m socials_automator.cli generate-reel ai.for.mortals --overlay-images --
 | `rvc_adam` | Viral TikTok voice - FREE, local (default) |
 | `edge_*` | Microsoft Edge TTS (free) |
 | `elevenlabs_*` | ElevenLabs (paid, high quality) |
+
+---
+
+### generate-reel-v2
+
+**Cinematic Script Generation** - Enhanced video reels with multi-hook scoring and pattern breaks.
+
+```bash
+python -m socials_automator.cli generate-reel-v2 <profile> [OPTIONS]
+```
+
+**V2 Features:**
+- **Multi-hook generation** - Generates 5-8 hook candidates with different angles
+- **6-metric scoring** - Scores each hook on: curiosity, clarity, specificity, credibility, retention, shareability
+- **Pattern breaks** - Planned every 2-4s (punch_in, hard_cut, zoom_keyword, whip_pan)
+- **Timed beats** - Hook → Promise → Payoff → Steps → Recap → CTA structure
+- **Shot hints** - Enhanced Pexels keywords with shot type guidance
+- **Role-based AI** - Separate AI for creative vs high-volume tasks
+- **Batched video selection** - Single AI call for all segments (faster)
+- **Token usage tracking** - Per-call and summary token/cost display
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--hooks` | Number of hook candidates (2-10) | 5 |
+| `--show-scores/--hide-scores` | Display hook score table | show |
+| `--smart-video` | Vision AI to select best Pexels videos | False |
+| `--smart-video-provider` | Vision AI provider (lmstudio, openai, zai) | lmstudio |
+| `--smart-video-model` | Vision model override (e.g., glm-4.6v-flash) | Provider default |
+| `--model` / `-m` | Text AI model override (see Model Selection) | Provider default |
+
+**Role-Based AI Configuration:**
+
+Different pipeline steps need different AI capabilities. Use these flags to optimize cost and speed:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--smart-ai` | AI for creative tasks (topic, script, caption) | from --text-ai |
+| `--smart-model` | Model override for smart AI | Provider default |
+| `--fast-ai` | AI for high-volume tasks (video search, keywords) | lmstudio |
+| `--fast-model` | Model override for fast AI | Provider default |
+
+**Pipeline Step AI Routing:**
+
+| Step | AI Used | Why |
+|------|---------|-----|
+| TopicSelector | Smart | Creative topic generation |
+| TopicResearcher | Smart | Web search synthesis |
+| ScriptPlannerV2 | Smart | Creative script with hooks |
+| CaptionGenerator | Smart | Engaging captions |
+| VideoSearcher (keywords) | Fast | High-volume, simple task |
+| VideoSearcher (selection) | Fast | Batched video selection |
+| ImageOverlayPlanner | Smart | Creative image planning |
+
+**CLI Output Shows AI Configuration:**
+```
+AI PROVIDERS
+  Smart:      zai / glm-4.7 (topic, script, caption)
+  Fast:       lmstudio (video search, keywords)
+  Vision:     lmstudio (video analysis)
+```
+
+**Token Usage Display:**
+```
+>>> AI CALLS
+  [AI] lmstudio/local-model (script_planning)... [OK] 2.3s | in:1250 out:890
+  [AI] zai/glm-4.7 (caption)... [OK] 1.5s | in:450 out:120
+
+>>> AI SUMMARY
+  Providers: lmstudio, zai
+  Calls: 4
+  Total AI time: 12.5s
+  Tokens: in:5.2K out:2.1K (7.3K total)
+  Est. cost: $0.0012
+```
+
+**Smart Video Selection:** Analyzes Pexels video frames with vision AI to select the best match for your topic. Uses a global cache at `data/pexels/cache/` shared across profiles.
+
+All other options from `generate-reel` are supported (--text-ai, --length, --upload, --loop-each, etc.)
+
+```bash
+# Examples - Basic
+python -m socials_automator.cli generate-reel-v2 ai.for.mortals --hooks 8
+python -m socials_automator.cli generate-reel-v2 ai.for.mortals -g --upload --loop-each 30m
+
+# Role-based AI - Use expensive model for creative, cheap for volume
+python -m socials_automator.cli generate-reel-v2 ai.for.mortals \
+  --smart-ai zai --smart-model glm-4.7 \
+  --fast-ai lmstudio
+
+# All local (100% FREE)
+python -m socials_automator.cli generate-reel-v2 ai.for.mortals \
+  --smart-ai lmstudio --fast-ai lmstudio -g
+
+# With smart video selection (vision AI picks best Pexels videos)
+python -m socials_automator.cli generate-reel-v2 ai.for.mortals --smart-video -g --upload
+
+# Production setup: Z.AI for creative, local for volume
+python -m socials_automator.cli generate-reel-v2 ai.for.mortals \
+  --text-ai zai --model glm-4.7 \
+  --fast-ai lmstudio \
+  --smart-video --smart-video-provider lmstudio \
+  -g --upload -n 10 --loop-each 5m
+```
+
+**Note:** V2 is designed for educational/tips content (ai.for.mortals style). For news profiles, use `generate-reel` which has the NewsOrchestrator pipeline.
 
 ---
 
@@ -424,6 +535,47 @@ CLOUDINARY_API_SECRET=your_secret
 2. Download SDXL checkpoint
 3. Start server (default: http://localhost:8188)
 4. Use: `--image-ai comfyui`
+
+---
+
+## Model Selection
+
+Use `--model` / `-m` to select a specific model within a provider. Models are configured in `config/providers.yaml`.
+
+```bash
+# Use Z.AI with GLM-4.7 (flagship model)
+python -m socials_automator.cli generate-reel ai.for.mortals --text-ai zai --model glm-4.7
+
+# Use Groq with faster Llama 3.1 8B
+python -m socials_automator.cli generate-reel ai.for.mortals --text-ai groq --model llama-3.1-8b
+
+# Use Gemini with Pro model
+python -m socials_automator.cli generate-reel ai.for.mortals --text-ai gemini --model gemini-1.5-pro
+```
+
+### Available Models
+
+**Z.AI** (`--text-ai zai`):
+| Model | Flag | Price | Notes |
+|-------|------|-------|-------|
+| GLM-4.5-Air | `--model glm-4.5-air` | $0.20/$1.10 | Default, cheap |
+| GLM-4.7 | `--model glm-4.7` | $0.60/$2.20 | Latest flagship |
+| GLM-4.5-Flash | `--model glm-4.5-flash` | FREE | Free tier |
+| GLM-4.6V-Flash | `--model glm-4.6v-flash` | FREE | Vision, free |
+
+**Groq** (`--text-ai groq`):
+| Model | Flag | Notes |
+|-------|------|-------|
+| Llama 3.3 70B | `--model llama-3.3-70b` | Default |
+| Llama 3.1 8B | `--model llama-3.1-8b` | Faster |
+| Mixtral 8x7B | `--model mixtral-8x7b` | - |
+
+**Gemini** (`--text-ai gemini`):
+| Model | Flag | Notes |
+|-------|------|-------|
+| Gemini 2.0 Flash | `--model gemini-2.0-flash` | Default |
+| Gemini 1.5 Pro | `--model gemini-1.5-pro` | More capable |
+| Gemini 1.5 Flash | `--model gemini-1.5-flash` | Faster |
 
 ---
 
