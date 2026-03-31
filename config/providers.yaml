@@ -46,51 +46,84 @@ llm_fallback:
 # - openai/local (for LM Studio with custom base_url)
 
 text_providers:
-  # Priority 1: Z.AI GLM-4.5-Air (Cheap & Fast)
-  # Model: GLM-4.5-Air - 106B total params, 12B active (MoE)
-  # Docs: https://docs.z.ai/
+  # Priority 1: Z.AI (Cheap & Fast)
+  # Docs: https://docs.z.ai/guides/overview/pricing
   zai:
     priority: 1
     enabled: true
-    litellm_model: "openai/GLM-4.5-Air"
+    litellm_model: "openai/GLM-4.5-Air"  # Default model
     base_url_env: "ZAI_API_URL"
     api_key_env: "ZAI_API_KEY"
     timeout: 60
+    models:
+      # Flagship models
+      glm-4.7: "openai/GLM-4.7"                 # $0.60/$2.20 - Latest flagship
+      glm-4.6: "openai/GLM-4.6"                 # $0.60/$2.20
+      glm-4.5: "openai/GLM-4.5"                 # $0.60/$2.20
+      glm-4.5-x: "openai/GLM-4.5-X"             # $2.20/$8.90 - Extended context
+      # Fast/cheap models
+      glm-4.5-air: "openai/GLM-4.5-Air"         # $0.20/$1.10 - Default (cheap)
+      glm-4.5-airx: "openai/GLM-4.5-AirX"       # $1.10/$4.50
+      # Free models
+      glm-4.5-flash: "openai/GLM-4.5-Flash"     # FREE
+      glm-4.6v-flash: "openai/GLM-4.6V-Flash"   # FREE, vision
+      # Vision models
+      glm-4.6v: "openai/GLM-4.6V"               # $0.30/$0.90
+      glm-4.5v: "openai/GLM-4.5V"               # $0.60/$1.80
+      glm-4.6v-flashx: "openai/GLM-4.6V-FlashX" # $0.04/$0.40
 
   # Priority 2: Groq (Fast inference)
   groq:
     priority: 2
     enabled: true
-    litellm_model: "groq/llama-3.3-70b-versatile"
+    litellm_model: "groq/llama-3.3-70b-versatile"  # Default
     api_key_env: "GROQ_API_KEY"
     timeout: 30
+    models:
+      llama-3.3-70b: "groq/llama-3.3-70b-versatile"
+      llama-3.1-8b: "groq/llama-3.1-8b-instant"
+      mixtral-8x7b: "groq/mixtral-8x7b-32768"
+      gemma2-9b: "groq/gemma2-9b-it"
 
   # Priority 3: Google Gemini
   gemini:
     priority: 3
     enabled: true
-    litellm_model: "gemini/gemini-2.0-flash"
+    litellm_model: "gemini/gemini-2.0-flash"  # Default
     api_key_env: "GOOGLE_API_KEY"
     timeout: 30
+    models:
+      gemini-2.0-flash: "gemini/gemini-2.0-flash"
+      gemini-2.0-flash-lite: "gemini/gemini-2.0-flash-lite"
+      gemini-1.5-pro: "gemini/gemini-1.5-pro"
+      gemini-1.5-flash: "gemini/gemini-1.5-flash"
 
   # Priority 4: OpenAI (Premium)
   openai:
     priority: 4
     enabled: true
-    litellm_model: "openai/gpt-4o"
+    litellm_model: "openai/gpt-4o"  # Default
     api_key_env: "OPENAI_API_KEY"
     timeout: 60
     models:
-      fast: "openai/gpt-4o-mini"
-      quality: "openai/gpt-4o"
+      gpt-4o: "openai/gpt-4o"
+      gpt-4o-mini: "openai/gpt-4o-mini"
+      gpt-4-turbo: "openai/gpt-4-turbo"
+      gpt-3.5-turbo: "openai/gpt-3.5-turbo"
+      o1: "openai/o1"
+      o1-mini: "openai/o1-mini"
 
-  # Priority 5: Anthropic (NOT OpenAI compatible - disabled)
+  # Priority 5: Anthropic
   anthropic:
     priority: 5
-    enabled: false  # Needs Anthropic SDK, not OpenAI compatible
+    enabled: false  # Needs Anthropic SDK
     litellm_model: "anthropic/claude-sonnet-4-20250514"
     api_key_env: "ANTHROPIC_API_KEY"
     timeout: 60
+    models:
+      claude-sonnet-4: "anthropic/claude-sonnet-4-20250514"
+      claude-opus-4: "anthropic/claude-opus-4-20250514"
+      claude-3.5-sonnet: "anthropic/claude-3-5-sonnet-20241022"
 
   # Local providers
   # NOTE: GLM-4.6v-flash has built-in reasoning (~60-120s thinking time)
@@ -103,6 +136,7 @@ text_providers:
     base_url: "http://localhost:1234/v1"
     api_key: "lm-studio"
     timeout: 180  # 3 min for reasoning models
+    # Models are auto-detected from LMStudio
 
   ollama:
     priority: 11
@@ -110,6 +144,11 @@ text_providers:
     litellm_model: "ollama/llama3.2"
     base_url: "http://localhost:11434"
     timeout: 120
+    models:
+      llama3.2: "ollama/llama3.2"
+      llama3.1: "ollama/llama3.1"
+      mistral: "ollama/mistral"
+      codellama: "ollama/codellama"
 
 # Default text provider chain (fallback order)
 text_priority_chain:
