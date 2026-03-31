@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_015",
+  "type": "script_generation",
+  "created_at": "2025-12-23T08:18:21.226364",
+  "updated_at": "2025-12-23T08:18:21.248681",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Unlock Hidden Revenue Streams Using AI-Powered Chatbots: A Step-by-Step Guide for Small Business Owners",
+    "hook_text": "Unlock hidden revenue streams using AI chatbots!",
+    "hook_type": "statement",
+    "segment_count": 7,
+    "word_count": 139,
+    "estimated_duration": 55.6,
+    "target_duration": 60.0
+  }
+}

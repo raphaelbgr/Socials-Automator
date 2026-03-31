@@ -1,0 +1,19 @@
+{
+  "id": "session_20251224_002",
+  "type": "script_generation",
+  "created_at": "2025-12-24T00:26:41.780067",
+  "updated_at": "2025-12-24T00:26:41.795974",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Mastering DALL-E 2 for Creative Content Creation in Just 10 Minutes!",
+    "hook_text": "Master DALL-E 2 in just 10 minutes!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 160,
+    "estimated_duration": 64.0,
+    "target_duration": 60.0
+  }
+}

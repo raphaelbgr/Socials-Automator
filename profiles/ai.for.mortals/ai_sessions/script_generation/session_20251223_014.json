@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_014",
+  "type": "script_generation",
+  "created_at": "2025-12-23T08:09:49.918330",
+  "updated_at": "2025-12-23T08:09:49.935602",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Master Free AI Voice Commands with ElevenLabs v3: Boost Your Productivity in Seconds!",
+    "hook_text": "Unlock free AI voice commands in seconds!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 150,
+    "estimated_duration": 60.0,
+    "target_duration": 60.0
+  }
+}

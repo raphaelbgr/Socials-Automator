@@ -1,0 +1,19 @@
+{
+  "id": "session_20251226_015",
+  "type": "script_generation",
+  "created_at": "2025-12-26T14:55:01.742954",
+  "updated_at": "2025-12-26T14:55:01.763285",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "How to use AssemblyAI’s free tier to transcribe your calls in real-time—no software needed",
+    "hook_text": "Real-time call transcription without installing anything!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 161,
+    "estimated_duration": 64.39999999999999,
+    "target_duration": 60.0
+  }
+}

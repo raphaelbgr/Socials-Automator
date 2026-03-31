@@ -1,0 +1,19 @@
+{
+  "id": "session_20251225_006",
+  "type": "script_generation",
+  "created_at": "2025-12-25T14:42:30.026757",
+  "updated_at": "2025-12-25T14:42:30.053158",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Stable Diffusion V7: Create original design assets without copyright concerns",
+    "hook_text": "Say goodbye to copyright worries! Here's how Stable Diffusion V7 works.",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 153,
+    "estimated_duration": 61.2,
+    "target_duration": 60.0
+  }
+}

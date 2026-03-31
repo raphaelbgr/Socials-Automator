@@ -1,0 +1,19 @@
+{
+  "id": "session_20251226_002",
+  "type": "script_generation",
+  "created_at": "2025-12-26T02:43:49.570344",
+  "updated_at": "2025-12-26T02:43:49.597115",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "5 ChatGPT update tips for productivity",
+    "hook_text": "Unlock 5 ChatGPT productivity hacks now!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 145,
+    "estimated_duration": 58.0,
+    "target_duration": 60.0
+  }
+}

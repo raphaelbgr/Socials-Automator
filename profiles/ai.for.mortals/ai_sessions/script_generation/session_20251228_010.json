@@ -1,0 +1,19 @@
+{
+  "id": "session_20251228_010",
+  "type": "script_generation",
+  "created_at": "2025-12-28T10:14:36.211896",
+  "updated_at": "2025-12-28T10:18:27.111110",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "What GPT-5 means for you",
+    "hook_text": "GPT-5 is here! What does it REALLY mean for you?",
+    "hook_type": "question",
+    "segment_count": 8,
+    "word_count": 172,
+    "estimated_duration": 68.8,
+    "target_duration": 60.0
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "session_20251226_001",
+  "type": "script_generation",
+  "created_at": "2025-12-26T00:39:12.830463",
+  "updated_at": "2025-12-26T00:39:12.853863",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Create AI-powered sustainability reports for businesses with GPT-5.2 and Hugging Face models",
+    "hook_text": "Tired of sustainability reports taking weeks?",
+    "hook_type": "question",
+    "segment_count": 8,
+    "word_count": 143,
+    "estimated_duration": 57.2,
+    "target_duration": 60.0
+  }
+}

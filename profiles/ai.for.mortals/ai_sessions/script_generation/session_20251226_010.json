@@ -1,0 +1,19 @@
+{
+  "id": "session_20251226_010",
+  "type": "script_generation",
+  "created_at": "2025-12-26T11:48:02.455103",
+  "updated_at": "2025-12-26T11:48:02.475712",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Research prompts",
+    "hook_text": "Unlock research superpowers with GPT-5 prompts",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 174,
+    "estimated_duration": 69.6,
+    "target_duration": 60.0
+  }
+}

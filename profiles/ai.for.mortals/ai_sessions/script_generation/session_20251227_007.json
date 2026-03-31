@@ -1,0 +1,19 @@
+{
+  "id": "session_20251227_007",
+  "type": "script_generation",
+  "created_at": "2025-12-27T08:01:57.134007",
+  "updated_at": "2025-12-27T08:01:57.156634",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "10 prompts for marketers",
+    "hook_text": "Marketing magic in just 10 prompts!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 168,
+    "estimated_duration": 67.2,
+    "target_duration": 60.0
+  }
+}

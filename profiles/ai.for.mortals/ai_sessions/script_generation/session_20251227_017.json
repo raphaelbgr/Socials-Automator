@@ -1,0 +1,19 @@
+{
+  "id": "session_20251227_017",
+  "type": "script_generation",
+  "created_at": "2025-12-27T18:14:51.331032",
+  "updated_at": "2025-12-27T18:16:56.606930",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "How to use Whisper to transcribe patient notes and save 4+ hours weekly—free for healthcare workers",
+    "hook_text": "Whisper saved me 4+ hours weekly on patient notes.",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 140,
+    "estimated_duration": 56.0,
+    "target_duration": 60.0
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_028",
+  "type": "script_generation",
+  "created_at": "2025-12-23T12:32:16.278156",
+  "updated_at": "2025-12-23T12:32:16.295683",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Optimize Your Workflow with AI for Document Summarization: A 30-Minute Guide Using Quillbot",
+    "hook_text": "Boost your document workflow in just 30 minutes!",
+    "hook_type": "statement",
+    "segment_count": 7,
+    "word_count": 156,
+    "estimated_duration": 62.400000000000006,
+    "target_duration": 60.0
+  }
+}

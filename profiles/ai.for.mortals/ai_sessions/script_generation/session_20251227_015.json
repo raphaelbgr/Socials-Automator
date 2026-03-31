@@ -1,0 +1,19 @@
+{
+  "id": "session_20251227_015",
+  "type": "script_generation",
+  "created_at": "2025-12-27T15:44:04.636052",
+  "updated_at": "2025-12-27T15:44:04.658712",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "monetize AI skills prompt templates",
+    "hook_text": "My AI side hustle made $3k last month",
+    "hook_type": "story",
+    "segment_count": 8,
+    "word_count": 163,
+    "estimated_duration": 65.2,
+    "target_duration": 60.0
+  }
+}

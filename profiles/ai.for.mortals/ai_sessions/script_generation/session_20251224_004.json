@@ -1,0 +1,19 @@
+{
+  "id": "session_20251224_004",
+  "type": "script_generation",
+  "created_at": "2025-12-24T01:05:46.156427",
+  "updated_at": "2025-12-24T01:05:46.171368",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "How to Use Midjourney V7 for Creating Stunning Visuals in 60 Seconds!",
+    "hook_text": "Unlock Midjourney V7 in just 60 seconds!",
+    "hook_type": "statement",
+    "segment_count": 7,
+    "word_count": 173,
+    "estimated_duration": 69.2,
+    "target_duration": 60.0
+  }
+}

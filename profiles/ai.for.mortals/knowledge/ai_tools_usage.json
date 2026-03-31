@@ -874,5 +874,563 @@
     "post_id": "20251223-022110",
     "date_used": "2025-12-23",
     "context": "video_reel"
+  },
+  {
+    "tool_id": "elevenlabs",
+    "post_id": "20251223-074557",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "elevenlabs",
+    "post_id": "20251223-080808",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "perplexity",
+    "post_id": "20251223-083308",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "sora",
+    "post_id": "20251223-085212",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "elevenlabs",
+    "post_id": "20251223-085212",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251223-092934",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "elevenlabs",
+    "post_id": "20251223-092934",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "sora",
+    "post_id": "20251223-095133",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251223-104951",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "midjourney",
+    "post_id": "20251223-104951",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "sora",
+    "post_id": "20251223-110901",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "runway",
+    "post_id": "20251223-110901",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "udio",
+    "post_id": "20251223-112856",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251223-114700",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "notebooklm",
+    "post_id": "20251223-114700",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251223-120816",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "notebooklm",
+    "post_id": "20251223-120816",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251223-124918",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "notebooklm",
+    "post_id": "20251223-124918",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "elevenlabs",
+    "post_id": "20251223-130808",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "sora",
+    "post_id": "20251223-134440",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251223-140846",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "notebooklm",
+    "post_id": "20251223-140846",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251223-183418",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251223-195632",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "notebooklm",
+    "post_id": "20251223-195632",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251223-204743",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "make",
+    "post_id": "20251223-204743",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "midjourney",
+    "post_id": "20251223-220122",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "midjourney",
+    "post_id": "20251223-232636",
+    "date_used": "2025-12-23",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "midjourney",
+    "post_id": "20251224-000610",
+    "date_used": "2025-12-24",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "midjourney",
+    "post_id": "20251224-010455",
+    "date_used": "2025-12-24",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "perplexity",
+    "post_id": "20251224-181740",
+    "date_used": "2025-12-24",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "claude",
+    "post_id": "20251224-211159",
+    "date_used": "2025-12-25",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "tome",
+    "post_id": "20251224-211159",
+    "date_used": "2025-12-25",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "suno",
+    "post_id": "20251225-015028",
+    "date_used": "2025-12-25",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251225-071606",
+    "date_used": "2025-12-25",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "jasper",
+    "post_id": "20251225-084648",
+    "date_used": "2025-12-25",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "stable-diffusion",
+    "post_id": "20251225-123720",
+    "date_used": "2025-12-25",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251226-013824",
+    "date_used": "2025-12-26",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251226-033952",
+    "date_used": "2025-12-26",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "make",
+    "post_id": "20251226-092033",
+    "date_used": "2025-12-26",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251226-140354",
+    "date_used": "2025-12-26",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "claude",
+    "post_id": "20251226-140354",
+    "date_used": "2025-12-26",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "fireflies",
+    "post_id": "20251226-151247",
+    "date_used": "2025-12-26",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "perplexity",
+    "post_id": "20251226-205558",
+    "date_used": "2025-12-26",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "stable-diffusion",
+    "post_id": "20251226-205558",
+    "date_used": "2025-12-26",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "jasper",
+    "post_id": "20251226-213932",
+    "date_used": "2025-12-26",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "dall-e",
+    "post_id": "20251226-213932",
+    "date_used": "2025-12-26",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "gamma",
+    "post_id": "20251227-041231",
+    "date_used": "2025-12-27",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "suno",
+    "post_id": "20251227-081739",
+    "date_used": "2025-12-27",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251227-164318",
+    "date_used": "2025-12-27",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "jasper",
+    "post_id": "20251227-183413",
+    "date_used": "2025-12-27",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251227-192829",
+    "date_used": "2025-12-27",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "claude",
+    "post_id": "20251227-192829",
+    "date_used": "2025-12-27",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251227-192829",
+    "date_used": "2025-12-27",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "perplexity",
+    "post_id": "20251227-203117",
+    "date_used": "2025-12-27",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251227-212247",
+    "date_used": "2025-12-27",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "claude",
+    "post_id": "20251227-212247",
+    "date_used": "2025-12-27",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251227-221122",
+    "date_used": "2025-12-27",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "dall-e",
+    "post_id": "20251228-030619",
+    "date_used": "2025-12-28",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "fireflies",
+    "post_id": "20251228-035523",
+    "date_used": "2025-12-28",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "otter",
+    "post_id": "20251228-062432",
+    "date_used": "2025-12-28",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "synthesia",
+    "post_id": "20251228-073757",
+    "date_used": "2025-12-28",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251228-084512",
+    "date_used": "2025-12-28",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "midjourney",
+    "post_id": "20251228-105823",
+    "date_used": "2025-12-28",
+    "context": "video_reel"
+  },
+  {
+    "tool_id": "pi",
+    "post_id": "20251228-173325",
+    "date_used": "2025-12-28",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "perplexity",
+    "post_id": "20251228-181504",
+    "date_used": "2025-12-28",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251228-193437",
+    "date_used": "2025-12-28",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "make",
+    "post_id": "20251228-193437",
+    "date_used": "2025-12-28",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "claude",
+    "post_id": "20251228-203216",
+    "date_used": "2025-12-28",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "tome",
+    "post_id": "20251229-003641",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251229-083655",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251229-091625",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "pi",
+    "post_id": "20251229-091625",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "make",
+    "post_id": "20251229-091625",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251229-103534",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "claude",
+    "post_id": "20251229-111533",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251229-135611",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "perplexity",
+    "post_id": "20251229-143547",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "midjourney",
+    "post_id": "20251229-151546",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251229-155617",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251229-163629",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "notebooklm",
+    "post_id": "20251229-163629",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "perplexity",
+    "post_id": "20251229-171624",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251229-175628",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "gemini",
+    "post_id": "20251229-183604",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "midjourney",
+    "post_id": "20251229-195553",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "chatgpt",
+    "post_id": "20251229-203710",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "perplexity",
+    "post_id": "20251229-211811",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "udio",
+    "post_id": "20251229-211811",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "descript",
+    "post_id": "20251229-215837",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
+  },
+  {
+    "tool_id": "udio",
+    "post_id": "20251229-215837",
+    "date_used": "2025-12-29",
+    "context": "video_reel_v2"
   }
 ]

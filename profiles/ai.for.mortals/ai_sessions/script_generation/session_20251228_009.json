@@ -1,0 +1,19 @@
+{
+  "id": "session_20251228_009",
+  "type": "script_generation",
+  "created_at": "2025-12-28T09:12:03.636051",
+  "updated_at": "2025-12-28T09:12:03.658159",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "How to use ChatGPT for X",
+    "hook_text": "Unlock instant earnings: GPT-5.2 is your new ATM!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 184,
+    "estimated_duration": 73.6,
+    "target_duration": 60.0
+  }
+}

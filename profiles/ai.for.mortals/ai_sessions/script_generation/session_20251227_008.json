@@ -1,0 +1,19 @@
+{
+  "id": "session_20251227_008",
+  "type": "script_generation",
+  "created_at": "2025-12-27T08:50:25.558283",
+  "updated_at": "2025-12-27T08:50:25.580328",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "How to create royalty-free background music in 2 clicks using Suno AI for your videos",
+    "hook_text": "Stop using boring stock music!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 232,
+    "estimated_duration": 92.8,
+    "target_duration": 60.0
+  }
+}

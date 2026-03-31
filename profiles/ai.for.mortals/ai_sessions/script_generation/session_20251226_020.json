@@ -1,0 +1,19 @@
+{
+  "id": "session_20251226_020",
+  "type": "script_generation",
+  "created_at": "2025-12-26T18:31:45.067407",
+  "updated_at": "2025-12-26T18:31:45.087748",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Automate your email responses",
+    "hook_text": "Email overload? AI's got your back!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 144,
+    "estimated_duration": 57.599999999999994,
+    "target_duration": 60.0
+  }
+}

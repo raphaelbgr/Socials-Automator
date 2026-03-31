@@ -1,0 +1,19 @@
+{
+  "id": "session_20251227_018",
+  "type": "script_generation",
+  "created_at": "2025-12-27T19:03:18.269727",
+  "updated_at": "2025-12-27T19:03:18.285796",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Using Jasper AI to create high-converting sales copy for your online courses in under 5 minutes—no writing experience required",
+    "hook_text": "Your course sales copy in 5 minutes flat!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 142,
+    "estimated_duration": 56.8,
+    "target_duration": 60.0
+  }
+}

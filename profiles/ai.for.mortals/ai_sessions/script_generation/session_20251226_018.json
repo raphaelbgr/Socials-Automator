@@ -1,0 +1,19 @@
+{
+  "id": "session_20251226_018",
+  "type": "script_generation",
+  "created_at": "2025-12-26T17:01:26.481273",
+  "updated_at": "2025-12-26T17:01:26.502833",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Boost productivity with AI business ideas",
+    "hook_text": "AI productivity secrets that actually work in 2025",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 142,
+    "estimated_duration": 56.8,
+    "target_duration": 60.0
+  }
+}

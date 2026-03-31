@@ -1,0 +1,19 @@
+{
+  "id": "session_20251226_009",
+  "type": "script_generation",
+  "created_at": "2025-12-26T10:53:15.248939",
+  "updated_at": "2025-12-26T11:12:38.542598",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Automate your email responses",
+    "hook_text": "Save hours each week by automating emails!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 139,
+    "estimated_duration": 55.6,
+    "target_duration": 60.0
+  }
+}

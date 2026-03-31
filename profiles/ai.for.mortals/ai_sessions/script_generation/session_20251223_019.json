@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_019",
+  "type": "script_generation",
+  "created_at": "2025-12-23T09:33:13.662479",
+  "updated_at": "2025-12-23T09:33:13.683899",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Master Free Text-to-Speech with ElevenLabs v3 & ChatGPT-5.2: A 60-Second Workflow",
+    "hook_text": "Master free text-to-speech in just 60 seconds!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 191,
+    "estimated_duration": 76.4,
+    "target_duration": 60.0
+  }
+}

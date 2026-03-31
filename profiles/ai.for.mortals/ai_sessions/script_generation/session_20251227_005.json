@@ -1,0 +1,19 @@
+{
+  "id": "session_20251227_005",
+  "type": "script_generation",
+  "created_at": "2025-12-27T05:42:41.344253",
+  "updated_at": "2025-12-27T05:42:41.368063",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Automate your email responses",
+    "hook_text": "3 Ways Email Automation Saves You 5 Hours Weekly",
+    "hook_type": "number",
+    "segment_count": 8,
+    "word_count": 146,
+    "estimated_duration": 58.400000000000006,
+    "target_duration": 60.0
+  }
+}

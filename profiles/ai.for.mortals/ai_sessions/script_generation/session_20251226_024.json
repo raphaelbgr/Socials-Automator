@@ -1,0 +1,19 @@
+{
+  "id": "session_20251226_024",
+  "type": "script_generation",
+  "created_at": "2025-12-26T23:31:04.470485",
+  "updated_at": "2025-12-26T23:31:04.490595",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Research prompts",
+    "hook_text": "Unlock research superpowers with these prompt secrets now!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 153,
+    "estimated_duration": 61.2,
+    "target_duration": 60.0
+  }
+}

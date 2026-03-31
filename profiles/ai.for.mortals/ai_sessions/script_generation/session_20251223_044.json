@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_044",
+  "type": "script_generation",
+  "created_at": "2025-12-23T20:30:31.787669",
+  "updated_at": "2025-12-23T20:30:31.805816",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Mastering Voice Over Creation: A Comprehensive Guide to Using AI for Professional-Quality Narration",
+    "hook_text": "Master professional narration in minutes using AI!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 156,
+    "estimated_duration": 62.400000000000006,
+    "target_duration": 60.0
+  }
+}

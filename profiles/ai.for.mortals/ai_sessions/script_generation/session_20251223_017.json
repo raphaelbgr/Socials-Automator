@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_017",
+  "type": "script_generation",
+  "created_at": "2025-12-23T08:53:57.454381",
+  "updated_at": "2025-12-23T08:53:57.474910",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Unlock Free, Advanced Text-to-Speech with ElevenLabs v3 & Sora 2: A 60-Second Workflow Hack",
+    "hook_text": "Unlock Free Sora 2 Text-to-Speech in 60 seconds!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 143,
+    "estimated_duration": 57.2,
+    "target_duration": 60.0
+  }
+}

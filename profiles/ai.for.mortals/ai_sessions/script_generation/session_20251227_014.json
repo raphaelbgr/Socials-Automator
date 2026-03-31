@@ -1,0 +1,19 @@
+{
+  "id": "session_20251227_014",
+  "type": "script_generation",
+  "created_at": "2025-12-27T14:43:30.660261",
+  "updated_at": "2025-12-27T14:43:30.681769",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "5 prompts that save me 2 hours/day",
+    "hook_text": "Reclaim 2 hours daily with these 5 AI prompts!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 289,
+    "estimated_duration": 115.60000000000001,
+    "target_duration": 60.0
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_051",
+  "type": "script_generation",
+  "created_at": "2025-12-23T23:27:37.265755",
+  "updated_at": "2025-12-23T23:29:14.864996",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Unlock Midjourney V7's Magic: Create Stunning Art in Minutes!",
+    "hook_text": "Unlock Midjourney V7's Magic: Create Art in Minutes!",
+    "hook_type": "statement",
+    "segment_count": 6,
+    "word_count": 161,
+    "estimated_duration": 64.39999999999999,
+    "target_duration": 60.0
+  }
+}

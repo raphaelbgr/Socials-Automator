@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_049",
+  "type": "script_generation",
+  "created_at": "2025-12-23T22:03:11.559425",
+  "updated_at": "2025-12-23T22:03:11.577437",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Unlock AI's Power in Content Creation: Dive into Midjourney V7's Creative Possibilities!",
+    "hook_text": "Unlock Midjourney V7's Creative Power!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 158,
+    "estimated_duration": 63.199999999999996,
+    "target_duration": 60.0
+  }
+}

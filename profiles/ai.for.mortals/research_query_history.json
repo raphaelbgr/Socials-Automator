@@ -1,0 +1,984 @@
+[
+  {
+    "timestamp": "2025-12-28T05:17:38.765926",
+    "queries": [
+      "step-by-step tutorial: setting up daily task automation with Claude Opus 4.5 and Zapier for December 2025 productivity",
+      "review of Gemini 3 Flash's new prompt optimization features for B2B productivity in december 2025",
+      "comparison of ChatGPT-5.2 vs Claude Opus 4.5 for generating daily task prompts focusing on speed and accuracy",
+      "latest news: openai's new prompt library updates affecting productivity tools in december 2025",
+      "howto: implementing top 5 ai prompts for budget tracking using perplexity sonar in under a minute",
+      "tutorial: creating reusable prompt templates in chatgpt-5.2 to automate email responses saving time",
+      "product review: cursor 2025's performance with custom prompts for efficient marketing copy writing",
+      "how midjourney v7 and runway gen-4 compare when using prompt-based visual content creation for e-commerce in december 2025",
+      "announcements from perplexity about sonar's integration with productivity apps enhancing daily workflow efficiency",
+      "practical tips: using sora 2 to create quick video snippets from text prompts saving content production time",
+      "an\u00e1lisis de herramientas ia para productividad en reuniones 2025",
+      "comparaci\u00f3n de la efectividad de los prompts entre chatgpt-5.2 y claude opus 4.5 en espa\u00f1ol",
+      "como crear contenido para instagram con midjourney v7 usando prompts eficientes"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T06:35:17.734119",
+    "queries": [
+      "Otter.ai tutorial: Setting up automated meeting transcriptions in December 2025",
+      "Otter.ai review: Accuracy and speed of transcriptions in noisy environments December 2025",
+      "How to integrate Otter.ai with Zoom for seamless meeting transcripts in December 2025",
+      "Otter.ai vs Fireflies.ai: Which meeting transcription tool is better for solopreneurs in December 2025?",
+      "Otter.ai news: Latest updates and feature enhancements in December 2025",
+      "Otter.ai tutorial: Using custom vocabulary for accurate transcriptions of industry-specific jargon December 2025",
+      "Otter.ai: Tips for sharing and collaborating on meeting transcripts with your team in December 2025",
+      "Como usar Otter.ai para transcrever entrevistas em tempo real (dezembro 2025)",
+      "Otter.ai pricing review: Is it worth the cost for small businesses in December 2025?",
+      "Noticias de Otter.ai: Integraciones con nuevas plataformas de videoconferencia en diciembre 2025",
+      "Otter.ai tutorial: Exporting transcripts in different formats (docx, pdf, etc.) in December 2025",
+      "Trucos para optimizar el uso de Otter.ai en reuniones virtuales (diciembre 2025)",
+      "Otter.ai vs Google Meet's built-in transcription: Which is more accurate? (December 2025)",
+      "Rese\u00f1as de usuarios de Otter.ai: \u00bfQu\u00e9 dicen sobre la calidad de la transcripci\u00f3n en espa\u00f1ol? (diciembre 2025)",
+      "Otter.ai tutorial: Using the AI summary feature for quick meeting recaps December 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T07:41:19.422432",
+    "queries": [
+      "Synthesia tutorial: Creating a 60-second explainer video with GPT-5.2 script integration (December 2025)",
+      "Synthesia review 2025: Is it still the best AI video generator for short explainer videos?",
+      "Synthesia alternatives: AI video creation tools compared December 2025",
+      "Latest Synthesia updates: New features and improvements in video creation (December 2025)",
+      "Synthesia how-to: Optimizing voiceover quality for 60-second explainer videos",
+      "Tutorial Synthesia: C\u00f3mo integrar avatares personalizados en videos explicativos cortos (diciembre 2025)",
+      "Synthesia review: User testimonials and experiences creating marketing videos (December 2025)",
+      "Synthesia tutorial: Step-by-step guide to create a 60-second explainer video using pre-made templates (December 2025)",
+      "Synthesia vs. Lumen5: Which AI video generator is best for quick explainer videos? (December 2025)",
+      "Synthesia how-to: Tips for creating engaging visuals within a 60-second time limit",
+      "Synthesia: New features for collaborative video editing announced December 2025",
+      "Synthesia tutorial: Adding animations and special effects to enhance explainer videos (December 2025)",
+      "Gu\u00eda pr\u00e1ctica: C\u00f3mo crear videos explicativos impactantes con Synthesia en menos de 2 minutos (diciembre 2025)",
+      "Review Synthesia: Experiencias de usuarios con la creaci\u00f3n de videos educativos y tutoriales (diciembre 2025)",
+      "Tutorial Synthesia: Como criar v\u00eddeos explicativos de 60 segundos rapidamente (dezembro 2025)"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T08:48:23.255946",
+    "queries": [
+      "How to generate engaging Instagram caption prompts using ChatGPT-5.2 in under a minute",
+      "User experience review of ChatGPT-5.2's new prompt template library for short-form video content creation December 2025",
+      "Comparing GPT-5.2 and Gemini 3 Flash in generating conversational scripts for Instagram Reels",
+      "Latest announcements from OpenAI regarding new features of GPT-5.2 affecting social media content creation December 2025",
+      "Practical tips: Using Perplexity Sonar to find trending topics for ChatGPT-5.2 generated Reels in Brazil 2025",
+      "Step-by-step tutorial: Setting up automated workflows between ChatGPT-5.2 and Runway Gen-4 for Instagram Reel creation December 2025",
+      "Technical review of Eleven v3's voiceover capabilities for enhancing visual content on Instagram Reels",
+      "Midjourney V7 vs Sora 2: Which tool is better for creating dynamic video backgrounds in Instagram Reels December 2025",
+      "Recent pricing changes for small businesses using ChatGPT-5.2 and Claude Opus 4.5 in December 2025",
+      "Optimizing prompt engineering in GPT-5.2 specifically for 60-second Instagram Reel scripts",
+      "Mejores herramientas IA para crear captions de Instagram con GPT-5.2 en Espa\u00f1a 2025",
+      "Comparaci\u00f3n entre ChatGPT-5.2 y Claude Opus 4.5 para generar contenido visual en TikTok",
+      "Como usar o Midjourney V7 com GPT-5.2 para criar imagens personalizadas para Reels de marketing",
+      "An\u00e1lise de usu\u00e1rios: Experi\u00eancias com o Eleven v3 em v\u00eddeos de marketing digital no Brasil 2025",
+      "Practical tips: Using Suno AI to create quick background music for ChatGPT-5.2 generated Reels in under a minute"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T09:54:09.652982",
+    "queries": [
+      "Tutorial: Using GPT-5.2 to personalize customer support responses for increased sales December 2025",
+      "Review: Gemini 3 Flash's performance in creative writing versus GPT-5.2 December 2025",
+      "News: How will GPT-5 impact content moderation policies in social media? December 2025",
+      "How-to: Optimize GPT-5.2 prompt engineering for generating high-converting ad copy December 2025",
+      "Comparativa: Perplexity Sonar vs Gemini 3 Flash para an\u00e1lisis de tendencias de mercado en tiempo real diciembre 2025",
+      "GPT-5: Implications for AI ethics and responsible development in December 2025",
+      "Tutorial: Creating a fully automated marketing campaign using GPT-5.2 and Zapier December 2025",
+      "How-to: Use Midjourney V7 and GPT-5.2 for creating unique NFT art collections December 2025",
+      "GPT-5.2 para principiantes: Gu\u00eda paso a paso para generar contenido automatizado diciembre 2025",
+      "GPT-5 e os impactos na \u00e1rea da educa\u00e7\u00e3o: Ferramentas e oportunidades (dezembro 2025)",
+      "Review of GPT-5.2's API for building custom AI assistants December 2025",
+      "GPT-5.2: How to use its new summarization feature to increase productivity December 2025",
+      "GPT-5.2 vs Claude Opus 4.5: Which is better for generating creative fiction December 2025",
+      "Tutorial passo a passo: Integrando Sora 2 e GPT-5.2 para criar v\u00eddeos automatizados (dezembro 2025)",
+      "Review: Is GPT-5.2's new coding assistant worth the upgrade? December 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T11:06:25.921236",
+    "queries": [
+      "Midjourney V7 tutorial: mastering image prompting for beginners December 2025",
+      "Midjourney V7: user reviews and art community feedback December 2025",
+      "Midjourney V7 vs DALL-E 3: which AI image generator is better for hyperrealistic art?",
+      "Midjourney V7 news: latest style updates and feature enhancements December 2025",
+      "How to use Midjourney V7 for creating consistent character designs December 2025",
+      "Tutorial Midjourney V7: Step-by-step guide to generating photorealistic portraits December 2025",
+      "Midjourney V7: Review from digital artist perspective",
+      "Midjourney V7 vs Stable Diffusion XL: which AI is best for generating illustrations?",
+      "Midjourney V7 tips and tricks: enhancing image quality for commercial use December 2025",
+      "Midjourney V7 tutorial: create stunning book covers in under 10 minutes December 2025",
+      "Noticias sobre Midjourney V7: integraci\u00f3n con Adobe Creative Cloud en diciembre 2025",
+      "C\u00f3mo usar Midjourney V7 para dise\u00f1o de logotipos: tutorial paso a paso diciembre 2025",
+      "An\u00e1lisis de Midjourney V7: ventajas y desventajas para principiantes en diciembre 2025",
+      "Midjourney V7 tutorial: como usar par\u00e2metros avan\u00e7ados para controle criativo dezembro 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T13:02:33.795340",
+    "queries": [
+      "Tutorial: Generating Instagram Reel scripts with ChatGPT-5.2 and Sora 2 in December 2025",
+      "Review: Is Gemini 3 Flash a viable free alternative to ChatGPT-5.2 for brainstorming?",
+      "How-to: Use free Perplexity Sonar AI to summarize research papers faster than ChatGPT-5.2",
+      "ChatGPT-5.2 vs Gemini 3 Flash: Which free AI is better for beginners in December 2025?",
+      "News: Google Gemini 3 Flash offers free API access to developers in December 2025",
+      "Review: User feedback on Claude Opus 4.5\u2019s free tier limitations for content creators",
+      "How to use free AI tools like ElevenLabs v3 to create engaging voiceovers for YouTube Shorts",
+      "Sora 2 vs Runway Gen-4: comparison of free features for AI video creation in December 2025",
+      "Tutorial: Creating free personalized workout plans using Gemini 3 Flash and Google Calendar API",
+      "Noticias: Perplexity Sonar anuncia nuevas integraciones gratuitas con herramientas de productividad en diciembre de 2025",
+      "Tutorial: C\u00f3mo usar Midjourney V7 gratis para crear avatares personalizados en diciembre 2025",
+      "Rese\u00f1a de la versi\u00f3n gratuita de Cursor AI en 2025: \u00bfmerece la pena?",
+      "Tutorial: Criando prompts de pesquisa gr\u00e1tis com o Perplexity Sonar para gerar ideias para reels em dezembro 2025",
+      "Howto: Use a free version of ElevenLabs v3 to generate voiceovers for Instagram Reels in December 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T13:58:49.134432",
+    "queries": [
+      "Tutorial: Crafting perfect email prompts with ChatGPT-5.2 for higher open rates (December 2025)",
+      "Howto: Personalizing Gemini 3 Flash's email prompt templates for different audience segments (December 2025)",
+      "Review: Claude Opus 4.5's email prompt generation capabilities compared to GPT-5.2 (December 2025)",
+      "Noticias recientes: Actualizaciones de ElevenLabs v3 para la creaci\u00f3n de prompts de correo electr\u00f3nico personalizados (Diciembre 2025)",
+      "Step-by-step tutorial: Using Runway Gen-4's AI to visualize email campaign performance based on prompt effectiveness",
+      "Gemini 3 Flash vs. ChatGPT-5.2: Which AI tool creates better email prompts for lead nurturing in December 2025?",
+      "Como criar prompts de email matadores com Gemini 3 Flash em portugu\u00eas (Dezembro 2025)",
+      "Tutorial: Using Perplexity Sonar to research and refine email prompts for maximum impact (December 2025)",
+      "Review of the best AI tools for A/B testing email prompt variations in December 2025",
+      "Howto: Leveraging AI to predict email prompt performance before sending (December 2025)",
+      "ChatGPT-5.2 email prompt templates: Are the paid ones really worth it? (December 2025)",
+      "Perplexity Sonar News: Improved email prompt generation with AI-driven insights (December 2025)",
+      "Tutorial: Integrating Cursor with GPT-5.2 to automate email prompt creation and testing (December 2025)",
+      "\u00bfCu\u00e1l herramienta de IA ofrece las mejores plantillas de correo electr\u00f3nico en espa\u00f1ol en diciembre de 2025?",
+      "Dicas pr\u00e1ticas: Otimizando prompts de email com IA para aumentar convers\u00f5es (Dezembro 2025)"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T14:45:06.088182",
+    "queries": [
+      "Tutorial: Building a lead generation system with ChatGPT-5.2 and Zapier December 2025",
+      "How to automate your e-commerce store with Gemini 3 Flash in December 2025",
+      "Review: Is Sora 2 ready for professional video marketing in December 2025?",
+      "Gemini 3 Flash vs ChatGPT-5.2 for automating customer service: A detailed comparison December 2025",
+      "Latest news: ElevenLabs v3 adding real-time voice cloning capabilities December 2025",
+      "Step-by-step guide: Creating and selling AI-generated art with Midjourney V7 December 2025",
+      "Runway Gen-4 review: Earning potential for small business video ads December 2025",
+      "How to build a profitable newsletter using ChatGPT-5.2 and Perplexity Sonar December 2025",
+      "Midjourney V7 vs Stable Diffusion for creating product mockups: which is better? December 2025",
+      "Tutorial: Using Cursor to automate code generation for AI-powered websites in December 2025",
+      "Tutorial on building a social media automation bot with Gemini 3 Flash December 2025",
+      "Noticias recientes sobre las nuevas funciones de monetizaci\u00f3n de Sora 2 en diciembre 2025",
+      "C\u00f3mo construir una tienda online automatizada con IA en 2025",
+      "Rese\u00f1a de Opus 4.5 para la creaci\u00f3n de contenido en espa\u00f1ol diciembre 2025",
+      "Como ganhar dinheiro com prompts da Midjourney V7 em dezembro de 2025: guia passo a passo"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T15:04:20.316815",
+    "queries": [
+      "Step-by-step tutorial: Setting up a payout system for users in Perplexity Sonar December 2025",
+      "User experience review of Gemini 3 Flash's earnings potential compared to Perplexity Sonar December 2025",
+      "Comparison of revenue sharing models between Gemini 3 Flash and Perplexity Sonar for AI search assistants 2026",
+      "Latest news on new payment feature updates in Perplexity Sonar December 2025",
+      "Practical tips: Maximizing earnings from Gemini 3 Flash using its built-in monetization tools",
+      "How to configure direct payments to users in Gemini 3 Flash for AI search assistants December 2025",
+      "Product review of Perplexity Sonar's payout structure and user satisfaction December 2025",
+      "Which AI tool pays more: Gemini 3 Flash vs Perplexity Sonar in 2026? Detailed comparison",
+      "Recent announcements from Google about new payment features for Gemini 3 Flash December 2025",
+      "Tutorial pr\u00e1ctico: Configurando Gemini 3 Flash para recibir pagos de usuarios en 2026",
+      "C\u00f3mo comparar ganancias entre Gemini 3 Flash y Perplexity Sonar en herramientas IA de b\u00fasqueda 2026",
+      "Compara\u00e7\u00e3o entre Gemini 3 Flash e Perplexity Sonar em modelos de pagamento para IA 2026",
+      "Dicas pr\u00e1ticas para monetizar con Perplexity Sonar en diciembre 2025",
+      "Tutorial pr\u00e1ctico: Using prompt templates with both tools to increase payout rates"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T15:31:11.405825",
+    "queries": [
+      "Tutorial: Using Gemini 3 Flash for prioritizing daily tasks in under a minute December 2025",
+      "How-to guide: Automating video creation with Runway Gen-4 for Instagram Reels side hustles December 2025",
+      "Step-by-step tutorial: Creating AI-generated social media graphics with Midjourney V7 in under a minute December 2025",
+      "Tutorial on leveraging Perplexity Sonar's prompt templates for finding profitable content niches December 2025",
+      "Review of Eleven v3's voiceover quality for monetizing Instagram Reels in 2025",
+      "User experience review: Claude Opus 4.5's efficiency for email marketing automation December 2025",
+      "Product review: Cursor 2025's code generation features for AI-powered websites December 2025",
+      "Comparison between ChatGPT-5.2 and Gemini 3 Flash for generating email templates December 2025",
+      "Which is better: Midjourney V7 vs DALL-E 3 for hyperrealistic Instagram assets December 2025",
+      "Latest news on OpenAI's updates to GPT-5.2 affecting productivity tools in December 2025",
+      "Recent announcements about copyright laws impacting AI-generated content sales December 2025",
+      "How-to: Using free versions of ElevenLabs v3 for voiceovers in Instagram Reels December 2025",
+      "Practical tip: Maximizing productivity with Perplexity Sonar's research prompts December 2025",
+      "Mejores gu\u00edas de IA para monetizar contenido en Instagram 2025",
+      "C\u00f3mo usar Cursor 2025 para automatizar respuestas de email con IA December 2025",
+      "Como criar prompts AI gratuitos com Perplexity Sonar para gerenciar or\u00e7amento em 2025",
+      "An\u00e1lise comparativa: Midjourney V7 vs DALL-E 3 para cria\u00e7\u00e3o de imagens para redes sociais December 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T15:35:34.247877",
+    "queries": [
+      "Step-by-step guide: Creating hyperrealistic product images with Midjourney V7 for e-commerce December 2025",
+      "User experience review: ChatGPT-5.2 vs Eleven v3 voice cloning features for podcast production in 2025",
+      "Comparison of AI image generators: Midjourney V7 vs DALL-E 3 capabilities for fashion design use cases December 2025",
+      "How to integrate Perplexity Sonar with email marketing platforms for data-driven campaigns in 2025",
+      "Practical tutorial: Using Sora 2 to convert text scripts into 15-second video clips for Instagram Reels",
+      "In-depth review: Runway Gen-4 export options and monetization features for small businesses December 2025",
+      "Comparison of Claude Opus 4.5 and Gemini 3 Flash performance in real-time data analysis scenarios",
+      "How to use Eleven v3's text-to-speech templates to create audiobooks from blog posts December 2025",
+      "December 2025 AI updates: OpenAI roadmap leaks for upcoming GPT-6 features",
+      "C\u00f3mo usar la nueva funci\u00f3n de prompt personalizado en ChatGPT-5.2 para crear scripts de Reels de 60 segundos",
+      "Rese\u00f1a de las capacidades de voz clonada de Eleven v3 para marketing empresarial en 2025",
+      "Como criar imagens hiperrealistas com Midjourney V7 para lojas virtuais em dezembro 2025",
+      "An\u00e1lise de not\u00edcias: Novos recursos do Sora 2 para produ\u00e7\u00e3o de v\u00eddeos r\u00e1pidos no Instagram"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T16:14:39.503004",
+    "queries": [
+      "How to use Midjourney V7 for monetizable visual content on Instagram Reels December 2025",
+      "Performance review of ElevenLabs v3 voice cloning features for Instagram Reel content creation December 2025",
+      "Compare ChatGPT-5.2 vs Claude Opus 4.5 for profitable email prompt generation December 2025",
+      "Latest AI tool updates for Instagram Reel content creation December 2025",
+      "Practical tips on optimizing Runway Gen-4 prompts for social media content creation December 2025",
+      "C\u00f3mo usar Cursor 2025 para crear plantillas de texto para Reels en menos de un minuto diciembre 2025",
+      "User experience review of ChatGPT-5.2 for social media caption creation December 2025",
+      "Compare ChatGPT-5.2 vs Claude Opus 4.5 for email prompt generation December 2025",
+      "Midjourney V7 vs Sora 2 comparison for monetizable visual content on Instagram 2025",
+      "Using Sora 2 to generate fast video content from text prompts for business growth December 2025",
+      "User experience review of ChatGPT-5.2 for Instagram Reel assets December 2025",
+      "Optimizing prompt parameters in Runway Gen-4 for Instagram Reel content creation December 2025",
+      "Technical analysis of Cursor 2025 performance enhancing Reel draft efficiency December 2025",
+      "Compare ElevenLabs v3 vs Midjourney V7 for monetizable content on Instagram December 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T17:16:52.535763",
+    "queries": [
+      "Step-by-step guide: Generating profitable AI side hustle ideas with ChatGPT-5.2 December 2025",
+      "Review of Midjourney V7's image generation features for selling on Etsy December 2025",
+      "Comparison: ChatGPT-5.2 vs Claude Opus 4.5 for creating social media content December 2025",
+      "Latest news: New AI side hustle marketplace launches in Europe December 2025",
+      "Tutorial: Setting up an automated email follow-up system with Claude Opus 4.5 for your AI side hustle portfolio December 2025",
+      "Review of Runway Gen-4's video generation capabilities for monetizable assets December 2025",
+      "Comparison: Midjourney V7 vs ElevenLabs v3 for creating consistent visual assets on Instagram December 2025",
+      "Latest news: EU directive on licensing AI-generated art for commercial use December 2025",
+      "Tutorial: Creating reusable prompt templates with Gemini 3 Flash for your AI side hustle portfolio December 2025",
+      "Practical tip: Using Fireflies.ai to convert AI-generated text into short videos for monetization December 2025",
+      "Review of ElevenLabs v3's audio generation features for voiceovers in AI side hustles December 2025",
+      "Comparison: ChatGPT-5.2 vs Gemini 3 Flash for generating revenue-focused prompts December 27, 2025",
+      "Latest news: New features in Cursor 2025 for collaborative AI writing December 2025",
+      "Step-by-step guide: Using Sora 2 to generate video content for your AI side hustle portfolio December 2025",
+      "Review of DALL-E 3's legal compliance features for selling AI-generated art commercially December 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T17:36:47.619333",
+    "queries": [
+      "How to use Sora 2 with Midjourney V7 for eco-friendly content creation December 2025",
+      "An\u00e1lisis de Perplexity Sonar vs Claude Opus 4.5 en contenido sobre cambio clim\u00e1tico diciembre 2025",
+      "Comparison of Runway Gen-4 and Perplexity Sonar for carbon footprint tracking December 2025",
+      "Step-by-step guide: Using Perplexity Sonar to find profitable sustainable topics December 2025",
+      "Latest announcements from Anthropic about Claude Opus 4.5's environmental features December 2025",
+      "C\u00f3mo usar Midjourney V7 para crear contenido sobre pr\u00e1cticas sostenibles en redes sociales diciembre 2025",
+      "Compara\u00e7\u00e3o entre Sora 2 e Perplexity Sonar para gerar conte\u00fado sobre impactos ambientais dezembro 2025",
+      "Tutorial: Integrating Runway Gen-4 with free AI tools for climate change messaging December 2025",
+      "User experience review of ChatGPT-5.2's capabilities for creating sustainable content marketing materials December 2025",
+      "Step-by-step: Automating daily carbon footprint tracking with Perplexity Sonar December 2025",
+      "Noticias sobre nuevas funciones de Runway Gen-4 para an\u00e1lisis ambiental diciembre 2025",
+      "An\u00e1lise: Midjourney V7 vs Perplexity Sonar em v\u00eddeos sobre pr\u00e1ticas sustent\u00e1veis dezembro 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T17:53:41.408625",
+    "queries": [
+      "Tutorial: How to structure 'Vibe Match' prompts for custom background music in Suno AI (Dec 2025)",
+      "Step-by-step guide: Using Suno AI's Vibe Match template for emotional video scores",
+      "Tutorial espa\u00f1ol: Gu\u00eda para crear m\u00fasica personalizada con Suno AI y plantillas Vibe Match (diciembre 2025)",
+      "Tutorial: Creating seamless loops for Instagram Reels using Suno AI Vibe Match prompts",
+      "Review: Testing Suno AI's Vibe Match template quality for professional content creation Dec 2025",
+      "Honest review: Is the Vibe Match prompt system in Suno AI better for background music?",
+      "Rese\u00f1a t\u00e9cnica: Generaci\u00f3n de m\u00fasica de fondo en Suno AI con el sistema Vibe Match 2025",
+      "Comparison: Suno AI Vibe Match vs traditional music search for video editors (December 2025)",
+      "Comparison: Using Suno AI vs stock music libraries for matching video energy levels (Dec 2025)",
+      "News: Suno AI updates for prompt template features and music generation December 2025",
+      "Not\u00edcias: Novos recursos do Suno AI para cria\u00e7\u00e3o de prompts de m\u00fasica em dezembro 2025",
+      "How-to: Optimizing Suno AI prompts to match specific video aesthetics for Reels",
+      "Howto: Adjusting mood and energy parameters in Suno AI Vibe Match templates",
+      "Dicas pr\u00e1ticas: Ajustando a dura\u00e7\u00e3o da m\u00fasica no Suno AI para Reels de 60 segundos",
+      "Practical tips: Fixing timing issues when syncing Suno AI music to video cuts"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T18:19:19.354135",
+    "queries": [
+      "Tutorial: Convert raw research data into charts using Perplexity Sonar December 2025",
+      "Step-by-step guide: Making visual graphs in Perplexity Sonar from unstructured text",
+      "Tutorial: Crear gr\u00e1ficos claros desde datos desordenados con Perplexity Sonar diciembre 2025",
+      "How to generate bar charts and line graphs in Perplexity Sonar visualization update",
+      "Review: Perplexity Sonar chart quality and visualization tools December 2025",
+      "Hands-on review: Creating data visualizations with Perplexity Sonar late 2025",
+      "An\u00e1lise: Qualidade dos gr\u00e1ficos gerados pelo Perplexity Sonar atualiza\u00e7\u00e3o dezembro 2025",
+      "Comparison: Perplexity Sonar vs ChatGPT-5.2 for data visualization and chart creation December 2025",
+      "Perplexity Sonar vs Claude Opus 4.5 for analyzing messy research data into visuals 2025",
+      "News: Perplexity Sonar adds new chart generation features December 2025",
+      "Noticias: Novedad de visualizaci\u00f3n de datos en Perplexity Sonar diciembre 2025",
+      "Howto: Clean and organize research data for Perplexity Sonar charts instantly",
+      "Practical tip: Prompting Perplexity Sonar for accurate data visualizations December 2025",
+      "How to export Perplexity Sonar charts for reports and social media"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T18:41:58.470833",
+    "queries": [
+      "Step-by-step tutorial: Installing Ollama and running Llama 3 locally on Windows/Mac in December 2025",
+      "Guide to integrating Ollama with desktop apps for offline workflows in 2025",
+      "Tutorial paso a paso: C\u00f3mo instalar Ollama y configurar Llama 3 sin internet en diciembre 2025",
+      "Guia de instala\u00e7\u00e3o: Configurando assistente IA offline com Ollama e Llama 3 em dezembro 2025",
+      "Review: Performance benchmarks of Llama 3 running locally via Ollama vs cloud APIs December 2025",
+      "User experience: Running Ollama and Llama 3 on consumer laptops (RAM and GPU requirements) in 2025",
+      "An\u00e1lisis de privacidad y velocidad de Ollama con Llama 3 para uso personal en diciembre 2025",
+      "Comparison: Ollama vs LM Studio for running Llama 3 locally on laptops in December 2025",
+      "Llama 3 offline with Ollama vs ChatGPT-5.2: Which is better for private data processing in 2025?",
+      "Latest news: Ollama platform updates and Llama 3 model optimizations announced December 2025",
+      "Novidades: Tend\u00eancias de intelig\u00eancia artificial local no Brasil com Ollama em dezembro 2025",
+      "Howto: Creating custom system prompts and modelfiles for Ollama in December 2025",
+      "Practical tips: Using Ollama's local API to build a personal voice assistant setup in 2025",
+      "Consejos pr\u00e1cticos: Usar Ollama y Llama 3 para redacci\u00f3n acad\u00e9mica offline en diciembre 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T18:45:34.158862",
+    "queries": [
+      "Step-by-step tutorial: Integrating GPT-5.2 with Runway Gen-4 for video edits December 2025",
+      "Using GPT-5.2 to generate Instagram prompts in under 60 seconds December 2025",
+      "User experience review of GPT-5.2's prompt template quality December 2025",
+      "Latest news on new feature updates to GPT-5.2 December 28, 2025",
+      "Comparison of GPT-5.2 with Perplexity Sonar for research prompt performance December 2025",
+      "Step-by-step tutorial: Using GPT-5.2 for book cover design with Midjourney V7 December 2025",
+      "How to automate expense tracking with GPT-5.2 and Perplexity Sonar December 2025",
+      "Review of GPT-5.2's performance in daily task automation December 2025",
+      "Comparison of GPT-5.2 vs Claude Opus 4.5 for logo generation December 2025",
+      "C\u00f3mo evaluar el rendimiento de GPT-5.2 en tareas diarias para redes sociales diciembre 2025",
+      "Comparaci\u00f3n de GPT-5.2 con Perplexity Sonar para plantillas de prompts de marketing december 2025",
+      "Gu\u00eda pr\u00e1ctica: Usar GPT-5.2 para generar logos r\u00e1pidamente en redes sociales december 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T19:04:15.068635",
+    "queries": [
+      "Tutorial: Connect Zapier and GPT-5.2 for one-click email replies December 2025",
+      "Step-by-step guide: Coding a personal email assistant using Cursor 2025 and Python",
+      "Tutorial: Configurar respostas autom\u00e1ticas no Gmail usando GPT-5.2 dezembro 2025",
+      "Tutorial paso a paso: Crear reglas de clasificaci\u00f3n de correos con Claude Opus 4.5",
+      "Review: Testing accuracy of Gemini 3 Flash for drafting empathetic customer support emails",
+      "Honest review: Does GPT-5.2 actually save time on inbox management in December 2025?",
+      "Rese\u00f1a: Experiencia de usuario automatizando correos con Perplexity Sonar 2025",
+      "Comparison: Claude Opus 4.5 vs GPT-5.2 context window for long email threads December 2025",
+      "Compara\u00e7\u00e3o: Velocidade de resposta do Gemini 3 Flash vs Claude Opus 4.5 em e-mails",
+      "News: OpenAI December 2025 release notes for GPT-5.2 email automation features",
+      "Breaking news: Google Workspace update integrating Gemini 3 Flash into Smart Reply December 2025",
+      "How to: Set up context-aware auto-responders using Claude Opus 4.5 API",
+      "How to summarize 50 emails instantly using Gemini 3 Flash productivity hack",
+      "C\u00f3mo automatizar respuestas de ausencia en Outlook con GPT-5.2 diciembre 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T19:37:08.244003",
+    "queries": [
+      "Tutorial: Use ChatGPT-5.2 to write high-converting affiliate marketing blog posts in 2025",
+      "Tutorial: Freelance coding workflow with Cursor 2025 and ChatGPT-5.2 integration",
+      "Tutorial: Crear guiones de video viral para YouTube Shorts usando ChatGPT-5.2 diciembre 2025",
+      "Tutorial: Estrat\u00e9gias de prompt para criar infoprodutos com ChatGPT-5.2 dezembro 2025",
+      "Review: Earning potential of AI faceless YouTube channels using Sora 2 and ElevenLabs v3",
+      "Review: ChatGPT-5.2 plugin ecosystem for affiliate marketing income generation December 2025",
+      "Rese\u00f1a: Usar ChatGPT-5.2 para automatizar la atenci\u00f3n al cliente y generar ingresos pasivos diciembre 2025",
+      "Comparison: Copywriting output quality for ads between ChatGPT-5.2 and Claude Opus 4.5 in 2025",
+      "Compara\u00e7\u00e3o: Custo-benef\u00edcio de usar ChatGPT-5.2 versus Gemini 3 Flash para ag\u00eancias de marketing dezembro 2025",
+      "Latest news: Fiverr changes AI service guidelines for ChatGPT-5.2 gigs December 2025",
+      "Latest news: OpenAI announces new revenue sharing model for ChatGPT-5.2 GPT Store creators December 2025",
+      "How to build a chatbot business using ChatGPT-5.2 API for local businesses December 2025",
+      "Howto: Quick workflow for generating SEO articles with Perplexity Sonar and ChatGPT-5.2",
+      "C\u00f3mo crear prompts de venta para email marketing con ChatGPT-5.2 y aumentar conversiones diciembre 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T20:35:02.377685",
+    "queries": [
+      "How to use Claude Opus 4.5 to extract action items from meeting transcripts in under 30 seconds December 2025",
+      "Step-by-step guide: Creating effective prompts for Claude Opus 4.5 to summarize meeting action items December 2025",
+      "Tutorial: Setting up Claude Opus 4.5 for automatic meeting transcript analysis and action item extraction December 2025",
+      "Hands-on review: Testing Claude Opus 4.5's 30-second meeting transcript processing feature for productivity December 2025",
+      "User experiences: Claude Opus 4.5's accuracy in extracting action items from various meeting transcripts December 2025",
+      "Claude Opus 4.5 vs. ChatGPT-5.2: Which AI extracts better action items from meeting transcripts December 2025",
+      "Meeting transcript analysis: Claude Opus 4.5 compared to Gemini 3 Flash for action item extraction December 2025",
+      "Latest features: Anthropic's Claude Opus 4.5 introduces rapid meeting transcript analysis December 2025",
+      "New capabilities: Claude Opus 4.5's December 2025 update enhances prompt efficiency for meeting summaries",
+      "Practical tips: Optimizing prompts for Claude Opus 4.5 to extract action items from any meeting format December 2025",
+      "Time-saving workflow: Integrating Claude Opus 4.5 with meeting transcription tools for automatic action item extraction December 2025",
+      "Tutorial: C\u00f3mo extraer puntos de acci\u00f3n de transcripciones de reuniones con Claude Opus 4.5 en 30 segundos diciembre 2025",
+      "Rese\u00f1a de usuario: Claude Opus 4.5 vs ChatGPT-5.2 para res\u00famenes de reuniones en espa\u00f1ol diciembre 2025",
+      "Tutorial passo a passo: Usando Claude Opus 4.5 para extrair itens de a\u00e7\u00e3o de transcri\u00e7\u00f5es de reuni\u00f5es dezembro 2025",
+      "Como otimizar prompts no Claude Opus 4.5 para melhorar a produtividade em reuni\u00f5es de neg\u00f3cio dezembro 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T22:37:37.213475",
+    "queries": [
+      "Step-by-step guide: Creating effective medical bill decoding prompts with Mistral AI December 2025",
+      "How to build prompt templates for healthcare billing analysis using Mistral AI in December 2025",
+      "Tutorial: Developing specialized prompts for medical invoice interpretation with Mistral AI 2025",
+      "User experience review: Mistral AI's effectiveness for decoding medical bills December 2025",
+      "Hands-on testing: How accurate is Mistral AI for analyzing healthcare invoices in December 2025",
+      "Mistral AI vs Claude Opus 4.5: Which provides better medical bill decoding prompts December 2025",
+      "Comparing medical invoice analysis capabilities: Mistral AI vs Gemini 3 Flash December 2025",
+      "Latest developments: Mistral AI's new features for healthcare financial analysis December 2025",
+      "Recent updates: Mistral AI's December 2025 enhancements for medical bill interpretation",
+      "Practical tips: Creating specialized medical billing prompts with Mistral AI in December 2025",
+      "How to optimize Mistral AI prompts for quick medical bill analysis December 2025",
+      "Step-by-step: Using Mistral AI to understand complex medical invoices in seconds",
+      "Tutorial: Crear plantillas de prompts para decodificar facturas m\u00e9dicas con Mistral AI diciembre 2025",
+      "Experiencia de usuario: Efectividad de Mistral AI para analizar facturas m\u00e9dicas diciembre 2025",
+      "Tutorial passo a passo: Criando prompts para decodificar faturas m\u00e9dicas com Mistral AI dezembro 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-28T23:46:35.302312",
+    "queries": [
+      "Tutorial: Automating Excel and Google Sheets formulas using ChatGPT-5.2 data analysis prompts",
+      "Tutorial en espa\u00f1ol: Creaci\u00f3n de flujos de trabajo automatizados con Claude Opus 4.5 para 2025",
+      "Tutorial: Using Perplexity Sonar to summarize 50-page PDF documents into 5 bullet points",
+      "Tutorial passo a passo: Gerenciamento de projetos com prompts espec\u00edficos do ChatGPT-5.2",
+      "Case study: Real-world time savings using Cursor 2025 for full-stack development in December 2025",
+      "Avalia\u00e7\u00e3o: Perplexity Sonar realmente substitui pesquisadores humanos em dezembro 2025?",
+      "Review of GPT-5.2's ability to manage complex calendar scheduling and logistics",
+      "Comparison: Image prompt consistency between Midjourney V7 and Sora 2 for brand assets",
+      "Comparison: Speed of generating Python scripts between Claude Opus 4.5 and ChatGPT-5.2",
+      "News: Anthropic releases December 2025 update for Claude Opus 4.5 focusing on agent workflows",
+      "Noticias: Nuevas integraciones de Eleven v3 para productividad de oficinas en 2025",
+      "How to structure mega-prompts in ChatGPT-5.2 to write entire ebooks in one session",
+      "C\u00f3mo usar prompts de rolplay con Gemini 3 Flash para simulaciones de negociaci\u00f3n y ventas",
+      "How to clean messy datasets instantly using Cursor 2025 AI features"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T00:13:51.952002",
+    "queries": [
+      "Step-by-step tutorial: Installing Ollama and running a local LLM for document summarization December 2025",
+      "Ollama tutorial: Create a prompt to summarize confidential PDFs without uploading data",
+      "Tutorial: C\u00f3mo instalar Ollama y resumir documentos confidenciales localmente en 2025",
+      "Tutorial passo a passo: Resumindo arquivos PDF com Ollama offline dezembro 2025",
+      "Review: Ollama performance and speed for summarizing large local documents in 2025",
+      "User experience: Using Ollama for offline privacy-focused productivity workflows",
+      "Rese\u00f1a: \u00bfEs Ollama la mejor opci\u00f3n para privacidad de datos en documentos 2025?",
+      "Ollama vs GPT-5.2: Which is better for summarizing highly sensitive legal documents securely?",
+      "Local LLM vs Claude Opus 4.5: Data privacy comparison for enterprise document processing",
+      "December 2025 update: New Ollama features improving local file processing capabilities",
+      "Not\u00edcias: Avan\u00e7os na privacidade de IA local com Ollama em dezembro 2025",
+      "How to summarize contracts locally using Ollama to ensure zero data leakage",
+      "Productivity hack: Create a local shortcut to summarize text files with Ollama instantly",
+      "C\u00f3mo usar Ollama para generar res\u00famenes de reuniones sensibles sin internet"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T00:40:13.907358",
+    "queries": [
+      "Step-by-step guide: Creating custom AI customer support assistants with Hugging Face Spaces without coding December 2025",
+      "Tutorial: Building a no-code AI chatbot for customer support using Hugging Face pipelines in 2025",
+      "How to create custom AI assistants for customer service with Hugging Face: No-code tutorial December 2025",
+      "Tutorial: Crear asistentes de IA para soporte al cliente con Hugging Face sin programaci\u00f3n diciembre 2025",
+      "Tutorial: Criar assistentes de IA para suporte ao cliente com Hugging Face sem programa\u00e7\u00e3o dezembro 2025",
+      "User experience review: Hugging Face's no-code AI assistant builder for customer support in December 2025",
+      "Hands-on review: Testing Hugging Face custom AI assistants for small business customer support workflows December 2025",
+      "Experiencia de usuario: Hugging Face Spaces para automatizar atenci\u00f3n a clientes diciembre 2025",
+      "Hugging Face vs Claude Opus 4.5: Comparing no-code AI assistant options for customer support December 2025",
+      "Custom AI assistants: Hugging Face vs Gemini 3 Flash for customer support automation in December 2025",
+      "Latest developments: Hugging Face launches no-code AI assistant builder for customer support December 2025",
+      "New features: Hugging Face's December 2025 update enhances AI assistant customization for customer service",
+      "Practical tips: Implementing custom AI assistants for customer support using Hugging Face no-code tools December 2025",
+      "How to: Create personalized customer support experiences with Hugging Face AI assistants in 2025",
+      "Step-by-step process: Setting up automated customer support with Hugging Face AI assistants without coding December 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T03:13:19.554680",
+    "queries": [
+      "Step-by-step guide: Setting up PaLM 2 for investment portfolio analysis December 2025",
+      "Tutorial: Creating automated investment reports with PaLM 2 and financial data APIs December 2025",
+      "Mastering prompt engineering: How to craft effective investment queries for PaLM 2 in December 2025",
+      "Tutorial paso a paso: Configurar PaLM 2 para an\u00e1lisis de inversi\u00f3n en diciembre 2025",
+      "User review: PaLM 2's accuracy in investment forecasting compared to human analysts December 2025",
+      "Hands-on review: Using PaLM 2 for cryptocurrency investment strategies in December 2025",
+      "Experiencia de usuario: \u00bfPaLM 2 realmente mejora las decisiones de inversi\u00f3n en diciembre 2025?",
+      "PaLM 2 vs GPT-5.2: Which AI model delivers superior investment analysis for December 2025 market conditions",
+      "Comparing AI investment strategies: Automated trading bots vs PaLM 2 advisory systems December 2025",
+      "Latest developments: Google's PaLM 2 December 2025 update enhances financial modeling capabilities",
+      "New trend: How financial institutions are adopting AI-powered investment strategies with PaLM 2 December 2025",
+      "How to start your AI investment journey with PaLM 2: A beginner's guide for December 2025",
+      "How to use PaLM 2 to analyze market trends and identify profitable investment opportunities December 2025",
+      "Como come\u00e7ar a investir com intelig\u00eancia artificial usando PaLM 2 em dezembro 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T06:32:12.291945",
+    "queries": [
+      "Step-by-step guide: Using Whisper AI to extract action items from meeting recordings December 2025",
+      "Tutorial: How to convert meeting transcripts into actionable tasks with Whisper AI in 2025",
+      "Quick tutorial: Setting up Whisper for automatic meeting recording analysis December 2025",
+      "Practical walkthrough: Implementing Whisper AI for meeting recording workflow automation",
+      "User experience review: Whisper AI's effectiveness in extracting action items from meeting recordings December 2025",
+      "Testing review: How accurate is Whisper at identifying key tasks from meeting transcripts in 2025?",
+      "Hands-on evaluation: Whisper's performance on different types of meeting recordings December 2025",
+      "Whisper vs Otter.ai: Which tool better extracts action items from meeting recordings December 2025",
+      "Comparison: Whisper AI vs other meeting transcription tools for task identification in 2025",
+      "How to integrate Whisper AI with project management tools for automated task creation December 2025",
+      "Practical tips: Optimizing Whisper's settings for better meeting recording analysis in 2025",
+      "How to create custom workflows for meeting recording analysis using Whisper AI December 2025",
+      "Latest updates: Whisper AI's December 2025 release enhances meeting recording analysis features",
+      "New capabilities: Whisper's latest improvements for automated meeting action item extraction 2025",
+      "Tutorial paso a paso: Usar Whisper para convertir grabaciones de reuniones en tareas accionables diciembre 2025",
+      "Comparaci\u00f3n: Whisper vs otras herramientas de transcripci\u00f3n de reuniones para identificar tareas diciembre 2025",
+      "Como extrair itens de a\u00e7\u00e3o de grava\u00e7\u00f5es de reuni\u00f5es com Whisper AI dezembro 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T08:38:02.474134",
+    "queries": [
+      "Gemini 3 Flash code generation tutorial: Debugging Python scripts December 2025",
+      "Gemini 3 Flash vs. Cursor 2025: Code generation speed comparison December 2025",
+      "Review: Gemini 3 Flash's new code completion features for Javascript development December 2025",
+      "News: Google announces improved debugging capabilities in Gemini 3 Flash December 2025",
+      "How to use Gemini 3 Flash for faster unit testing in December 2025",
+      "Practical guide: Using Gemini 3 Flash to automate code reviews December 2025",
+      "Tutorial: Using Gemini 3 Flash to generate API documentation automatically December 2025",
+      "Gemini 3 Flash code generation review: Is it better than GPT-5.2 for complex algorithms December 2025",
+      "Tutorial: Integrating Gemini 3 Flash with VS Code for real-time debugging December 2025",
+      "Noticias Gemini 3 Flash: Nuevas funciones de depuraci\u00f3n y generaci\u00f3n de c\u00f3digo diciembre 2025",
+      "C\u00f3mo acelerar el desarrollo con Gemini 3 Flash: gu\u00eda pr\u00e1ctica diciembre 2025",
+      "Comparativa: Gemini 3 Flash vs Claude Opus 4.5 para generar c\u00f3digo limpio y eficiente diciembre 2025",
+      "Tutorial passo a passo: Gerando c\u00f3digo em Python com Gemini 3 Flash dezembro 2025",
+      "An\u00e1lise: A velocidade de gera\u00e7\u00e3o de c\u00f3digo do Gemini 3 Flash realmente supera o ChatGPT-5.2 em dezembro 2025?",
+      "How to use Gemini 3 Flash to generate Typescript code December 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T09:17:32.482602",
+    "queries": [
+      "Gemini 3 Flash 'Explain Like I'm 5' tutorial for simplifying complex topics December 2025",
+      "Gemini 3 Flash vs ChatGPT-5.2: Which AI excels at simplifying complex explanations in December 2025?",
+      "Review: Gemini 3 Flash 'Explain Like I'm 5' mode - Does it actually work for exam prep?",
+      "How to use Gemini 3 Flash's 'Explain Like I'm 5' mode for effective study sessions December 2025",
+      "Gemini 3 Flash 'Explain Like I'm 5' mode: User testimonials and experiences December 2025",
+      "Latest updates: Google enhances Gemini 3 Flash's educational capabilities in December 2025",
+      "Tutorial: Using Gemini 3 Flash 'Explain Like I'm 5' mode to understand complex scientific papers December 2025",
+      "C\u00f3mo usar Gemini 3 Flash para simplificar temas de econom\u00eda para estudiantes en diciembre 2025",
+      "GPT-5.2 vs Gemini 3 Flash 'Explain Like I'm 5': Which is better for learning complex coding concepts December 2025",
+      "Step-by-step guide: Activating and using the 'Explain Like I'm 5' feature in Gemini 3 Flash December 2025",
+      "Noticias recientes: Google lanza 'Explain Like I'm 5' en Gemini 3 Flash para la educaci\u00f3n en diciembre 2025",
+      "Practical guide: Using Gemini 3 Flash 'Explain Like I'm 5' mode to teach difficult concepts to children in December 2025",
+      "Tutorial passo a passo: Como usar o modo 'Explain Like I'm 5' do Gemini 3 Flash para aprender f\u00edsica qu\u00e2ntica em dezembro de 2025",
+      "Rese\u00f1as: \u00bfEs Gemini 3 Flash el mejor asistente de IA para comprender temas complejos en diciembre de 2025?",
+      "Como usar o Gemini 3 Flash 'Explain Like I'm 5' para preparar para o ENEM em dezembro de 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T09:57:18.393852",
+    "queries": [
+      "Tutorial: Creating product demo videos with Sora 2 free trial December 2025",
+      "Review: Is Midjourney V7 worth the subscription cost for generating marketing assets December 2025?",
+      "Gemini 3 Flash vs. ChatGPT-5.2: Which offers better free tier for quick coding tasks December 2025?",
+      "How to: Use ElevenLabs v3 to create multilingual voiceovers for YouTube shorts December 2025",
+      "Step-by-step tutorial: Generating email marketing copy with free prompts using ChatGPT-5.2 December 2025",
+      "Claude Opus 4.5 Free tier limitations: What can you realistically achieve in December 2025?",
+      "How to: Automate social media posting with combined free AI tools: Perplexity Sonar and Buffer December 2025",
+      "Noticias: Google anuncia mejoras en la versi\u00f3n gratuita de Gemini 3 Flash diciembre 2025",
+      "Midjourney V7 vs. DALL-E 3: Which image generator provides better free daily credits for content creation December 2025?",
+      "Tutorial paso a paso: Crear un avatar animado con ElevenLabs v3 y D-ID (diciembre 2025)",
+      "Como usar Perplexity Sonar para pesquisa gratuita de tend\u00eancias de marketing digital (dezembro 2025)",
+      "Review: Is Cursor 2025 a viable free alternative to paid AI coding assistants December 2025?",
+      "Actualizaci\u00f3n: ElevenLabs v3 anuncia nuevos planes de precios y funciones gratuitas en diciembre de 2025",
+      "Como criar v\u00eddeos curtos chamativos com Sora 2 (vers\u00e3o gratuita) para o TikTok (dezembro 2025)",
+      "How to: Integrate ChatGPT-5.2 free API for basic chatbot on website December 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T10:36:39.810594",
+    "queries": [
+      "Tutorial: Generate infographic design ideas with Gemini 3 Flash for Instagram December 2025",
+      "Review: Is Gemini 3 Flash a viable alternative to Canva for infographic creation in December 2025?",
+      "Gemini 3 Flash vs Midjourney V7 for generating infographics: Which produces better results for beginners December 2025",
+      "How to: Legally use AI-generated infographics for commercial purposes using Gemini 3 Flash December 2025",
+      "Gemini 3 Flash infographic generation tutorial: From prompt to sale December 2025",
+      "News: Google updates Gemini 3 Flash with improved infographic design capabilities December 2025",
+      "How to: Price and sell AI-generated infographics on Etsy and other platforms using Gemini 3 Flash December 2025",
+      "Review: User experiences generating and selling infographics using Gemini 3 Flash in December 2025",
+      "How to: Automate infographic creation and sales with Gemini 3 Flash and Zapier in December 2025",
+      "Tutorial: Step-by-step guide to creating engaging infographics with Gemini 3 Flash for different niches December 2025",
+      "Noticias sobre Gemini 3 Flash: \u00bfC\u00f3mo impactan las nuevas funciones a la creaci\u00f3n de infograf\u00edas? diciembre 2025",
+      "Rese\u00f1a: \u00bfEs Gemini 3 Flash la mejor herramienta para crear infograf\u00edas sin ser dise\u00f1ador? Diciembre 2025",
+      "Comparaci\u00f3n: Gemini 3 Flash vs GPT-5.2 para generar prompts de infograf\u00edas rentables diciembre 2025",
+      "Passo a passo: Criar infogr\u00e1ficos com Gemini 3 Flash e vender no Instagram em dezembro 2025",
+      "Guia pr\u00e1tico: Usando Gemini 3 Flash para encontrar nichos de mercado para infogr\u00e1ficos dezembro 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T11:16:41.659071",
+    "queries": [
+      "Claude Opus 4.5 tutorial: creating interactive chatbot flows for Instagram DMs December 2025",
+      "Review: Claude Opus 4.5's performance for summarizing legal documents in December 2025",
+      "Claude Opus 4.5 vs GPT-5.2: Which AI better handles complex reasoning tasks for research in December 2025?",
+      "Anthropic announces Claude Opus 4.5 December 2025 update: new multimodal capabilities revealed",
+      "How to: Use Claude Opus 4.5 to generate personalized email marketing campaigns in December 2025",
+      "Claude Opus 4.5 tutorial: generating scripts for YouTube videos with complex narratives December 2025",
+      "Claude Opus 4.5 review: User feedback on its ability to handle nuanced creative writing tasks in December 2025",
+      "Actualizaci\u00f3n de Claude Opus 4.5 diciembre 2025: an\u00e1lisis de las mejoras en la generaci\u00f3n de informes financieros",
+      "How to: Use Claude Opus 4.5 for generating high-converting sales page copy in December 2025",
+      "Claude Opus 4.5 vs Gemini 3 Flash: Comparing their capabilities in generating code for complex software projects December 2025",
+      "Tutorial: Automatizando la creaci\u00f3n de guiones para podcasts con Claude Opus 4.5 en diciembre 2025",
+      "How to: Optimize prompts for Claude Opus 4.5 to achieve consistent brand voice in content generation December 2025",
+      "Claude Opus 4.5 tutorial: step-by-step guide to building a custom AI assistant for project management December 2025",
+      "Claude Opus 4.5: Avalia\u00e7\u00e3o do desempenho na cria\u00e7\u00e3o de resumos de livros t\u00e9cnicos em portugu\u00eas dezembro 2025",
+      "C\u00f3mo usar Claude Opus 4.5 para generar ideas de contenido viral para TikTok en diciembre 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T11:56:43.463867",
+    "queries": [
+      "GPT-5.2 tutorial: Creating viral TikTok scripts in December 2025",
+      "GPT-5.2 vs. Gemini 3 Flash: Which generates better personalized workout plans December 2025",
+      "ElevenLabs v3 review: Creating realistic AI voiceovers for YouTube Shorts December 2025",
+      "Noticias GPT-5.2: Impacto en la automatizaci\u00f3n del marketing digital diciembre 2025",
+      "Perplexity Sonar: generating engaging email subject lines December 2025",
+      "Como usar Gemini 3 Flash para crear prompts optimizados para Midjourney V7 diciembre 2025",
+      "Practical tips: Using Sora 2 for creating background video loops for streaming in December 2025",
+      "Runway Gen-4 vs Sora 2: which AI video generator creates the most realistic animations in December 2025?",
+      "News: OpenAI announces new GPT-5.2 plugins for e-commerce businesses December 2025",
+      "Guia pr\u00e1tico: Gerar ideias de conte\u00fado com ChatGPT-5.2 para Instagram em dezembro 2025",
+      "GPT-5.2: Are the new privacy features worth the hype? December 2025 user reviews",
+      "Step-by-step: Generate AI art with Midjourney V7 using Gemini 3 Flash prompts December 2025",
+      "Tutorial passo a passo: Como criar storyboards para v\u00eddeos do TikTok com GPT-5.2 em dezembro 2025",
+      "GPT-5.2's impact on freelance writers: Opportunities and challenges in December 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T12:37:06.290478",
+    "queries": [
+      "Anki spaced repetition with AI: step-by-step setup using GPT-5.2 December 2025",
+      "How to integrate ElevenLabs v3 voiceovers into Anki flashcards for language learning December 2025",
+      "Anki flashcards boosted by AI: Gemini 3 Flash vs GPT-5.2 for content generation December 2025",
+      "Review: Anki AI plugins for creating personalized spaced repetition schedules (December 2025)",
+      "Anki and AI: news and updates on the integration for effective learning December 2025",
+      "Practical tips for using AI-generated images from Midjourney V7 in Anki flashcards December 2025",
+      "Anki flashcards: How to automate card creation with Claude Opus 4.5 in December 2025",
+      "Is AI-powered Anki worth it? User reviews of enhanced flashcard learning December 2025",
+      "Anki + AI: new features announced for improving learning efficiency in December 2025",
+      "\u00bfC\u00f3mo usar GPT-5.2 con Anki para crear flashcards de vocabulario en espa\u00f1ol? diciembre 2025",
+      "Anki y Gemini 3 Flash: comparaci\u00f3n para estudiantes de idiomas en diciembre 2025",
+      "Anki con inteligencia artificial: tutorial para optimizar el aprendizaje de historia con GPT-5.2 diciembre 2025",
+      "Dicas pr\u00e1ticas: Integrar Claude Opus 4.5 com Anki para criar flashcards de medicina dezembro 2025",
+      "Tutorial passo a passo: Usando Gemini 3 Flash para gerar automaticamente perguntas para flashcards Anki em dezembro 2025",
+      "Using Cursor 2025 to generate code snippets for Anki flashcards: A practical guide December 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T13:17:10.130194",
+    "queries": [
+      "GPT-5.2 tutorial: crafting high-converting landing page copy with prompt templates December 2025",
+      "Review: GPT-5.2 prompt template marketplace - are premium templates worth it? December 2025",
+      "Gemini 3 Flash vs GPT-5.2: which creates better prompt templates for social media scheduling December 2025",
+      "How to personalize GPT-5.2 prompt templates for different industries December 2025",
+      "GPT-5.2 prompt templates for brainstorming: a step-by-step guide December 2025",
+      "Latest news: OpenAI releases updated prompt template guidelines for GPT-5.2 December 2025",
+      "C\u00f3mo crear plantillas de prompts efectivas con GPT-5.2 para email marketing diciembre 2025",
+      "GPT-5.2 prompt templates for generating product descriptions: practical examples December 2025",
+      "GPT-5.2 prompt template libraries: free vs paid options compared December 2025",
+      "Noticias sobre GPT-5.2: Actualizaciones en la generaci\u00f3n de prompts para video marketing diciembre 2025",
+      "Review: User experiences with advanced prompt engineering features in GPT-5.2 December 2025",
+      "Trucos para optimizar las plantillas de prompts de GPT-5.2 y aumentar la productividad diciembre 2025",
+      "GPT-5.2 prompt templates for generating realistic character descriptions: tutorial December 2025",
+      "An\u00e1lise: Modelos de prompts do GPT-5.2 para criar roteiros de v\u00eddeos curtos em dezembro 2025",
+      "Dicas para usar prompt templates GPT-5.2 para e-mail marketing em dezembro 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T13:57:22.554900",
+    "queries": [
+      "Gemini 3 Flash tutorial: creating interactive presentations with AI December 2025",
+      "Review: Gemini 3 Flash versus PowerPoint for speed and ease of use in presentation creation December 2025",
+      "Gemini 3 Flash vs. Beautiful.ai: AI presentation software comparison December 2025",
+      "News: Google announces speed improvements for Gemini 3 Flash presentations December 2025",
+      "How to use Gemini 3 Flash to generate a presentation outline from a text document December 2025",
+      "Gemini 3 Flash para presentaciones: tutorial paso a paso para principiantes diciembre 2025",
+      "Is Gemini 3 Flash better than Canva for quick presentation decks December 2025? A user review",
+      "How to quickly create training materials with Gemini 3 Flash: tips and tricks December 2025",
+      "Not\u00edcias: Gemini 3 Flash atualiza a interface para agilizar a cria\u00e7\u00e3o de apresenta\u00e7\u00f5es em dezembro de 2025",
+      "Gemini 3 Flash tutorial: Adding interactive elements (polls, quizzes) to AI-generated slides December 2025",
+      "Gu\u00eda pr\u00e1ctica: Usar Gemini 3 Flash para generar presentaciones para inversores diciembre 2025",
+      "Gemini 3 Flash versus Tome.app: Comparing AI-powered presentation tools for 2026",
+      "Tutorial: Import existing PowerPoint presentations into Gemini 3 Flash for AI enhancement December 2025",
+      "Review: User experiences with Gemini 3 Flash's AI presentation design templates December 2025",
+      "\u00bfEs Gemini 3 Flash la mejor herramienta IA para presentaciones en espa\u00f1ol diciembre 2025?"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T14:37:14.855209",
+    "queries": [
+      "Tutorial: Building a niche news aggregator with Perplexity Sonar and monetizing through sponsorships (December 2025)",
+      "Review: Perplexity Sonar for identifying trending niche news topics - December 2025",
+      "How to find high-paying sponsors for your Perplexity AI-powered news aggregator - December 2025",
+      "Perplexity Sonar vs. Gemini 3 Flash for news aggregation: Which is better for monetization in December 2025?",
+      "News: Perplexity Sonar updates for enhanced news filtering and sponsor integration (December 2025)",
+      "Step-by-step guide: Integrating Midjourney V7 generated visuals into your Perplexity Sonar news aggregator (December 2025)",
+      "Como usar Perplexity Sonar para crear un agregador de noticias de nicho en espa\u00f1ol: gu\u00eda completa diciembre 2025",
+      "Perplexity Sonar review: is it better than Google News for niche content aggregation in December 2025?",
+      "Howto: Use Perplexity Sonar API to build a custom news aggregator dashboard - December 2025",
+      "Tutorial: Automating sponsor outreach using GPT-5.2 for your Perplexity AI news aggregator - December 2025",
+      "Noticias Perplexity AI: Integraci\u00f3n de Sonar con plataformas de publicidad program\u00e1tica diciembre 2025",
+      "Perplexity Sonar vs Claude Opus 4.5 for identifying emerging trends in niche news (December 2025)",
+      "Dicas pr\u00e1ticas: Monetizar um agregador de not\u00edcias de nicho com Perplexity Sonar em dezembro de 2025",
+      "An\u00e1lisis: Perplexity Sonar vs agregadores de noticias tradicionales - Diciembre 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T15:16:55.075846",
+    "queries": [
+      "Midjourney V7 tutorial: mastering character consistency December 2025",
+      "Midjourney V7 review: Is it still worth it for beginners in December 2025?",
+      "Midjourney V7 vs Sora 2 for creating seamless looping animations: a comparison December 2025",
+      "News: Midjourney V7 update focuses on enhanced photorealism in portrait generation December 2025",
+      "How to use Midjourney V7 to create unique textures for 3D models December 2025",
+      "Midjourney V7 tutorial: creating consistent art styles across multiple images December 2025",
+      "Midjourney V7 review: Does it outperform previous versions for architectural visualization December 2025?",
+      "Como crear prompts efectivos en Midjourney V7 para generar paisajes realistas: gu\u00eda paso a paso diciembre 2025",
+      "Midjourney V7 vs DALL-E 3 for creating product mockups: features compared December 2025",
+      "Midjourney V7 tutorial: generating consistent characters for a comic book December 2025",
+      "Midjourney V7: trucos y consejos para optimizar el uso de la herramienta en diciembre 2025",
+      "News: Midjourney V7 integrates new watermarking system to combat AI art theft December 2025",
+      "How to use Midjourney V7 to generate visually appealing social media ads December 2025",
+      "Midjourney V7: Avalia\u00e7\u00e3o honesta sobre a facilidade de uso para iniciantes em dezembro de 2025",
+      "Tutorial Midjourney V7: C\u00f3mo crear ilustraciones estilo vintage para Instagram en diciembre 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T15:57:23.683215",
+    "queries": [
+      "Gemini 3 Flash mental health prompt tutorial December 2025",
+      "Review: Gemini 3 Flash accuracy creating mental health check-in prompts",
+      "How to customize Gemini 3 Flash for personalized mental wellness prompts December 2025",
+      "Gemini 3 Flash vs. ChatGPT-5.2 for generating mental health prompts: A comparison December 2025",
+      "Step-by-step: integrating Gemini 3 Flash prompts with daily journaling apps December 2025",
+      "Gemini 3 Flash mental health prompt examples: practical tips December 2025",
+      "Noticias: Google lanza actualizaci\u00f3n de Gemini 3 Flash para bienestar emocional diciembre 2025",
+      "Tutorial: Crear prompts de salud mental personalizados con Gemini 3 Flash diciembre 2025",
+      "Latest news: Gemini 3 Flash introduces enhanced safety features for mental health prompts December 2025",
+      "How to use Gemini 3 Flash to create guided meditation scripts in December 2025",
+      "An\u00e1lise: Gemini 3 Flash \u00e9 eficaz para prompts de auto-reflex\u00e3o? dezembro 2025",
+      "Review: User experiences with Gemini 3 Flash for daily mood tracking in December 2025",
+      "C\u00f3mo usar Gemini 3 Flash para crear un diario de gratitud guiado: tutorial diciembre 2025",
+      "Gemini 3 Flash vs Claude Opus 4.5 for creating anxiety reduction prompts: which is better December 2025",
+      "Gemini 3 Flash: prompts para sa\u00fade mental no trabalho dezembro 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T16:37:35.657105",
+    "queries": [
+      "Tutorial: Use Gemini 3 Flash to rewrite your resume bullet points for ATS optimization December 2025",
+      "Gemini 3 Flash resume writer: Does it actually improve your chances of getting hired? December 2025",
+      "GPT-5.2 vs Gemini 3 Flash for resume writing: Which AI creates the strongest career summary? December 2025",
+      "News: Google announces enhanced career coaching features for Gemini 3 Flash in December 2025",
+      "How to: Leverage Gemini 3 Flash to tailor your resume to specific job descriptions December 2025",
+      "Tutorial: Using Gemini 3 Flash to generate cover letters that get you noticed in December 2025",
+      "\u00bfEs Gemini 3 Flash el mejor asistente IA para redactar curr\u00edculums en espa\u00f1ol? Rese\u00f1a diciembre 2025",
+      "Gemini 3 Flash resume building: Tips for avoiding common AI-generated resume mistakes December 2025",
+      "Practical uses: Gemini 3 Flash for career change resume writing in December 2025",
+      "Tutorial: How to import your LinkedIn profile into Gemini 3 Flash for resume creation December 2025",
+      "Gemini 3 Flash vs Claude Opus 4.5 for resume keyword optimization: Which is more effective in December 2025?",
+      "Novidades: Gemini 3 Flash adiciona suporte para curr\u00edculos em portugu\u00eas do Brasil dezembro 2025",
+      "Review: Gemini 3 Flash as a 24/7 resume writer - Worth the hype? December 2025",
+      "Gu\u00eda paso a paso: Optimiza tu curr\u00edculum con Gemini 3 Flash para superar los sistemas ATS diciembre 2025",
+      "Como usar Gemini 3 Flash para criar um curr\u00edculo de destaque em 2025",
+      "C\u00f3mo adaptar tu curr\u00edculum a diferentes ofertas de empleo con Gemini 3 Flash: gu\u00eda pr\u00e1ctica diciembre 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T17:17:31.505191",
+    "queries": [
+      "Tutorial: Converting PDF textbooks to interactive flashcards using Perplexity Sonar (December 2025)",
+      "Perplexity Sonar: User reviews of the PDF to flashcard feature (December 2025)",
+      "How to share Perplexity Sonar generated flashcards with friends (December 2025)",
+      "Perplexity Sonar vs. Quizlet: Which is better for learning from PDFs in December 2025?",
+      "News: Perplexity Sonar updates on PDF flashcard creation December 2025",
+      "How to customize flashcard prompts for complex subjects within Perplexity Sonar (December 2025)",
+      "Tutorial: Generate shareable flashcard decks from PDFs using Perplexity Sonar for social media (December 2025)",
+      "Perplexity Sonar PDF to flashcard feature: Accuracy and limitations (December 2025)",
+      "How to create visual flashcards from PDFs with Perplexity Sonar and Midjourney V7 integration (December 2025)",
+      "Perplexity Sonar vs. ChatGPT-5.2 for creating educational flashcards from PDF documents (December 2025)",
+      "Noticias: Perplexity Sonar mejora la funcionalidad de flashcards en diciembre de 2025",
+      "Tutorial: Transforma apuntes en PDF a flashcards interactivas con Perplexity Sonar (Diciembre 2025)",
+      "C\u00f3mo optimizar el aprendizaje con flashcards generadas por Perplexity Sonar en 2025",
+      "Avalia\u00e7\u00e3o completa: A funcionalidade de flashcards do Perplexity Sonar realmente funciona em dezembro de 2025?",
+      "Como usar o Perplexity Sonar para criar flashcards de vocabul\u00e1rio a partir de PDFs (dezembro 2025)"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T17:57:32.916461",
+    "queries": [
+      "Gemini 3 Flash tutorial: Automating lead generation form filling December 2025",
+      "Review: Gemini 3 Flash's data entry automation accuracy for accounting firms December 2025",
+      "Gemini 3 Flash vs. GPT-5.2: Which is better for automating CRM data entry December 2025",
+      "News: Google announces improvements to Gemini 3 Flash for enterprise data management December 2025",
+      "How to use Gemini 3 Flash to extract data from scanned documents automatically December 2025",
+      "Step-by-step: Training Gemini 3 Flash to recognize custom data fields for automated input December 2025",
+      "Gemini 3 Flash review: User experiences automating insurance claim processing December 2025",
+      "C\u00f3mo usar Gemini 3 Flash para automatizar la entrada de datos en hojas de c\u00e1lculo diciembre 2025",
+      "Gemini 3 Flash tutorial: Automate product listing creation on e-commerce sites December 2025",
+      "Noticias: Gemini 3 Flash anuncia nueva integraci\u00f3n con Zapier para automatizaci\u00f3n diciembre 2025",
+      "How to troubleshoot common errors with Gemini 3 Flash data entry automation December 2025",
+      "Gemini 3 Flash vs Claude Opus 4.5 for automating PDF data extraction: a comparison December 2025",
+      "Tutorial: Automa\u00e7\u00e3o de entrada de dados com Gemini 3 Flash para pequenas empresas dezembro 2025",
+      "Como otimizar Gemini 3 Flash para extrair dados de formul\u00e1rios complexos em dezembro 2025",
+      "Review: Gemini 3 Flash\u2019s capabilities in automating invoice processing for small businesses December 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T18:37:10.695802",
+    "queries": [
+      "Gemini 3 Flash tutorial: turning meeting notes into actionable tasks December 2025",
+      "How to: streamline project management using Gemini 3 Flash prompt templates December 2025",
+      "Gemini 3 Flash review: Is it the best AI for summarizing meeting notes in December 2025?",
+      "Gemini 3 Flash vs Claude Opus 4.5: which is better for creating action plans from meeting transcripts December 2025?",
+      "Latest Gemini 3 Flash updates: enhanced prompt processing for meeting summaries December 2025",
+      "Gemini 3 Flash tutorial: extracting key decisions from unstructured meeting notes December 2025",
+      "How to: Integrate Gemini 3 Flash meeting summaries with Asana project management December 2025",
+      "\u00bfC\u00f3mo usar Gemini 3 Flash para convertir grabaciones de reuniones en planes de acci\u00f3n concisos? diciembre 2025",
+      "An\u00e1lisis de Gemini 3 Flash: \u00bfRealmente ahorra tiempo en la gesti\u00f3n de proyectos? diciembre 2025",
+      "Practical tips: Optimizing Gemini 3 Flash prompts for maximum action plan clarity December 2025",
+      "Gemini 3 Flash review: Action plan creation compared to human project managers December 2025",
+      "Gemini 3 Flash: new prompt templates for project action items announced December 2025",
+      "Tutorial passo a passo: Usando Gemini 3 Flash para criar planos de a\u00e7\u00e3o a partir de reuni\u00f5es em portugu\u00eas dezembro 2025",
+      "Gemini 3 Flash vs GPT-5.2: Which AI creates better meeting action plans in December 2025?",
+      "Alternativas a Gemini 3 Flash para transformar notas de reuniones en tareas diciembre 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T19:17:05.044628",
+    "queries": [
+      "Tutorial: Using ElevenLabs v3 for personalized language learning audio in December 2025",
+      "Review: Are AI-powered language immersion programs effective? December 2025",
+      "ChatGPT-5.2 vs. Gemini 3 Flash for language learning: A comparison of immersion features December 2025",
+      "News: ElevenLabs v3 adds new dialects and accents for immersive language practice December 2025",
+      "How to create a personalized language learning plan using GPT-5.2 in December 2025",
+      "Tutorial: Generating realistic conversations for language practice with Claude Opus 4.5 in December 2025",
+      "Review: Midjourney V7 for creating visually rich language learning flashcards December 2025",
+      "\u00bfC\u00f3mo usar Sora 2 para crear videos de inmersi\u00f3n ling\u00fc\u00edstica personalizados en diciembre 2025?",
+      "News: Sora 2 integrates with language learning apps for immersive video experiences December 2025",
+      "How to use ElevenLabs v3 to correct pronunciation errors in your target language December 2025",
+      "Claude Opus 4.5 vs. Human tutors: Which is more effective for rapid language acquisition in December 2025?",
+      "Tutorial: Building a custom language learning chatbot with Cursor 2025 in December 2025",
+      "\u00bfCu\u00e1les son las mejores herramientas de IA para la inmersi\u00f3n ling\u00fc\u00edstica en espa\u00f1ol en diciembre de 2025?",
+      "Como acelerar o aprendizado de idiomas com a imers\u00e3o gerada por IA em dezembro de 2025?",
+      "Tutorial paso a paso: Usa Gemini 3 Flash para practicar conversaci\u00f3n en un nuevo idioma diciembre 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T19:57:20.443709",
+    "queries": [
+      "Midjourney V7 print-on-demand tutorial: creating seamless patterns for fabric December 2025",
+      "Review: Scaling print-on-demand business with Midjourney V7 and automated Etsy listings December 2025",
+      "Midjourney V7 vs DALL-E 3 for creating high-resolution images for large-format prints: comparison December 2025",
+      "News: Midjourney V7 integrates with Canva for simplified print-on-demand product mockups December 2025",
+      "How to: Optimize Midjourney V7 prompts for specific print-on-demand product types December 2025",
+      "Midjourney V7 tutorial: generating designs for phone cases and selling on Shopify December 2025",
+      "\u00bfC\u00f3mo usar Midjourney V7 para crear dise\u00f1os \u00fanicos para tazas y vender en Etsy? diciembre 2025",
+      "Midjourney V7 print-on-demand: Best prompts for creating trending designs on Redbubble December 2025",
+      "Review: Midjourney V7's upscaling capabilities for print-on-demand products: user experiences December 2025",
+      "News: Midjourney V7 introduces new licensing options for commercial print-on-demand use December 2025",
+      "Como usar Midjourney V7 para criar estampas exclusivas para camisetas e vender online em dezembro de 2025",
+      "How to: Avoid copyright issues when using Midjourney V7 images for print-on-demand December 2025",
+      "Midjourney V7: Impresi\u00f3n bajo demanda para principiantes. Gu\u00eda completa diciembre 2025",
+      "An\u00e1lisis comparativo: Midjourney V7 vs Stable Diffusion para crear dise\u00f1os de alta calidad para impresi\u00f3n bajo demanda en diciembre 2025",
+      "Avalia\u00e7\u00e3o: Integra\u00e7\u00e3o do Midjourney V7 com plataformas de dropshipping para impress\u00e3o sob demanda em dezembro de 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T20:38:19.884969",
+    "queries": [
+      "GPT-5.2 tutorial: creating interactive quizzes for online learning December 2025",
+      "ChatGPT-5.2 vs. Claude Opus 4.5: Which is better for generating scripts for TikTok videos? December 2025",
+      "How to use GPT-5.2 to automate email marketing campaigns in December 2025",
+      "GPT-5.2 update: New features for summarizing research papers announced December 2025",
+      "Review: GPT-5.2 for generating personalized workout plans: does it work? December 2025",
+      "Tutorial: Using GPT-5.2 to generate code for Discord bots December 2025",
+      "GPT-5.2 and legal document review: a step-by-step guide December 2025",
+      "How to use GPT-5.2 for writing poetry: tips and tricks December 2025",
+      "GPT-5.2: new API integrations for e-commerce platforms December 2025",
+      "An\u00e1lise: GPT-5.2 para criar apresenta\u00e7\u00f5es de slides eficazes em dezembro de 2025",
+      "C\u00f3mo usar GPT-5.2 para crear chatbots de ventas en WhatsApp: gu\u00eda pr\u00e1ctica diciembre 2025",
+      "GPT-5.2 vs Gemini 3 Flash: cu\u00e1l es mejor para la generaci\u00f3n de ideas de contenido diciembre 2025",
+      "\u00bfEs GPT-5.2 una herramienta \u00fatil para la creaci\u00f3n de contenido educativo en diciembre de 2025?",
+      "Dicas pr\u00e1ticas: Usando GPT-5.2 para traduzir documentos t\u00e9cnicos em dezembro 2025",
+      "How to utilize GPT-5.2 for creating engaging social media captions December 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T21:19:29.291391",
+    "queries": [
+      "Perplexity Sonar audio summaries: step-by-step guide for document analysis December 2025",
+      "Review: Perplexity Sonar's document summarization accuracy compared to human analysis December 2025",
+      "Perplexity Sonar document to audio feature: tips and tricks for optimal use December 2025",
+      "How to use Perplexity Sonar to summarize legal documents quickly December 2025",
+      "Perplexity Sonar vs ChatGPT-5.2 for summarizing research papers: A detailed comparison December 2025",
+      "Perplexity Sonar document audio summaries: limitations and workarounds December 2025",
+      "Noticias: Perplexity Sonar mejora la funcionalidad de resumen de audio en documentos diciembre 2025",
+      "Perplexity Sonar audio summaries: Best practices for creating educational content December 2025",
+      "Perplexity Sonar audio document summaries: Generating content for social media marketing December 2025",
+      "An\u00e1lisis: Perplexity Sonar para convertir documentos t\u00e9cnicos en res\u00famenes de audio diciembre 2025",
+      "Perplexity Sonar document summarization vs Claude Opus 4.5: features for academic research December 2025",
+      "Tutorial: Perplexity Sonar para transformar artigos cient\u00edficos em \u00e1udio em portugu\u00eas dezembro 2025",
+      "News: Perplexity Sonar announces new document format support for audio summaries December 2025",
+      "Review: Is Perplexity Sonar's audio summarization truly beneficial for students in December 2025?",
+      "Como usar Perplexity Sonar para resumir contratos e acordos em \u00e1udio dezembro 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T21:59:49.425560",
+    "queries": [
+      "Descript AI audio cleaning tutorial December 2025: removing background noise for free",
+      "Descript free plan limitations: audio clarity enhancement compared December 2025",
+      "Review: Descript's AI-powered audio repair tools \u2013 are they truly free and effective December 2025?",
+      "Descript new audio features December 2025: improved noise reduction algorithms",
+      "How to use Descript for podcast audio cleanup on a budget December 2025",
+      "Descript vs Audacity for free audio editing: a detailed comparison December 2025",
+      "Descript tutorial: removing echo from voice recordings for free December 2025",
+      "Descript's magic audio feature review: is it good for removing traffic noise in December 2025?",
+      "How-to: Optimize Descript settings for crystal-clear audio without paid subscription December 2025",
+      "\u00bfEs Descript realmente gratis? An\u00e1lisis de las funciones gratuitas de edici\u00f3n de audio en diciembre 2025",
+      "Tutorial Descript: c\u00f3mo mejorar la calidad del audio de tus videos de YouTube gratis en diciembre 2025",
+      "Descript audio cleanup tutorial: remove hum and hiss for free December 2025",
+      "Not\u00edcias Descript: recursos de aprimoramento de \u00e1udio com IA aprimorados para usu\u00e1rios gratuitos em dezembro de 2025",
+      "C\u00f3mo usar Descript para eliminar el ruido de fondo en entrevistas grabadas con el m\u00f3vil diciembre 2025",
+      "Como usar o Descript para melhorar a qualidade do \u00e1udio de videoaulas em dezembro de 2025"
+    ]
+  },
+  {
+    "timestamp": "2025-12-29T22:40:16.561397",
+    "queries": [
+      "ChatGPT-5.2 prompt engineering tutorial: crafting the perfect cold email December 2025",
+      "Review: Gemini 3 Flash email prompt quality for different industries December 2025",
+      "Claude Opus 4.5 vs GPT-5.2: Which AI generates better email subject lines December 2025",
+      "News: Gemini 3 Flash releases new advanced email prompting features December 2025",
+      "How to use AI to personalize email marketing campaigns with effective prompts December 2025",
+      "GPT-5.2 tutorial: Generate high-converting marketing email prompts December 2025",
+      "C\u00f3mo crear prompts de correo electr\u00f3nico efectivos con Claude Opus 4.5: gu\u00eda pr\u00e1ctica diciembre 2025",
+      "Gemini 3 Flash: best email prompt templates for customer support escalation December 2025",
+      "Review: Perplexity Sonar for improving email deliverability scores using AI-generated prompts December 2025",
+      "Claude Opus 4.5: prompt templates to reduce response time on common email inquiries December 2025",
+      "GPT-5.2 vs Gemini 3 Flash email prompt performance: A/B testing results December 2025",
+      "Noticias: Anuncio de la nueva funci\u00f3n de prompts de correo electr\u00f3nico de GPT-5.2 diciembre 2025",
+      "Gemini 3 Flash: mejores prompts para automatizar emails de seguimiento diciembre 2025",
+      "An\u00e1lise: ChatGPT-5.2 e a cria\u00e7\u00e3o de prompts de email eficazes para prospec\u00e7\u00e3o em dezembro 2025",
+      "Tutorial: Crear correos electr\u00f3nicos de ventas B2B con prompts en ChatGPT-5.2 y personalizaci\u00f3n en diciembre 2025"
+    ]
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_048",
+  "type": "script_generation",
+  "created_at": "2025-12-23T21:51:45.578770",
+  "updated_at": "2025-12-23T21:51:45.595119",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Optimize Your Workflow with AI-Powered Text Summarization: A 30-Minute Hack for Efficient Content Creation",
+    "hook_text": "Maximize your content creation in minutes!",
+    "hook_type": "statement",
+    "segment_count": 7,
+    "word_count": 152,
+    "estimated_duration": 60.800000000000004,
+    "target_duration": 60.0
+  }
+}

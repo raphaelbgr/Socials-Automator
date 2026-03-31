@@ -1,0 +1,19 @@
+{
+  "id": "session_20251226_014",
+  "type": "script_generation",
+  "created_at": "2025-12-26T14:17:25.884877",
+  "updated_at": "2025-12-26T14:17:25.902294",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Claude vs ChatGPT",
+    "hook_text": "Claude vs ChatGPT in 2025: Who wins?",
+    "hook_type": "question",
+    "segment_count": 8,
+    "word_count": 142,
+    "estimated_duration": 56.8,
+    "target_duration": 60.0
+  }
+}

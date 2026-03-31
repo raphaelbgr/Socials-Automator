@@ -1,0 +1,19 @@
+{
+  "id": "session_20251227_006",
+  "type": "script_generation",
+  "created_at": "2025-12-27T07:04:41.251754",
+  "updated_at": "2025-12-27T07:04:41.271745",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Research prompts",
+    "hook_text": "Research breakthroughs that actually work? Here's how.",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 177,
+    "estimated_duration": 70.8,
+    "target_duration": 60.0
+  }
+}

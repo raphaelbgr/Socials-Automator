@@ -1,0 +1,19 @@
+{
+  "id": "session_20251224_014",
+  "type": "script_generation",
+  "created_at": "2025-12-24T17:49:57.294496",
+  "updated_at": "2025-12-24T17:49:57.320213",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Save 30 minutes daily: Automate your email follow-ups with this single Adept AI command",
+    "hook_text": "7 emails, 1 command, save 30 minutes daily",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 177,
+    "estimated_duration": 70.8,
+    "target_duration": 60.0
+  }
+}

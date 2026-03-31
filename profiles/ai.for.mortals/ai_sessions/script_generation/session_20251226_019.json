@@ -1,0 +1,19 @@
+{
+  "id": "session_20251226_019",
+  "type": "script_generation",
+  "created_at": "2025-12-26T17:37:27.766771",
+  "updated_at": "2025-12-26T17:37:27.789838",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Free vs paid AI tools",
+    "hook_text": "Free AI tools that beat paid ones in 2025",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 164,
+    "estimated_duration": 65.6,
+    "target_duration": 60.0
+  }
+}

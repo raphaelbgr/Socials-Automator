@@ -1,0 +1,19 @@
+{
+  "id": "session_20251224_001",
+  "type": "script_generation",
+  "created_at": "2025-12-24T00:07:25.799521",
+  "updated_at": "2025-12-24T00:07:25.813387",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Unlock AI's Power for Remote Work: Midjourney V7 Secrets Revealed!",
+    "hook_text": "Unlock Midjourney V7's Power for Remote Work!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 153,
+    "estimated_duration": 61.2,
+    "target_duration": 60.0
+  }
+}

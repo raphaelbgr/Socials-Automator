@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_031",
+  "type": "script_generation",
+  "created_at": "2025-12-23T13:27:45.197282",
+  "updated_at": "2025-12-23T13:27:45.211841",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Optimize Your Workflow with Voice-to-Text AI: A Step-by-Step Guide Using Dragon NaturallySpeaking",
+    "hook_text": "Transform your work with Dragon NaturallySpeaking!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 141,
+    "estimated_duration": 56.4,
+    "target_duration": 60.0
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_026",
+  "type": "script_generation",
+  "created_at": "2025-12-23T11:49:38.665434",
+  "updated_at": "2025-12-23T11:51:47.329301",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Unveiling the Ultimate Video Transcription Workflow: A Side-by-Side Comparison of Whisper, Deepgram, and Google Cloud Speech",
+    "hook_text": "Compare Whisper, Deepgram & Google Cloud Speech for the best video transcription",
+    "hook_type": "statement",
+    "segment_count": 7,
+    "word_count": 171,
+    "estimated_duration": 68.39999999999999,
+    "target_duration": 60.0
+  }
+}

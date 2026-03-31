@@ -1,0 +1,19 @@
+{
+  "id": "session_20251228_007",
+  "type": "script_generation",
+  "created_at": "2025-12-28T06:48:17.604338",
+  "updated_at": "2025-12-28T06:48:17.630226",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "How to use Otter.ai to get instant meeting transcripts in 60 seconds",
+    "hook_text": "Struggling with meeting notes? Otter.ai will be your savior!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 208,
+    "estimated_duration": 83.2,
+    "target_duration": 60.0
+  }
+}

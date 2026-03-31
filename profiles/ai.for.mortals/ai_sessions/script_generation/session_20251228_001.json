@@ -1,0 +1,19 @@
+{
+  "id": "session_20251228_001",
+  "type": "script_generation",
+  "created_at": "2025-12-28T00:08:55.259766",
+  "updated_at": "2025-12-28T00:08:55.281034",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Build Your Own Free AI Assistant in 5 Minutes Using Hugging Face—Stop Paying for Subscriptions",
+    "hook_text": "Stop paying for AI assistants! Build your own in minutes.",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 189,
+    "estimated_duration": 75.6,
+    "target_duration": 60.0
+  }
+}

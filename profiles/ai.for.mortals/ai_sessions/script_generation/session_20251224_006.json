@@ -1,0 +1,19 @@
+{
+  "id": "session_20251224_006",
+  "type": "script_generation",
+  "created_at": "2025-12-24T01:42:29.166267",
+  "updated_at": "2025-12-24T01:42:29.182816",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Unlock AI Creativity: 3 Hidden Gems for Artistic Masterpieces in 60 Seconds!",
+    "hook_text": "Unlock AI Creativity: 3 Hidden Gems for Artistic Masterpieces in 60 Seconds!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 158,
+    "estimated_duration": 63.199999999999996,
+    "target_duration": 60.0
+  }
+}

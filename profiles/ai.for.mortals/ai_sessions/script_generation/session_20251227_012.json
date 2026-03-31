@@ -1,0 +1,19 @@
+{
+  "id": "session_20251227_012",
+  "type": "script_generation",
+  "created_at": "2025-12-27T12:49:40.247913",
+  "updated_at": "2025-12-27T12:49:40.267287",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "AI trend breakdown",
+    "hook_text": "AI trends are shifting daily.",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 181,
+    "estimated_duration": 72.4,
+    "target_duration": 60.0
+  }
+}

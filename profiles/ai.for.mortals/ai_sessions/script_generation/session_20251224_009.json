@@ -1,0 +1,19 @@
+{
+  "id": "session_20251224_009",
+  "type": "script_generation",
+  "created_at": "2025-12-24T12:37:12.511626",
+  "updated_at": "2025-12-24T12:37:12.538354",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "New feature explained",
+    "hook_text": "Turn any photo into video in 3 clicks!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 174,
+    "estimated_duration": 69.6,
+    "target_duration": 60.0
+  }
+}

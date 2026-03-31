@@ -1,0 +1,19 @@
+{
+  "id": "session_20251228_011",
+  "type": "script_generation",
+  "created_at": "2025-12-28T11:22:42.334150",
+  "updated_at": "2025-12-28T11:26:04.936725",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Midjourney basics",
+    "hook_text": "Master Midjourney in minutes!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 156,
+    "estimated_duration": 62.400000000000006,
+    "target_duration": 60.0
+  }
+}

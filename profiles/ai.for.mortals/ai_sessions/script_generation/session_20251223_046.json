@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_046",
+  "type": "script_generation",
+  "created_at": "2025-12-23T21:07:41.187470",
+  "updated_at": "2025-12-23T21:07:41.205349",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "10 prompts for marketers",
+    "hook_text": "Unlock the power of AI for marketers in just 60 seconds!",
+    "hook_type": "statement",
+    "segment_count": 6,
+    "word_count": 185,
+    "estimated_duration": 74.0,
+    "target_duration": 60.0
+  }
+}

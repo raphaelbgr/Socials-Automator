@@ -1,0 +1,19 @@
+{
+  "id": "session_20251223_022",
+  "type": "script_generation",
+  "created_at": "2025-12-23T10:31:51.027156",
+  "updated_at": "2025-12-23T10:31:51.046051",
+  "profile": "ai.for.mortals",
+  "history": [],
+  "constraints_used": [],
+  "feedback": null,
+  "metadata": {
+    "topic": "Crafting Accurate Transcripts Using Dragon NaturallySpeaking: A Beginner's Guide to Voice Recognition Software",
+    "hook_text": "Master Dragon NaturallySpeaking in just 60 seconds!",
+    "hook_type": "statement",
+    "segment_count": 8,
+    "word_count": 144,
+    "estimated_duration": 57.599999999999994,
+    "target_duration": 60.0
+  }
+}
