@@ -43,7 +43,7 @@ class TestFFmpegPathEscaping:
 
     def test_temp_path(self):
         """Test typical temp directory path."""
-        path = r"C:\Users\rbgnr\AppData\Local\Temp\video_20251216_abc123\voiceover.srt"
+        path = r"~/AppData\Local\Temp\video_20251216_abc123\voiceover.srt"
         escaped = escape_ffmpeg_filter_path(path)
         assert escaped == "C\\:/Users/rbgnr/AppData/Local/Temp/video_20251216_abc123/voiceover.srt"
 
@@ -138,9 +138,9 @@ class TestFontPathEscaping:
 
     def test_custom_font_path(self):
         """Test custom font in project folder."""
-        path = r"C:\Users\rbgnr\git\Socials-Automator\fonts\Montserrat-Bold.ttf"
+        path = r"~/git\Socials-Automator\fonts\Montserrat-Bold.ttf"
         escaped = escape_ffmpeg_filter_path(path)
-        assert escaped == "C\\:/Users/rbgnr/git/Socials-Automator/fonts/Montserrat-Bold.ttf"
+        assert escaped == "C\\:/Users/user/projects/Socials-Automator/fonts/Montserrat-Bold.ttf"
 
     def test_font_path_with_spaces(self):
         """Test font path with spaces."""
@@ -439,16 +439,16 @@ class TestRealWorldScenarios:
 
     def test_windows_temp_folder_pattern(self):
         """Test the actual temp folder pattern used by the app."""
-        path = r"C:\Users\rbgnr\AppData\Local\Temp\video_20251216-232926_wqrk8h5e\voiceover.srt"
+        path = r"~/AppData\Local\Temp\video_20251216-232926_wqrk8h5e\voiceover.srt"
         escaped = escape_ffmpeg_filter_path(path)
         expected = "C\\:/Users/rbgnr/AppData/Local/Temp/video_20251216-232926_wqrk8h5e/voiceover.srt"
         assert escaped == expected
 
     def test_profiles_output_path(self):
         """Test typical profile output path."""
-        path = r"C:\Users\rbgnr\git\Socials-Automator\profiles\ai.for.mortals\reels\2024\12\generated\post_001\voiceover.srt"
+        path = r"~/git\Socials-Automator\profiles\ai.for.mortals\reels\2024\12\generated\post_001\voiceover.srt"
         escaped = escape_ffmpeg_filter_path(path)
-        assert escaped.startswith("C\\:/Users/rbgnr/git/Socials-Automator/profiles/")
+        assert escaped.startswith("C\\:/Users/user/projects/Socials-Automator/profiles/")
 
     def test_windows_system_fonts_arial(self):
         """Test common Arial font path."""
@@ -464,9 +464,9 @@ class TestRealWorldScenarios:
 
     def test_project_fonts_folder(self):
         """Test project fonts folder path."""
-        path = r"C:\Users\rbgnr\git\Socials-Automator\fonts\Montserrat-Bold.ttf"
+        path = r"~/git\Socials-Automator\fonts\Montserrat-Bold.ttf"
         escaped = escape_ffmpeg_filter_path(path)
-        assert escaped == "C\\:/Users/rbgnr/git/Socials-Automator/fonts/Montserrat-Bold.ttf"
+        assert escaped == "C\\:/Users/user/projects/Socials-Automator/fonts/Montserrat-Bold.ttf"
 
 
 class TestFFmpegFilterValidation:

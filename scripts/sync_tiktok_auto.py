@@ -10,7 +10,7 @@ This script:
 
 Prerequisites:
 - Start Chrome with remote debugging:
-  "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\Users\rbgnr\ChromeDebug"
+  "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="~/ChromeDebug"
 - Be logged into TikTok in that Chrome session
 
 Usage:
@@ -48,7 +48,7 @@ def connect_to_chrome(port: int = 9222) -> webdriver.Chrome:
     except Exception as e:
         print(f"[X] Failed to connect to Chrome: {e}")
         print("\nMake sure Chrome is running with remote debugging:")
-        print('  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\\Users\\rbgnr\\ChromeDebug"')
+        print('  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222 --user-data-dir="~\\ChromeDebug"')
         sys.exit(1)
 
 

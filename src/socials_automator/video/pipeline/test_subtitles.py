@@ -67,7 +67,7 @@ async def test_voice_and_subtitles():
 
     # Create temp directory
     temp_dir = Path(tempfile.mkdtemp(prefix="subtitle_test_"))
-    output_dir = Path("C:/Users/rbgnr/git/Socials-Automator/profiles/ai.for.mortals/reels/2025/12/generated/test")
+    output_dir = Path("~/git/Socials-Automator/profiles/ai.for.mortals/reels/2025/12/generated/test")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"[INFO] Temp dir: {temp_dir}")
